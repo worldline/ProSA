@@ -1,0 +1,52 @@
+[package]
+name = "prosa"
+version = "0.1.0"
+authors.workspace = true
+description = "ProSA core"
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+include.workspace = true
+
+[[bin]]
+name = "proc"
+path = "proc.rs"
+
+[package.metadata.prosa]
+main = ["core::main::MainProc"]
+
+[package.metadata.prosa.stub]
+proc = "stub::proc::StubProc"
+settings = "stub::proc::StubSettings"
+adaptor = ["stub::adaptor::StubParotAdaptor"]
+
+[dependencies]
+prosa-utils = { workspace = true, features = ["msg", "config", "config-observability"] }
+prosa-macros = { workspace = true }
+bytes = {workspace = true}
+chrono= "0.4"
+tracing = "0.1"
+tracing-subscriber = {version = "0.3", features = ["std", "env-filter"]}
+thiserror.workspace = true
+url = { version = "2", features = ["serde"] }
+
+aquamarine.workspace = true
+
+openssl = { version = "0.10" }
+tokio = { workspace = true, features = ["full"] }
+tokio-openssl = "0.6"
+async-http-proxy = { version = "1", features = ["runtime-tokio","basic-auth"] }
+
+serde = { version = "1", features = ["derive"] }
+config = "0.13"
+glob = { version = "0.3" }
+toml = "0.8"
+serde_yaml = "0.9"
+
+tracing-opentelemetry = "0.22"
+
+opentelemetry = { version = "0.21", features = ["metrics", "trace", "logs"] }
+opentelemetry_sdk = { version = "0.21", features = ["metrics", "trace", "logs", "rt-tokio"] }
+opentelemetry-stdout = { version = "0.2", features = ["metrics", "trace", "logs"]}
+opentelemetry-otlp = { version = "0.14", features = ["metrics", "trace", "logs"]}

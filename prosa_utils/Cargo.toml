@@ -1,0 +1,49 @@
+[package]
+name = "prosa-utils"
+version = "0.1.0"
+authors.workspace = true
+description = "ProSA utils"
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+license.workspace = true
+include.workspace = true
+
+[features]
+default = ["full"]
+msg = []
+config = ["dep:glob","dep:serde","dep:toml","dep:serde_yaml"]
+config-openssl = ["config", "dep:openssl"]
+config-observability = ["dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp"]
+full = ["msg", "config", "config-openssl", "config-observability"]
+
+[package.metadata.prosa]
+tvf = ["msg::simple_string_tvf::SimpleStringTvf"]
+
+[dependencies]
+thiserror.workspace = true
+bytes.workspace = true
+chrono = "0.4"
+hex = "0.4"
+
+# Config
+glob = { version = "0.3", optional = true }
+serde = { version = "1", optional = true, features = ["derive"] }
+toml = { version = "0.8", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+
+# Config OpenSSL
+openssl = { version = "0.10", optional = true }
+
+# Config Observability
+tracing-core = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["std", "env-filter"], optional = true }
+tracing-opentelemetry = { version = "0.22", optional = true }
+opentelemetry = { version = "0.21", features = ["metrics", "trace", "logs"], optional = true }
+opentelemetry_sdk = { version = "0.21", features = ["metrics", "trace", "logs", "rt-tokio"], optional = true }
+opentelemetry-stdout = { version = "0.2", features = ["metrics", "trace", "logs"], optional = true }
+opentelemetry-otlp = { version = "0.14", features = ["metrics", "trace", "logs"], optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tokio-openssl = "0.6"

@@ -1,0 +1,168 @@
+use std::time::Duration;
+
+use config::Config;
+use opentelemetry::global;
+use prosa::core::main::{MainProc, MainRunnable};
+use prosa::core::msg::{InternalMsg, Msg, RequestMsg};
+use prosa::core::proc::{proc, Proc, ProcBusParam, ProcConfig};
+use prosa::core::settings::settings;
+use prosa::core::settings::Settings;
+use prosa::event::pending::PendingMsgs;
+use prosa::stub::adaptor::StubParotAdaptor;
+use prosa::stub::proc::{StubProc, StubSettings};
+use prosa_utils::config::tracing::TelemetryFilter;
+use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+
+use serde::{Deserialize, Serialize};
+use tracing::metadata::LevelFilter;
+
+use prosa::core::adaptor::Adaptor;
+use tokio::time;
+use tracing::{debug, info, warn};
+
+#[derive(Default, Adaptor)]
+struct MyAdaptor {}
+
+#[proc]
+struct MyProcClass {}
+
+#[proc]
+impl<A> Proc<A> for MyProcClass
+where
+    A: Default + Adaptor + std::marker::Send,
+{
+    async fn internal_run(&mut self, _name: String) -> Result<(), Box<dyn std::error::Error>> {
+        let mut adaptor = A::default();
+        self.proc.add_proc().await?;
+        self.proc
+            .add_service_proc(vec![String::from("PROC_TEST")])
+            .await?;
+        let mut interval = time::interval(time::Duration::from_secs(4));
+        let mut msg_id: u64 = 0;
+        let mut pending_msgs: PendingMsgs<RequestMsg<M>, M> = Default::default();
+        loop {
+            tokio::select! {
+                Some(msg) = self.internal_rx_queue.recv() => {
+                    match msg {
+                        InternalMsg::REQUEST(msg) => {
+                            info!("Proc {} receive a request: {:?}", self.get_proc_id(), msg);
+
+
+                            // Push in the pending message
+                            pending_msgs.push(msg, Duration::from_millis(200));
+                            //msg.return_to_sender(tvf).await.unwrap();
+                        },
+                        InternalMsg::RESPONSE(msg) => {
+                            let _enter = msg.enter_span();
+                            info!("Proc {} receive a response: {:?}", self.get_proc_id(), msg);
+                        },
+                        InternalMsg::ERROR(err) => {
+                            let _enter = err.enter_span();
+                            info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
+                        },
+                        InternalMsg::COMMAND(_) => todo!(),
+                        InternalMsg::CONFIG => todo!(),
+                        InternalMsg::SERVICE(table) => {
+                            debug!("New service table received:\n{}\n", table);
+                            self.service = table;
+                        },
+                        InternalMsg::SHUTDOWN => {
+                            adaptor.terminate();
+                            warn!("The processor will shut down");
+                        },
+                    }
+                },
+                _ = interval.tick() => {
+                    debug!("Timer on my proc");
+
+                    let mut tvf: M = Default::default();
+                    tvf.put_string(1, String::from("test srv"));
+                    tvf.put_string(2, String::from("request"));
+
+                    let stub_service_name = String::from("STUB_TEST");
+                    if let Some(service) = self.service.get_proc_service(&stub_service_name, msg_id) {
+                        debug!("The service is find: {:?}", service);
+                        service.proc_queue.send(InternalMsg::REQUEST(RequestMsg::new(msg_id, stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await.unwrap();
+                        msg_id += 1;
+                    }
+
+                    let proc_service_name = String::from("PROC_TEST");
+                    if let Some(service) = self.service.get_proc_service(&proc_service_name, msg_id) {
+                        debug!("The service is find: {:?}", service);
+                        service.proc_queue.send(InternalMsg::REQUEST(RequestMsg::new(msg_id, proc_service_name, tvf, self.proc.get_service_queue()))).await.unwrap();
+                        msg_id += 1;
+                    }
+                },
+                Some(msg) = pending_msgs.pull(), if !pending_msgs.is_empty() => {
+                    debug!("Timeout message {:?}", msg);
+
+
+                    let mut tvf: M = Default::default();
+                    tvf.put_unsigned(1, 42u64);
+                    tvf.put_string(2, "test");
+
+                    // Return the message to the sender
+                    msg.return_to_sender(tvf).await.unwrap();
+                },
+            }
+        }
+    }
+}
+
+#[settings]
+#[derive(Default, Debug, Deserialize, Serialize)]
+struct MySettings {
+    // Can add parameters here
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // load the configuration
+    let config = Config::builder()
+        .add_source(config::File::with_name("./my_prosa_settings.yml"))
+        .add_source(config::Environment::with_prefix("PROSA"))
+        .build()
+        .unwrap();
+
+    let my_settings = config.try_deserialize::<MySettings>()?;
+    println!("My ProSA settings: {:?}", my_settings);
+
+    // metrics
+    global::set_meter_provider(my_settings.get_observability().build_meter_provider());
+
+    // logs
+    global::set_logger_provider(my_settings.get_observability().build_logger_provider());
+
+    // traces
+    let telemetry_filter = TelemetryFilter::new(LevelFilter::DEBUG);
+    my_settings
+        .get_observability()
+        .tracing_init(&telemetry_filter)?;
+
+    // Create bus and main processor
+    let (bus, main) = MainProc::<SimpleStringTvf>::create(&my_settings);
+
+    // Launch the main task
+    let main_task = main.run();
+
+    // Launch a stub processor
+    let stub_settings = StubSettings::new(vec![String::from("STUB_TEST")]);
+    let stub_proc = StubProc::<SimpleStringTvf>::create(1, bus.clone(), stub_settings);
+    Proc::<StubParotAdaptor>::run(stub_proc, String::from("STUB_PROC"));
+
+    // Launch the test processor
+    let proc = MyProcClass::<SimpleStringTvf>::create_raw(2, bus.clone());
+    Proc::<MyAdaptor>::run(proc, String::from("proc_1"));
+
+    // Wait before launch the second processor
+    std::thread::sleep(time::Duration::from_secs(2));
+
+    // Launch the second test processor
+    let proc2 = MyProcClass::<SimpleStringTvf>::create_raw(3, bus.clone());
+    Proc::<MyAdaptor>::run(proc2, String::from("proc_2"));
+
+    // Wait on main task
+    main_task.join().unwrap();
+    opentelemetry::global::shutdown_tracer_provider();
+    Ok(())
+}

@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "prosa_macros",
+    "prosa_utils",
+    "prosa", 
+    "cargo-prosa",
+]
+
+[workspace.package]
+authors = ["Jeremy HERGAULT <jeremy.hergault@worldline.com>", "Anthony THOMAS <anthony.thomas@worldline.com>", "Olivier SCHYNS <olivier.schyns@worldline.com>", "Rene-Louis EYMARD <rene-louis.eymard@worldline.com>"]
+homepage = "https://worldline.com/"
+repository = "https://github.com/worldline/ProSA"
+edition = "2021"
+license = "LGPL-3.0-or-later"
+
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+    "*assets/*",
+    "COPYRIGHT",
+]
+
+[workspace.dependencies]
+prosa-utils = { version = "0.1.0", path = "prosa_utils" }
+prosa-macros = { version = "0.1.0", path = "prosa_macros" }
+thiserror = "1"
+aquamarine = "0.5"
+bytes = "1"
+tokio = "1"

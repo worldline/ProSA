@@ -1,0 +1,73 @@
+//! Main ProSA file binary
+
+use serde::{{ '{' }}Deserialize, Serialize{{ '}' }};
+
+use tracing::{{ '{' }}debug, info{{ '}' }};
+
+use prosa_utils::config::tracing::TelemetryFilter;
+use prosa::core::main::MainRunnable;
+use prosa::core::settings::Settings;
+use prosa::core::proc::ProcConfig;
+
+// Include settings
+include!(concat!(env!("OUT_DIR"), "/settings.rs"));
+
+// Include config
+include!(concat!(env!("OUT_DIR"), "/config.rs"));
+
+// Include run
+include!(concat!(env!("OUT_DIR"), "/run.rs"));
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
+    let matches = cli().get_matches();
+
+    // Look if we have to launch the ProSA or just dry run
+    if matches.get_flag("dry_run") {{ '{' }}
+        if let Some(config_path) = matches.get_one::<String>("config") {{ '{' }}
+            if let Ok(config) = prosa_config(&matches) {{ '{' }}
+                let prosa_settings = config.try_deserialize::<RunSettings>()?;
+                println!("{{ name }} settings: {{ '{:?}' }}", prosa_settings);
+            {{ '}' }} else {{ '{' }}
+                // Write default config
+                let default_config = RunSettings::default();
+                default_config.write_config(config_path)?;
+                println!("Write {{ name }} settings {{ '{}' }}: {{ '{:?}' }}", config_path, default_config);
+            {{ '}' }}
+        {{ '}' }}
+    {{ '}' }} else {{ '{' }}
+        info!("Starting ProSA {} - {}", env!("CARGO_PKG_NAME"), PROSA_VERSIONS);
+        let mut prosa_settings = prosa_config(&matches)?.try_deserialize::<RunSettings>()?;
+
+        // Provide ProSA name if set in command line
+        if let Some(name) = matches.get_one::<String>("name") {{ '{' }}
+            prosa_settings.set_prosa_name(name.clone());
+        {{ '}' }}
+
+        // Deamonize the program if needed
+        if matches.get_flag("daemon") {{ '{' }}
+            daemonize(&matches);
+        {{ '}' }}
+
+        // Init observability
+        let filter = TelemetryFilter::default();
+        prosa_settings
+            .get_observability()
+            .tracing_init(&filter)?;
+
+        // Create bus and main processor
+        let (bus, main) = new_main(&prosa_settings);
+
+        // Launch the main task
+        debug!("Launch the main task");
+        let main_task = main.run();
+
+        // Run all processors
+        run_processors(bus, &prosa_settings);
+
+        // Wait on main task
+        main_task.join().unwrap();
+    {{ '}' }}
+
+    Ok(())
+{{ '}' }}

@@ -1,0 +1,191 @@
+use std::collections::HashMap;
+use std::io::Write;
+use std::{{ '{' }}env, io{{ '}' }};
+use std::ffi::OsString;
+use std::fs;
+use std::path::Path;
+
+use cargo_prosa::builder::Desc;
+use cargo_prosa::cargo::{{ '{' }}CargoMetadata, Metadata{{ '}' }};
+use cargo_prosa::CONFIGURATION_FILENAME;
+
+fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Metadata>) -> io::Result<()> {{ '{' }}
+    let mut f = fs::File::create(Path::new(&out_dir).join("settings.rs"))?;
+    writeln!(f, "use prosa::core::settings::prosa_settings;")?;
+
+    if let Some(processors) = &desc.proc {{ '{' }}
+        writeln!(f, "\n/// ProSA Run settings")?;
+        writeln!(f, "#[prosa_settings]")?;
+        writeln!(f, "#[derive(Default, Debug, Deserialize, Serialize)]")?;
+        writeln!(f, "pub struct RunSettings {{ '{{' }}")?;
+        for processor in processors {{ '{' }}
+            let proc_metadata = metadata.get(&processor.proc_name).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
+            if let Some(settings) = &proc_metadata.settings {{ '{' }}
+                if let Some(description) = &proc_metadata.description {{ '{' }}
+                    writeln!(f, "    /// {{ '{}' }}", description)?;
+                {{ '}' }}
+
+                writeln!(f, "    pub {{ '{}: {}' }},", processor.get_name().replace('-', "_"), settings.replace('-', "_"))?;
+            {{ '}' }}
+        {{ '}' }}
+        writeln!(f, "{{ '}}' }}")
+    {{ '}' }} else {{ '{' }}
+        Err(io::Error::new(io::ErrorKind::InvalidInput, "No configured processor available"))
+    {{ '}' }}
+{{ '}' }}
+
+fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetadata) -> io::Result<()> {{ '{' }}
+    let mut f = fs::File::create(Path::new(&out_dir).join("config.rs"))?;
+
+    writeln!(f, "\n/// List of all ProSA components versions")?;
+    if let Some(main_version) = cargo_metadata.get_main_version(desc.prosa.main.as_str()) {{ '{' }}
+        write!(f, "const PROSA_VERSIONS: &str = \"{{ '{}' }} - {{ '{}' }}", env!("CARGO_PKG_VERSION"), main_version)?;
+        if let Some(procs) = &desc.proc {{ '{' }}
+            for proc in procs {{ '{' }}
+                write!(f, "\n  {{ '{}' }}", proc.get_name())?;
+                if let (Some(proc_version), Some(adaptor_version)) = cargo_metadata.get_versions(proc.proc.as_str(), proc.adaptor.as_str()) {{ '{' }}
+                    write!(f, "\n    Processor: {{ '{}' }}", proc_version)?;
+                    write!(f, "\n    Adaptor  : {{ '{}' }}", adaptor_version)?;
+                {{ '}' }}
+            {{ '}' }};
+        {{ '}' }}
+        writeln!(f, "\";")?;
+    {{ '}' }} else {{ '{' }}
+        writeln!(f, "const PROSA_VERSIONS: &str = \"{{ '{}' }}\"", env!("CARGO_PKG_VERSION"))?;
+    {{ '}' }}
+
+    writeln!(f, "\nfn cli() -> ::clap::Command {{ '{{' }}")?;
+    writeln!(f, "    ::clap::Command::new(\"prosa\")")?;
+    writeln!(f, "        .version(\"{{ '{}' }}\")", env!("CARGO_PKG_VERSION"))?;
+    writeln!(f, "        .long_version(PROSA_VERSIONS)")?;
+
+    let authors = env!("CARGO_PKG_AUTHORS");
+    if !authors.is_empty() {{ '{' }}
+        writeln!(f, "        .author(\"{{ '{}' }}\")", authors)?;
+    {{ '}' }}
+
+    let description = env!("CARGO_PKG_DESCRIPTION");
+    if !description.is_empty() {{ '{' }}
+        writeln!(f, "        .about(\"{{ '{}' }}\")", description)?;
+    {{ '}' }}
+
+    writeln!(f, "        .arg(")?;
+    writeln!(f, "            ::clap::arg!(--dry_run \"Show how the ProSA will run but doesn't start it. Write the config file if it doesn't exist\")")?;
+    writeln!(f, "                .action(clap::ArgAction::SetTrue)")?;
+    writeln!(f, "        )")?;
+    writeln!(f, "        .arg(::clap::arg!(-d - -daemon).action(::clap::ArgAction::SetTrue))")?;
+    writeln!(f, "        .arg(")?;
+    writeln!(f, "            ::clap::arg!(-c --config <CONFIG_PATH> \"Path of the ProSA configuration file\")")?;
+    writeln!(f, "                .default_value(\"prosa.yml\")")?;
+    writeln!(f, "        )")?;
+    writeln!(f, "        .arg(::clap::arg!(-n --name <NAME> \"Name of the ProSA\"))")?;
+    writeln!(f, "        .arg(::clap::arg!(--user <USER> \"User:Group to run the daemon ProSA\"))")?;
+    writeln!(f, "        .arg(::clap::arg!(-l --log_path <LOGPATH> \"Path of the output log\"))")?;
+    writeln!(f, "{{ '}}' }}\n")?;
+
+    writeln!(f, "fn prosa_config(matches: &::clap::ArgMatches) -> Result<::config::Config, ::config::ConfigError> {{ '{{' }}")?;
+    writeln!(f, "    ::config::Config::builder()")?;
+    writeln!(f, "        .add_source(config::File::with_name(")?;
+    writeln!(f, "            matches.get_one::<String>(\"config\").unwrap().as_str(),")?;
+    writeln!(f, "        ))")?;
+    writeln!(f, "        .add_source(")?;
+    writeln!(f, "            config::Environment::with_prefix(\"PROSA\")")?;
+    writeln!(f, "                .try_parsing(true)")?;
+    writeln!(f, "                .separator(\"_\")")?;
+    writeln!(f, "                .list_separator(\" \"),")?;
+    writeln!(f, "        )")?;
+    writeln!(f, "        .build()")?;
+    writeln!(f, "{{ '}}' }}\n")
+{{ '}' }}
+
+fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Metadata>) -> io::Result<()> {{ '{' }}
+    let mut f = fs::File::create(Path::new(&out_dir).join("run.rs"))?;
+
+    writeln!(f, "fn new_main(settings: &RunSettings) -> (prosa::core::main::Main<{{ '{}' }}>, {{ '{}' }}<{{ '{}' }}>) {{ '{{' }}", desc.prosa.tvf, desc.prosa.main, desc.prosa.tvf)?;
+    writeln!(f, "    {{ '{}' }}::<{{ '{}' }}>::create(settings)", desc.prosa.main, desc.prosa.tvf)?;
+    writeln!(f, "{{ '}}' }}")?;
+
+    writeln!(f, "\n/// Method to run all configured processors, return the number of processors runned")?;
+    writeln!(f, "fn run_processors(bus: prosa::core::main::Main<{{ '{}' }}>, settings: &RunSettings) {{ '{{' }}", desc.prosa.tvf)?;
+
+    let mut proc_id = 0u32;
+    if let Some(processors) = &desc.proc {{ '{' }}
+        for processor in processors {{ '{' }}
+            proc_id += 1;
+            writeln!(f, "debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
+            let proc_metadata = metadata.get(&processor.proc_name).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
+            if let Some(_) = &proc_metadata.settings {{ '{' }}
+                writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name().replace('-', "_"))?;
+            {{ '}' }} else {{ '{' }}
+                writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, bus.clone());", processor.proc, desc.prosa.tvf, proc_id)?;
+            {{ '}' }}
+
+            writeln!(f, "prosa::core::proc::Proc::<{{ '{}' }}>::run(proc, settings.get_prosa_name());", processor.adaptor)?;
+        {{ '}' }}
+    {{ '}' }}
+
+    writeln!(f, "{{ '}}' }}")?;
+    writeln!(f, "\n/// Number of configured processor")?;
+    writeln!(f, "#[allow(dead_code)]")?;
+    writeln!(f, "const NUMBER_OF_PROCESSORS: u32 = {{ '{}' }};", proc_id)?;
+
+    writeln!(f, "\n/// Method to run the current program as an UNIX daemon")?;
+    writeln!(f, "pub fn daemonize(matches: &::clap::ArgMatches) {{ '{{' }}")?;
+    writeln!(f, "    let user = matches.get_one::<String>(\"user\").map(|s| {{ '{{' }}")?;
+    writeln!(f, "        if let Some(sep) = s.find(':') {{ '{{' }}")?;
+    writeln!(f, "            (&s[..sep], &s[sep + 1..])")?;
+    writeln!(f, "        {{ '}}' }} else {{ '{{' }}")?;
+    writeln!(f, "            (s.as_str(), \"\")")?;
+    writeln!(f, "        {{ '}}' }}")?;
+    writeln!(f, "    {{ '}}' }});")?;
+
+    writeln!(f, "    let log_path = matches.get_one::<String>(\"log_path\").map_or(")?;
+    writeln!(f, "        std::env::current_dir()")?;
+    writeln!(f, "            .unwrap()")?;
+    writeln!(f, "            .into_os_string()")?;
+    writeln!(f, "            .into_string()")?;
+    writeln!(f, "            .unwrap(),")?;
+    writeln!(f, "        |p| p.clone(),")?;
+    writeln!(f, "    );")?;
+
+    writeln!(f, "    let stdout = std::fs::File::create(log_path.clone() + \"/prosa.out\").unwrap();")?;
+    writeln!(f, "    let stderr = std::fs::File::create(log_path.clone() + \"/prosa.err\").unwrap();")?;
+
+    writeln!(f, "    let mut daemonize = daemonize::Daemonize::new()")?;
+    writeln!(f, "        .pid_file(log_path.clone() + \"/prosa_proc.pid\")")?;
+    writeln!(f, "        .chown_pid_file(true)")?;
+    writeln!(f, "        .working_directory(log_path);")?;
+
+    writeln!(f, "    daemonize = if let Some((user, group)) = user {{ '{{' }}")?;
+    writeln!(f, "        daemonize = daemonize.user(user);")?;
+    writeln!(f, "        if !group.is_empty() {{ '{{' }}")?;
+    writeln!(f, "            daemonize.group(group)")?;
+    writeln!(f, "        {{ '}}' }} else {{ '{{' }}")?;
+    writeln!(f, "            daemonize")?;
+    writeln!(f, "        {{ '}}' }}")?;
+    writeln!(f, "    {{ '}}' }} else {{ '{{' }}")?;
+    writeln!(f, "        daemonize")?;
+    writeln!(f, "    {{ '}}' }};")?;
+
+    writeln!(f, "    daemonize = daemonize.umask(0o777).stdout(stdout).stderr(stderr);")?;
+
+    writeln!(f, "    match daemonize.start() {{ '{{' }}")?;
+    writeln!(f, "        Ok(_) => println!(\"Success, daemonized\"),")?;
+    writeln!(f, "        Err(e) => eprintln!(\"Error, {{ '{{}}' }}\", e),")?;
+    writeln!(f, "    {{ '}}' }}")?;
+    writeln!(f, "{{ '}}' }}")
+{{ '}' }}
+
+fn main() {{ '{' }}
+    let out_dir = env::var_os("OUT_DIR").unwrap();
+    let cargo_metadata = CargoMetadata::load_metadata().unwrap();
+    let prosa_proc_metadata = cargo_metadata.prosa_proc_metadata();
+    let prosa_desc = toml::from_str::<Desc>(fs::read_to_string(CONFIGURATION_FILENAME).unwrap().as_str()).unwrap();
+
+    write_settings_rs(&out_dir, &prosa_desc, &prosa_proc_metadata).unwrap();
+    write_config_rs(&out_dir, &prosa_desc, &cargo_metadata).unwrap();
+    write_run_rs(&out_dir, &prosa_desc, &prosa_proc_metadata).unwrap();
+
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=ProSA.toml");
+{{ '}' }}

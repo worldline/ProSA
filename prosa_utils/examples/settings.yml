@@ -1,0 +1,19 @@
+observability:
+  level: debug
+  metrics:
+    otlp: # Opentelemetry protocol
+      endpoint: "http://localhost:4137"
+      timeout_sec: 3
+      protocol: Grpc
+    stdout:
+  traces:
+    otlp: # Opentelemetry protocol
+      level: info
+      endpoint: "http://localhost:4137"
+      timeout_sec: 3
+      protocol: Grpc
+    stdout:
+      level: debug
+  logs:
+    stdout:
+      level: debug

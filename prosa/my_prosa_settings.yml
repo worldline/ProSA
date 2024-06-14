@@ -1,0 +1,13 @@
+name: my-prosa
+
+otel:
+  level: DEBUG
+  metrics:
+    stdout:
+      level: 0
+  traces:
+    stdout:
+      level: debug
+  logs:
+    stdout:
+      level: debug
