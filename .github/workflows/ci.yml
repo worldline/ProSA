@@ -4,6 +4,8 @@ name: Rust
 # yamllint disable-line rule:truthy
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
   schedule: [cron: "40 1 * * *"]
@@ -46,11 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-          components: deny
-      - run: cargo deny check
+      - uses: EmbarkStudios/cargo-deny-action@v1
 
   doc:
     name: Documentation
