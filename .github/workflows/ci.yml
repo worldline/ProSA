@@ -4,6 +4,8 @@ name: Rust
 # yamllint disable-line rule:truthy
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
   schedule: [cron: "40 1 * * *"]
@@ -21,7 +23,6 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -33,8 +34,44 @@ jobs:
           --verbose --all-targets
           --all-features --tests
 
+  fmt:
+    name: Rust fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt -- --check
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: deny
+      - run: cargo deny check
+
+  doc:
+    name: Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RUSTDOCFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo doc --color=always --verbose --no-deps
+
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -42,3 +79,18 @@ jobs:
           toolchain: stable
           components: rustc-dev
       - run: cargo check --benches --all-features --release
+
+  test:
+    name: Tests
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: llvm-tools, rustc-dev
+      - run: >
+          cargo test --all-features --release
+          --tests  --verbose --color always
+          --workspace --no-fail-fast
