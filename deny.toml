@@ -1,24 +1,19 @@
-all-features = true
-feature-depth = 1
-
 [advisories]
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-vulnerability = "warn"
-unmaintained = "warn"
 yanked = "deny"
-notice = "warn"
 ignore = [
 ]
 
 [licenses]
-unlicensed = "allow"
 allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
     "LGPL-3.0",
 ]
-copyleft = "deny"
-allow-osi-fsf-free = "either"
-default = "deny"
 confidence-threshold = 0.8
 
 [bans]
