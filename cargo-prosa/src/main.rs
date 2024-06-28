@@ -59,7 +59,10 @@ where
 {
     const RENDER_FILENAME: &str = "build.rs";
     let mut tera_build = Tera::default();
-    tera_build.add_raw_template(RENDER_FILENAME, include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/build.rs.j2")))?;
+    tera_build.add_raw_template(
+        RENDER_FILENAME,
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/build.rs.j2")),
+    )?;
 
     let build_file = fs::File::create(&path).map_err(tera::Error::io_error)?;
     tera_build.render_to(RENDER_FILENAME, ctx, build_file)
@@ -72,7 +75,10 @@ where
 {
     const RENDER_FILENAME: &str = "main.rs";
     let mut tera_build = Tera::default();
-    tera_build.add_raw_template(RENDER_FILENAME, include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/main.rs.j2")))?;
+    tera_build.add_raw_template(
+        RENDER_FILENAME,
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/main.rs.j2")),
+    )?;
 
     let main_file = fs::File::create(&path).map_err(tera::Error::io_error)?;
     tera_build.render_to(RENDER_FILENAME, ctx, main_file)

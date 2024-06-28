@@ -18,10 +18,19 @@ include!(concat!(env!("OUT_DIR"), "/config.rs"));
 // Include run
 include!(concat!(env!("OUT_DIR"), "/run.rs"));
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
+fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
     let matches = cli().get_matches();
 
+    // Deamonize the program if needed
+    if matches.get_flag("daemon") {{ '{' }}
+        daemonize(&matches);
+    {{ '}' }}
+
+    prosa_main(matches)
+{{ '}' }}
+
+#[tokio::main]
+async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
     // Look if we have to launch the ProSA or just dry run
     if matches.get_flag("dry_run") {{ '{' }}
         if let Some(config_path) = matches.get_one::<String>("config") {{ '{' }}
@@ -36,17 +45,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
             {{ '}' }}
         {{ '}' }}
     {{ '}' }} else {{ '{' }}
-        info!("Starting ProSA {} - {}", env!("CARGO_PKG_NAME"), PROSA_VERSIONS);
         let mut prosa_settings = prosa_config(&matches)?.try_deserialize::<RunSettings>()?;
 
         // Provide ProSA name if set in command line
         if let Some(name) = matches.get_one::<String>("name") {{ '{' }}
             prosa_settings.set_prosa_name(name.clone());
-        {{ '}' }}
-
-        // Deamonize the program if needed
-        if matches.get_flag("daemon") {{ '{' }}
-            daemonize(&matches);
         {{ '}' }}
 
         // Init observability
@@ -56,6 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
             .tracing_init(&filter)?;
 
         // Create bus and main processor
+        info!("Starting ProSA {} - {}", env!("CARGO_PKG_NAME"), PROSA_VERSIONS);
         let (bus, main) = new_main(&prosa_settings);
 
         // Launch the main task

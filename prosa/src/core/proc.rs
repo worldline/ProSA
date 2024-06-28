@@ -10,9 +10,8 @@
 //! use std::error::Error;
 //! use serde::Serialize;
 //! use prosa_utils::msg::tvf::Tvf;
-//! use prosa::core::proc::{proc, Proc, ProcBusParam};
+//! use prosa::core::proc::{proc_settings, proc, Proc, ProcBusParam};
 //! use prosa::core::adaptor::Adaptor;
-//! use prosa::core::settings::settings;
 //! use prosa::core::msg::{Msg, InternalMsg};
 //!
 //! pub trait MyAdaptorTrait<M>
@@ -58,14 +57,14 @@
 //!     }
 //! }
 //!
-//! #[settings]
+//! #[proc_settings]
 //! #[derive(Default, Debug, Serialize)]
-//! pub struct MySettings {
+//! pub struct MyProcSettings {
 //!     param: String,
 //!     // ...
 //! }
 //!
-//! #[proc(settings = MySettings)]
+//! #[proc(settings = MyProcSettings)]
 //! pub struct MyProc { /* Nothing in here */ }
 //!
 //! #[proc]
