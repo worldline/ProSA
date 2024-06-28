@@ -4,8 +4,6 @@ name: Rust
 # yamllint disable-line rule:truthy
 on:
   push:
-    branches:
-      - main
   pull_request:
   workflow_dispatch:
   schedule: [cron: "40 1 * * *"]
