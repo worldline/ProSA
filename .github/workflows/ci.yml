@@ -19,8 +19,6 @@ permissions:
   contents: read
 
 jobs:
-
-
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
