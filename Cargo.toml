@@ -22,7 +22,7 @@ include = [
 ]
 
 [workspace.dependencies]
-prosa-utils = { version = "0.1.0", path = "prosa_utils" }
+prosa-utils = { version = "0.1.1", path = "prosa_utils" }
 prosa-macros = { version = "0.1.0", path = "prosa_macros" }
 thiserror = "1"
 aquamarine = "0.5"

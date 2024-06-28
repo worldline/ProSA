@@ -11,11 +11,11 @@ use cargo_prosa::CONFIGURATION_FILENAME;
 
 fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Metadata>) -> io::Result<()> {{ '{' }}
     let mut f = fs::File::create(Path::new(&out_dir).join("settings.rs"))?;
-    writeln!(f, "use prosa::core::settings::prosa_settings;")?;
+    writeln!(f, "use prosa::core::settings::settings;")?;
 
     if let Some(processors) = &desc.proc {{ '{' }}
         writeln!(f, "\n/// ProSA Run settings")?;
-        writeln!(f, "#[prosa_settings]")?;
+        writeln!(f, "#[settings]")?;
         writeln!(f, "#[derive(Default, Debug, Deserialize, Serialize)]")?;
         writeln!(f, "pub struct RunSettings {{ '{{' }}")?;
         for processor in processors {{ '{' }}

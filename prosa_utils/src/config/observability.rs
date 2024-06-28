@@ -238,10 +238,7 @@ impl Observability {
     /// Meter provider builder
     pub fn build_meter_provider(&self) -> MeterProvider {
         if let Some(settings) = &self.metrics {
-            match settings.build_provider() {
-                Ok(m) => m,
-                Err(_) => MeterProvider::default(),
-            }
+            settings.build_provider().unwrap_or_default()
         } else {
             MeterProvider::default()
         }
@@ -272,10 +269,7 @@ impl Observability {
     /// ```
     pub fn build_tracer_provider(&self) -> TracerProvider {
         if let Some(settings) = &self.traces {
-            match settings.build_tracer_provider() {
-                Ok(m) => m,
-                Err(_) => TracerProvider::default(),
-            }
+            settings.build_tracer_provider().unwrap_or_default()
         } else {
             TracerProvider::default()
         }
