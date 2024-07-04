@@ -144,7 +144,7 @@ where
 
 impl<M> ProcService<M>
 where
-    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send,
+    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     /// Method to create a processor service with its processor ID and a message queue
     pub fn new(

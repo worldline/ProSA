@@ -93,7 +93,7 @@ fn add_message_generic(generics: &mut syn::Generics) -> syn::parse::Result<()> {
     generics.make_where_clause();
     if let Some(ref mut where_clause) = generics.where_clause {
         let message_where: syn::WherePredicate = syn::parse2(
-            quote! { M: 'static + std::marker::Send + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default },
+            quote! { M: 'static + std::marker::Send + std::marker::Sync + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default },
         )?;
         where_clause.predicates.push(message_where);
     } else {
@@ -161,7 +161,7 @@ fn generate_struct_impl_bus_param(
     Ok(quote! {
         impl #item_generics prosa::core::proc::ProcBusParam for #item_ident #item_generics
         where
-            M: 'static + std::marker::Send + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default,
+            M: 'static + std::marker::Send + std::marker::Sync + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default,
         {
             #[doc=concat!(" Getter of the ", stringify!(#item_ident), " processor ID")]
             fn get_proc_id(&self) -> u32 {
@@ -191,7 +191,7 @@ fn generate_struct_impl_config(
         // The definition must be done for the protocol
         impl #item_generics prosa::core::proc::ProcConfig<M> for #item_ident #item_generics
         where
-            M: 'static + std::marker::Send + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default,
+            M: 'static + std::marker::Send + std::marker::Sync + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default,
         {
             type Settings = #settings;
 

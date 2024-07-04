@@ -24,6 +24,7 @@ use opentelemetry_sdk::metrics::MeterProvider;
 /// where
 ///     M: 'static
 ///         + std::marker::Send
+///         + std::marker::Sync
 ///         + std::marker::Sized
 ///         + std::clone::Clone
 ///         + std::fmt::Debug
@@ -44,6 +45,7 @@ pub trait StubAdaptor<M>
 where
     M: 'static
         + std::marker::Send
+        + std::marker::Sync
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
@@ -67,6 +69,7 @@ impl<M> StubAdaptor<M> for StubParotAdaptor
 where
     M: 'static
         + std::marker::Send
+        + std::marker::Sync
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
