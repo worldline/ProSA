@@ -29,7 +29,7 @@ struct MyProcClass {}
 #[proc]
 impl<A> Proc<A> for MyProcClass
 where
-    A: Default + Adaptor + std::marker::Send,
+    A: Default + Adaptor + std::marker::Send + std::marker::Sync,
 {
     async fn internal_run(&mut self, _name: String) -> Result<(), Box<dyn std::error::Error>> {
         let mut adaptor = A::default();

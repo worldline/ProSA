@@ -18,6 +18,7 @@
 //! where
 //!     M: 'static
 //!     + std::marker::Send
+//!     + std::marker::Sync
 //!     + std::marker::Sized
 //!     + std::clone::Clone
 //!     + std::fmt::Debug
@@ -40,6 +41,7 @@
 //! where
 //!     M: 'static
 //!     + std::marker::Send
+//!     + std::marker::Sync
 //!     + std::marker::Sized
 //!     + std::clone::Clone
 //!     + std::fmt::Debug
@@ -68,26 +70,35 @@
 //! pub struct MyProc { /* Nothing in here */ }
 //!
 //! #[proc]
-//! impl<M> MyProc<M>
-//! where
-//!     M: 'static
-//!     + std::marker::Send
-//!     + std::marker::Sized
-//!     + std::clone::Clone
-//!     + std::fmt::Debug
-//!     + prosa_utils::msg::tvf::Tvf
-//!     + std::default::Default,
+//! impl MyProc
 //! {
 //!     fn internal_func() {
 //!         // You can declare function
 //!     }
 //! }
+//! // or explicitly
+//! //#[proc]
+//! //impl<M> MyProc<M>
+//! //where
+//! //    M: 'static
+//! //    + std::marker::Send
+//! //    + std::marker::Sync
+//! //    + std::marker::Sized
+//! //    + std::clone::Clone
+//! //    + std::fmt::Debug
+//! //    + prosa_utils::msg::tvf::Tvf
+//! //    + std::default::Default,
+//! //{
+//! //    fn internal_func() {
+//! //        // You can declare function
+//! //    }
+//! //}
 //!
 //! // You must implement the trait Proc to define your processing
 //! #[proc]
 //! impl<A> Proc<A> for MyProc
 //! where
-//!     A: Default + Adaptor + MyAdaptorTrait<M> + std::marker::Send,
+//!     A: Default + Adaptor + MyAdaptorTrait<M> + std::marker::Send + std::marker::Sync,
 //! {
 //!     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
 //!         // Initiate an adaptor for the stub processor
@@ -225,7 +236,7 @@ where
 
 impl<M> ProcParam<M>
 where
-    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send,
+    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     /// Method to create a processor parameter
     pub fn new(id: u32, queue: mpsc::Sender<InternalMsg<M>>, main: Main<M>) -> ProcParam<M> {
@@ -337,6 +348,7 @@ pub trait ProcConfig<M>
 where
     M: 'static
         + std::marker::Send
+        + std::marker::Sync
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug

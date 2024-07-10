@@ -124,7 +124,7 @@ where
 
 impl<M> Main<M>
 where
-    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send,
+    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     /// Method to instanciate a ProSA main task
     /// Must be called only one time
@@ -274,7 +274,7 @@ macro_rules! prosa_main_update_srv {
 
 impl<M> MainProc<M>
 where
-    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send,
+    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     async fn remove_proc(&mut self, proc_id: u32) -> Option<HashMap<u32, ProcService<M>>> {
         if let Some(proc) = self.processors.remove(&proc_id) {
@@ -445,7 +445,7 @@ where
 
 impl<M> MainRunnable<M> for MainProc<M>
 where
-    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send,
+    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     fn create<S: Settings>(settings: &S) -> (Main<M>, MainProc<M>) {
         let (internal_tx_queue, internal_rx_queue) = mpsc::channel(2048);
