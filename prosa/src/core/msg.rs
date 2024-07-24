@@ -32,6 +32,8 @@ where
     DELSRV(Vec<String>, u32, u32),
     /// Command to ask an action or a status to the main processor
     COMMAND(String),
+    /// Internal call for shutdown (with a reason)
+    SHUTDOWN(String),
 }
 
 /// Internal ProSA message that define all message type that can be received by a processor
@@ -82,6 +84,8 @@ where
     fn get_span_mut(&mut self) -> &mut Span;
     /// Enter the span and push metadata in it
     fn enter_span(&self) -> span::Entered;
+    /// Return the elapsed time corresponding to the processing time (duration since the request creation)
+    fn elapsed(&self) -> Duration;
     /// Getter of the message content
     fn get_data(&self) -> &M;
     /// Getter of the mutable message content
@@ -126,6 +130,10 @@ where
         self.span.enter()
     }
 
+    fn elapsed(&self) -> Duration {
+        self.begin_time.elapsed().unwrap_or(Duration::new(0, 0))
+    }
+
     fn get_data(&self) -> &M {
         &self.data
     }
@@ -158,11 +166,6 @@ where
         }
     }
 
-    /// Return the elapsed time corresponding to the processing time (or a duration of 0 if it can't process it)
-    pub fn elapsed(&self) -> Duration {
-        self.begin_time.elapsed().unwrap_or(Duration::new(0, 0))
-    }
-
     /// Method to return the response to the called processor
     pub async fn return_to_sender(
         self,
@@ -173,6 +176,7 @@ where
                 id: self.id,
                 service: self.service,
                 span: self.span,
+                response_time: self.begin_time,
                 data: resp,
             }))
             .await
@@ -190,6 +194,7 @@ where
                 id: self.id,
                 service: self.service,
                 span: self.span,
+                error_time: self.begin_time,
                 data: data.unwrap_or(self.data),
                 err,
             }))
@@ -206,6 +211,7 @@ where
     id: u64,
     service: String,
     span: Span,
+    response_time: SystemTime,
     data: M,
 }
 
@@ -234,6 +240,10 @@ where
         enter
     }
 
+    fn elapsed(&self) -> Duration {
+        self.response_time.elapsed().unwrap_or(Duration::new(0, 0))
+    }
+
     fn get_data(&self) -> &M {
         &self.data
     }
@@ -252,6 +262,7 @@ where
     id: u64,
     service: String,
     span: Span,
+    error_time: SystemTime,
     data: M,
     err: ServiceError,
 }
@@ -282,6 +293,10 @@ where
         enter
     }
 
+    fn elapsed(&self) -> Duration {
+        self.error_time.elapsed().unwrap_or(Duration::new(0, 0))
+    }
+
     fn get_data(&self) -> &M {
         &self.data
     }
@@ -301,6 +316,7 @@ where
             id,
             service,
             span,
+            error_time: SystemTime::now(),
             data,
             err,
         }
