@@ -31,7 +31,7 @@ extern crate self as prosa;
 ///     fn init(&mut self, _proc: &InjProc<M>) -> Result<(), Box<dyn std::error::Error>> {
 ///         Ok(())
 ///     }
-///     fn build_transation(&mut self) -> M {
+///     fn build_transaction(&mut self) -> M {
 ///         let mut msg = M::default();
 ///         msg.put_string(1, format!("transaction"));
 ///         msg
@@ -53,7 +53,7 @@ where
     /// This method is called only once so the processing will be thread safe
     fn init(&mut self, proc: &InjProc<M>) -> Result<(), Box<dyn Error>>;
     /// Method to build a transaction to inject
-    fn build_transation(&mut self) -> M;
+    fn build_transaction(&mut self) -> M;
     /// Method to process transaction response of the injection (to check the return code for example)
     /// if an error is trigger, the injection and the processor will stop
     /// By default response are ignored
@@ -85,7 +85,7 @@ where
         Ok(())
     }
 
-    fn build_transation(&mut self) -> M {
+    fn build_transaction(&mut self) -> M {
         let mut msg = M::default();
         msg.put_string(1, "DUMMY");
         msg

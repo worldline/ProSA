@@ -157,7 +157,7 @@ impl InjProc {
                 regulator.notify_receive_transaction(Duration::default());
 
                 // Build the next transaction
-                let _ = next_transaction.get_or_insert(adaptor.build_transation());
+                let _ = next_transaction.get_or_insert(adaptor.build_transaction());
             }
             InternalMsg::ERROR(err) => panic!(
                 "The inj processor {} receive an error {:?}",
@@ -201,7 +201,7 @@ where
 
         // Create a message regulator
         let mut regulator = self.settings.get_regulator();
-        let mut next_transaction = Some(adaptor.build_transation());
+        let mut next_transaction = Some(adaptor.build_transaction());
         let mut msg_id: u64 = 0;
 
         // Wait for service table
@@ -244,7 +244,7 @@ where
                         let trans = if let Some(transaction) = next_transaction.take() {
                             RequestMsg::new(msg_id, self.settings.service_name.clone(), transaction, self.proc.get_service_queue())
                         } else {
-                            RequestMsg::new(msg_id, self.settings.service_name.clone(), adaptor.build_transation(), self.proc.get_service_queue())
+                            RequestMsg::new(msg_id, self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_service_queue())
                         };
 
                         debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = name, service = self.settings.service_name, request = format!("{:?}", trans.get_data()));
