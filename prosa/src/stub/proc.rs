@@ -1,6 +1,3 @@
-use std::time::Instant;
-
-use opentelemetry::{metrics::Unit, KeyValue};
 use prosa_macros::proc_settings;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -80,14 +77,6 @@ where
         let mut adaptor = A::default();
         adaptor.init(self)?;
 
-        // meter
-        let meter = self.proc.meter("stub");
-        let req_duration = meter
-            .f64_histogram("request_duration")
-            .with_description("stub processing duration")
-            .with_unit(Unit::new("seconds"))
-            .init();
-
         // Declare the processor
         self.proc.add_proc().await?;
 
@@ -100,13 +89,8 @@ where
             if let Some(msg) = self.internal_rx_queue.recv().await {
                 match msg {
                     InternalMsg::REQUEST(msg) => {
-                        let top = Instant::now();
                         let resp_data = adaptor.process_request(msg.get_service(), msg.get_data());
                         debug!(name: "stub_proc", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = name, stub_service = msg.get_service(), stub_req = format!("{:?}", msg.get_data()).to_string(), stub_resp = format!("{:?}", resp_data));
-                        req_duration.record(
-                            top.elapsed().as_secs_f64(),
-                            &[KeyValue::new("service", msg.get_service().clone())],
-                        );
                         msg.return_to_sender(resp_data).await.unwrap()
                     }
                     InternalMsg::RESPONSE(msg) => panic!(

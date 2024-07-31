@@ -34,7 +34,7 @@ use opentelemetry_sdk::metrics::MeterProvider;
 ///     fn init(&mut self, _proc: &StubProc<M>) -> Result<(), Box<dyn std::error::Error>> {
 ///         Ok(())
 ///     }
-///     fn process_request(&self, service_name: &str, request: &M) -> M {
+///     fn process_request(&mut self, service_name: &str, request: &M) -> M {
 ///         let mut msg = request.clone();
 ///         msg.put_string(1, format!("test service {}", service_name));
 ///         msg
@@ -56,7 +56,7 @@ where
     /// This method is called only once so the processing will be thread safe
     fn init(&mut self, proc: &StubProc<M>) -> Result<(), Box<dyn Error>>;
     /// Method to process incomming requests
-    fn process_request(&self, service_name: &str, request: &M) -> M;
+    fn process_request(&mut self, service_name: &str, request: &M) -> M;
 }
 
 /// Parot adaptor for the stub processor. Use to respond to a request with the same message
@@ -81,7 +81,7 @@ where
         Ok(())
     }
 
-    fn process_request(&self, _service_name: &str, request: &M) -> M {
+    fn process_request(&mut self, _service_name: &str, request: &M) -> M {
         request.clone()
     }
 }

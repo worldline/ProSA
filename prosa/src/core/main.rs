@@ -42,8 +42,8 @@ where
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum BusError {
     /// Error that indicate the queue can forward the internal main message
-    #[error("The Queue can't send the internal main message: {0}")]
-    InternalMainQueueError(String),
+    #[error("The Queue can't send the internal main message {0}, proc_id={1}, reason={2}")]
+    InternalMainQueueError(String, u32, String),
     /// Error that indicate the queue can forward the internal message
     #[error("The Queue can't send the internal message: {0}")]
     InternalQueueError(String),
@@ -53,15 +53,6 @@ pub enum BusError {
     /// Error on the internal TVF message use for internal exchange
     #[error("The internal message is not correct: {0}")]
     InternalTvfError(#[from] TvfError),
-}
-
-impl<M> From<mpsc::error::SendError<InternalMainMsg<M>>> for BusError
-where
-    M: Sized + Clone + Tvf,
-{
-    fn from(error: mpsc::error::SendError<InternalMainMsg<M>>) -> Self {
-        BusError::InternalMainQueueError(error.to_string())
-    }
 }
 
 impl<M> From<mpsc::error::SendError<InternalMsg<M>>> for BusError
@@ -147,45 +138,45 @@ where
     }
 
     /// Method to declare a new processor on the main bus
-    pub async fn add_proc_queue(
-        &self,
-        proc: ProcService<M>,
-    ) -> Result<(), mpsc::error::SendError<InternalMainMsg<M>>> {
+    pub async fn add_proc_queue(&self, proc: ProcService<M>) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::NEWPROCQUEUE(proc))
+            .send(InternalMainMsg::NEWPROCQUEUE(proc.clone()))
             .await
+            .map_err(|e| {
+                BusError::InternalMainQueueError(
+                    "NEWPROCQUEUE".into(),
+                    proc.get_proc_id(),
+                    e.to_string(),
+                )
+            })
     }
 
     /// Method to remove an entire processor from the main bus
-    pub async fn rm_proc(
-        &self,
-        proc_id: u32,
-    ) -> Result<(), mpsc::error::SendError<InternalMainMsg<M>>> {
+    pub async fn rm_proc(&self, proc_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::DELPROC(proc_id))
             .await
+            .map_err(|e| BusError::InternalMainQueueError("DELPROC".into(), proc_id, e.to_string()))
     }
 
     /// Method to declare a new processor on the main bus
-    pub async fn rm_proc_queue(
-        &self,
-        proc_id: u32,
-        queue_id: u32,
-    ) -> Result<(), mpsc::error::SendError<InternalMainMsg<M>>> {
+    pub async fn rm_proc_queue(&self, proc_id: u32, queue_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::DELPROCQUEUE(proc_id, queue_id))
             .await
+            .map_err(|e| {
+                BusError::InternalMainQueueError("DELPROCQUEUE".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to declare a new service for a whole processor on the main bus
-    pub async fn add_service_proc(
-        &self,
-        names: Vec<String>,
-        proc_id: u32,
-    ) -> Result<(), mpsc::error::SendError<InternalMainMsg<M>>> {
+    pub async fn add_service_proc(&self, names: Vec<String>, proc_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::NEWPROCSRV(names, proc_id))
             .await
+            .map_err(|e| {
+                BusError::InternalMainQueueError("NEWPROCSRV".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to declare a new service for a processor queue on the main bus
@@ -194,21 +185,21 @@ where
         names: Vec<String>,
         proc_id: u32,
         queue_id: u32,
-    ) -> Result<(), mpsc::error::SendError<InternalMainMsg<M>>> {
+    ) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::NEWSRV(names, proc_id, queue_id))
             .await
+            .map_err(|e| BusError::InternalMainQueueError("NEWSRV".into(), proc_id, e.to_string()))
     }
 
     /// Method to remove a service for a whole processor from the main bus
-    pub async fn rm_service_proc(
-        &self,
-        names: Vec<String>,
-        proc_id: u32,
-    ) -> Result<(), mpsc::error::SendError<InternalMainMsg<M>>> {
+    pub async fn rm_service_proc(&self, names: Vec<String>, proc_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::DELPROCSRV(names, proc_id))
             .await
+            .map_err(|e| {
+                BusError::InternalMainQueueError("DELPROCSRV".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to remove a service from the main bus
@@ -217,10 +208,19 @@ where
         names: Vec<String>,
         proc_id: u32,
         queue_id: u32,
-    ) -> Result<(), mpsc::error::SendError<InternalMainMsg<M>>> {
+    ) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::DELSRV(names, proc_id, queue_id))
             .await
+            .map_err(|e| BusError::InternalMainQueueError("DELSRV".into(), proc_id, e.to_string()))
+    }
+
+    /// Method to stop all processors
+    pub async fn stop(&self, reason: String) -> Result<(), BusError> {
+        self.internal_tx_queue
+            .send(InternalMainMsg::SHUTDOWN(reason))
+            .await
+            .map_err(|e| BusError::InternalMainQueueError("SHUTDOWN".into(), 0, e.to_string()))
     }
 
     /// Provide the ProSA name based on ProSA settings
@@ -343,6 +343,22 @@ where
         }
     }
 
+    /// Method to shutdown all processors (return `true` if all processor are off, `false` otherwise)
+    async fn stop(&mut self) -> bool {
+        let mut is_stopped = true;
+        for proc in self.processors.values() {
+            for proc_service in proc.values() {
+                if let Err(e) = proc_service.proc_queue.send(InternalMsg::SHUTDOWN).await {
+                    debug!("The {:?} seems already stopped: {}", proc_service, e);
+                } else {
+                    is_stopped = false;
+                }
+            }
+        }
+
+        is_stopped
+    }
+
     async fn internal_run(&mut self) -> Result<(), BusError> {
         loop {
             tokio::select! {
@@ -422,20 +438,20 @@ where
                         InternalMainMsg::COMMAND(cmd)=> {
                             info!("Wan't to execute the command {}", cmd);
                         },
+                        InternalMainMsg::SHUTDOWN(reason) => {
+                            warn!("ProSA need to stop: {}", reason);
+                            self.stop().await;
+
+                            // The shutdown mecanism will be implemented later
+                            return Ok(())
+                        },
                     }
                 },
                 _ = signal::ctrl_c() => {
                     warn!("ProSA need to stop");
-                    for proc in self.processors.values() {
-                        for proc_service in proc.values() {
-                            if let Err(e) = proc_service.proc_queue.send(InternalMsg::SHUTDOWN).await {
-                                debug!("The {:?} seems already stopped: {}", proc_service, e);
-                            }
-                        }
-                    }
+                    self.stop().await;
 
-                    // FIXME Wait until all processor are delleted
-
+                    // The shutdown mecanism will be implemented later
                     return Ok(())
                 },
             }

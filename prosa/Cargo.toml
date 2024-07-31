@@ -1,6 +1,6 @@
 [package]
 name = "prosa"
-version = "0.1.1"
+version = "0.1.2"
 authors.workspace = true
 description = "ProSA core"
 homepage.workspace = true
@@ -15,6 +15,11 @@ path = "proc.rs"
 
 [package.metadata.prosa]
 main = ["core::main::MainProc"]
+
+[package.metadata.prosa.inj]
+proc = "inj::proc::InjProc"
+settings = "inj::proc::InjSettings"
+adaptor = ["inj::adaptor::InjDummyAdaptor"]
 
 [package.metadata.prosa.stub]
 proc = "stub::proc::StubProc"
