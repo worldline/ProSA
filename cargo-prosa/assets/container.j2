@@ -1,0 +1,50 @@
+{% if builder_image is defined -%}
+FROM {{ builder_image }} AS builder
+WORKDIR /opt
+COPY . .
+
+RUN mkdir -p ~/.ssh \
+ && touch ~/.ssh/config \
+ && echo "Host *\n    StrictHostKeyChecking=accept-new" >> ~/.ssh/config \
+ && chmod 644 ~/.ssh/config
+
+{% if package_manager == "apt" -%}
+RUN export DEBIAN_FRONTEND=noninteractive \
+ && apt-get -y update && apt-get -y install \
+      libssl-dev
+{% endif -%}
+
+{% if docker -%}
+RUN --mount=type=ssh export CARGO_NET_GIT_FETCH_WITH_CLI=true \
+ && cargo build -r
+{% else %}
+RUN cargo build -r
+{% endif %}
+{% endif -%}
+FROM {{ image }}
+
+LABEL org.opencontainers.image.title="{{ name }}"
+LABEL org.opencontainers.image.version="{{ version }}"
+{% if license is defined %}LABEL org.opencontainers.image.licenses="{{ license }}"{% endif %}
+{% if authors is defined %}LABEL org.opencontainers.image.authors="{{ authors | join(sep=", ") }}"{% endif %}
+{% if description is defined %}LABEL org.opencontainers.image.description="{{ description }}"{% endif %}
+{% if documentation is defined %}LABEL org.opencontainers.image.documentation="{{ documentation }}"{% endif %}
+
+{% if builder_image is defined -%}
+COPY --from=builder --chmod=755 /opt/target/release/{{ name }} /usr/local/bin/{{ name }}
+{% else %}
+COPY --chmod=755 target/release/{{ name }} /usr/local/bin/{{ name }}
+{% endif -%}
+
+{% if package_manager == "apt" %}
+RUN export DEBIAN_FRONTEND=noninteractive \
+ && apt-get -y update && apt-get -y install \
+      libssl3 \
+ && apt-get -y clean && apt-get -y autoclean \
+ && rm -rf /tmp/* \
+ && /usr/local/bin/{{ name }} -c /etc/{{ name }}.yml --dry_run
+{% else %}
+RUN /usr/local/bin/{{ name }} -c /etc/{{ name }}.yml --dry_run
+{% endif %}
+
+ENTRYPOINT ["/usr/local/bin/{{ name }}", "-c", "/etc/{{ name }}.yml"]

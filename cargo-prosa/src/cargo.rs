@@ -161,19 +161,15 @@ impl Metadata {
     ) -> Result<ProcDesc, String> {
         let name = if let Some(name) = &self.name {
             Some(name.as_str())
-        } else if let Some(Some(proc_name)) = self
-            .proc
-            .as_ref()
-            .map(|p| p.rsplit_once(':').map(|(_, proc_name)| proc_name))
-        {
-            Some(proc_name)
         } else {
-            None
+            self.proc
+                .as_ref()
+                .and_then(|p| p.rsplit_once(':').map(|(_, proc_name)| proc_name))
         }
         .ok_or(String::from("Missing ProSA `name` metadata"))?;
 
-        let adaptor = if let Some(Some(adaptor)) =
-            adaptor_name.map(|name| self.find_adaptor(name, crate_name))
+        let adaptor = if let Some(adaptor) =
+            adaptor_name.and_then(|name| self.find_adaptor(name, crate_name))
         {
             Some(adaptor)
         } else if let Some(adaptors) = &self.adaptor {
@@ -220,28 +216,44 @@ impl fmt::Display for Metadata {
 /// Package metadata that describe a crate
 #[derive(Debug, Deserialize)]
 pub struct PackageMetadata {
-    name: String,
-    version: String,
-    description: Option<String>,
+    /// Name of the package
+    pub name: String,
+    /// Version of the package
+    pub version: String,
+    /// Package license
+    pub license: Option<String>,
+    /// Description of the package
+    pub description: Option<String>,
+    /// URL of the package documentation
+    pub documentation: Option<String>,
+    /// Authors of the package
+    pub authors: Vec<String>,
+
+    /// Metadata of the package
     metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 impl PackageMetadata {
-    /// Know if the package contain ProSA metadata
-    pub fn is_prosa(&self) -> bool {
+    /// Know if a metadata key is present
+    pub fn contain_metadata(&self, name: &str) -> bool {
         if let Some(metadata) = &self.metadata {
-            metadata.contains_key("prosa")
+            metadata.contains_key(name)
         } else {
             false
         }
     }
 
+    /// Know if the package contain ProSA metadata
+    pub fn is_prosa(&self) -> bool {
+        self.contain_metadata("prosa")
+    }
+
     /// Getter of the ProSA Processor or Adaptor if present
     pub fn get_prosa_proc_metadata(&self) -> Option<HashMap<String, Metadata>> {
-        if let Some(Some(Some(metadata))) = self
+        if let Some(metadata) = self
             .metadata
             .as_ref()
-            .map(|m| m.get("prosa").map(|w| w.as_object()))
+            .and_then(|m| m.get("prosa").and_then(|w| w.as_object()))
         {
             let mut proc_metadata = HashMap::new();
             for (name, data) in metadata {
@@ -261,10 +273,10 @@ impl PackageMetadata {
     /// Getter of a ProSA metadata list
     fn get_prosa_metadata(&self, ty: &str) -> Vec<String> {
         let mut meta_list: Vec<String> = Vec::new();
-        if let Some(Some(Some(metadata))) = self
+        if let Some(metadata) = self
             .metadata
             .as_ref()
-            .map(|m| m.get("prosa").map(|w| w.as_object()))
+            .and_then(|m| m.get("prosa").and_then(|w| w.as_object()))
         {
             for (meta_name, data) in metadata {
                 if meta_name == ty {
@@ -296,10 +308,10 @@ impl PackageMetadata {
 
     /// Method to get a component version from its name if it exist
     fn get_version(&self, name: &str, ty: &str) -> Option<ComponentVersion> {
-        if let Some(Some(Some(metadata))) = self
+        if let Some(metadata) = self
             .metadata
             .as_ref()
-            .map(|m| m.get("prosa").map(|w| w.as_object()))
+            .and_then(|m| m.get("prosa").and_then(|w| w.as_object()))
         {
             for (meta_name, data) in metadata {
                 if meta_name != "main" && meta_name != "tvf" && ty != "main" && ty != "tvf" {
@@ -367,6 +379,28 @@ impl PackageMetadata {
     pub fn get_adaptor_version(&self, name: &str) -> Option<ComponentVersion> {
         self.get_version(name, "adaptor")
     }
+
+    /// Method to add package metadata to a Jinja context
+    pub fn j2_context(&self, ctx: &mut tera::Context) {
+        ctx.insert("name", &self.name);
+        ctx.insert("version", &self.version);
+        if let Some(license) = &self.license {
+            ctx.insert("license", license);
+        }
+        if let Some(desc) = &self.description {
+            ctx.insert("description", desc);
+        }
+        if let Some(doc) = &self.documentation {
+            ctx.insert("documentation", doc);
+        }
+        if !self.authors.is_empty() {
+            ctx.insert("authors", &self.authors);
+        }
+
+        if let Some(metadata) = &self.metadata {
+            ctx.insert("deb_pkg", &metadata.contains_key("deb"));
+        }
+    }
 }
 
 impl fmt::Display for PackageMetadata {
@@ -381,10 +415,10 @@ impl fmt::Display for PackageMetadata {
             writeln!(f, "Package {}[{}]", self.name, self.version)?;
         }
 
-        if let Some(Some(Some(metadata))) = self
+        if let Some(metadata) = self
             .metadata
             .as_ref()
-            .map(|m| m.get("prosa").map(|w| w.as_object()))
+            .and_then(|m| m.get("prosa").and_then(|w| w.as_object()))
         {
             for (name, data) in metadata {
                 writeln!(f, "  - {}", name)?;
@@ -421,6 +455,37 @@ impl CargoMetadata {
             .output()?;
 
         Ok(serde_json::from_slice(cargo_metadata.stdout.as_slice())?)
+    }
+
+    /// Method to load metadata of the current ProSA package without its dependencies
+    pub fn load_package_metadata() -> Result<PackageMetadata, io::Error> {
+        // Get local packges metadata
+        let cargo_metadata = std::process::Command::new("cargo")
+            .args(vec!["metadata", "-q", "--no-deps"])
+            .output()?;
+        if cargo_metadata.status.success() {
+            let mut metadata: CargoMetadata =
+                serde_json::from_slice(cargo_metadata.stdout.as_slice())?;
+            if metadata.packages.len() == 1 {
+                Ok(metadata.packages.pop().unwrap())
+            } else {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Local package metadata is not correct",
+                ))
+            }
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                std::str::from_utf8(cargo_metadata.stderr.as_slice()).unwrap_or(
+                    format!(
+                        "Can't retrieve package metadata {:?}",
+                        cargo_metadata.status.code()
+                    )
+                    .as_str(),
+                ),
+            ))
+        }
     }
 
     /// Method to get all merged ProSA proc metadata
