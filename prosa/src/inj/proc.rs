@@ -154,7 +154,7 @@ impl InjProc {
                 debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = name, service = msg.get_service(), response = format!("{:?}", msg.get_data()));
                 adaptor.process_response(msg.get_data(), msg.get_service())?;
 
-                regulator.notify_receive_transaction(Duration::default());
+                regulator.notify_receive_transaction(msg.elapsed());
 
                 // Build the next transaction
                 let _ = next_transaction.get_or_insert(adaptor.build_transaction());

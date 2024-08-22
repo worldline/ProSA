@@ -48,7 +48,7 @@ pub struct Speed {
 }
 
 impl Speed {
-    /// Create a new speed from number of desire sample (5 minimum)
+    /// Create a new speed using a number of desired samples (5 minimum)
     pub fn new(size_for_average: u16) -> Speed {
         let size = if size_for_average > 5 {
             size_for_average as usize
@@ -80,33 +80,39 @@ impl Speed {
         self.event_speeds.front()
     }
 
+    /// Accumulate all event speeds as Duration
+    ///
+    /// <math><msub><mi>Σ</mi><mn>t</mn></msub></math>
+    fn accumulate_event_speeds(&self) -> Duration {
+        let mut duration = Duration::ZERO;
+        let mut instant = Instant::now();
+        for event_speed in &self.event_speeds {
+            duration += instant.duration_since(*event_speed);
+            instant = *event_speed;
+        }
+
+        duration
+    }
+
     /// Getter of the mean time between transaction
     ///
     /// <math><mfrac><mi><msub><mi>Σ</mi><mn>t</mn></msub></mi><mi><msub><mi>N</mi><mn>t</mn></msub></mi></mfrac> = mean</math>
     pub fn get_mean_duration(&self) -> Duration {
-        let mut mean_duration = Duration::default();
-        let mut instant = Instant::now();
-        for event_speed in &self.event_speeds {
-            mean_duration += instant.duration_since(*event_speed);
-            instant = *event_speed;
+        if !self.event_speeds.is_empty() {
+            self.accumulate_event_speeds()
+                .div_f32(self.event_speeds.len() as f32)
+        } else {
+            Duration::ZERO
         }
-
-        mean_duration.div_f32(self.event_speeds.capacity() as f32)
     }
 
     /// Getter of the current speed of transaction flow
     ///
     /// <math><mfrac><mi>1000 × <msub><mi>N</mi><mn>t</mn></msub></mi><mi><msub><mi>Σ</mi><mn>t</mn></msub></mi></mfrac> = TPS</math>
     pub fn get_speed(&self) -> f64 {
-        let mut sum_duration = Duration::default();
-        let mut instant = Instant::now();
-        for event_speed in &self.event_speeds {
-            sum_duration += instant.duration_since(*event_speed);
-            instant = *event_speed;
-        }
-
+        let sum_duration = self.accumulate_event_speeds();
         if !sum_duration.is_zero() {
-            (1000 * self.event_speeds.capacity()) as f64 / sum_duration.as_millis() as f64
+            (1000 * self.event_speeds.len()) as f64 / sum_duration.as_millis() as f64
         } else {
             0.0
         }
@@ -119,15 +125,9 @@ impl Speed {
     ///
     /// <math><mfrac><mi>1000 × <msub><mi>N</mi><mn>t</mn></msub></mi><mi>TPS</mi></mfrac> + overhead − <msub><mi>Σ</mi><mn>t</mn></msub> = duration</math>
     pub fn get_duration_overhead(&self, tps: f64, overhead: Option<Duration>) -> Duration {
-        let mut sum_duration = Duration::default();
-        let mut instant = Instant::now();
-        for event_speed in &self.event_speeds {
-            sum_duration += instant.duration_since(*event_speed);
-            instant = *event_speed;
-        }
-
         let duration =
             Duration::from_millis(((1000 * self.event_speeds.len()) as f64 / tps) as u64);
+        let sum_duration = self.accumulate_event_speeds();
         if let Some(overhead) = overhead {
             duration
                 .saturating_add(overhead)
