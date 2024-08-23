@@ -228,9 +228,7 @@ where
 
     /// Method to push a pending message
     pub fn push(&mut self, msg: T, timeout: Duration) {
-        let id = msg.get_id();
-        self.timers.push(id, timeout);
-        self.pending_messages.insert(id, msg);
+        self.push_with_id(msg.get_id(), msg, timeout);
     }
 
     /// Method to push a pending message with a custom id
@@ -343,7 +341,9 @@ mod tests {
                     Some(msg) = self.internal_rx_queue.recv() => {
                         match msg {
                             InternalMsg::REQUEST(_) => {
+                                assert_eq!(0, pending_timer.len());
                                 pending_timer.push(1, Duration::from_millis(100));
+                                assert_eq!(1, pending_timer.len());
                             },
                             InternalMsg::SERVICE(table) => {
                                 if let Some(service) = table.get_proc_service(&String::from("TEST"), 1) {
@@ -354,6 +354,7 @@ mod tests {
                         }
                     },
                     Some(timer_id) = pending_timer.pull(), if !pending_timer.is_empty() => {
+                        assert_eq!(0, pending_timer.len());
                         assert_eq!(1, timer_id);
                         self.proc.rm_proc().await?;
                         return Ok(())
@@ -376,7 +377,9 @@ mod tests {
                     Some(msg) = self.internal_rx_queue.recv() => {
                         match msg {
                             InternalMsg::REQUEST(msg) => {
+                                assert_eq!(0, pending_msg.len());
                                 pending_msg.push(msg, Duration::from_millis(100));
+                                assert_eq!(1, pending_msg.len());
                             },
                             InternalMsg::SERVICE(table) => {
                                 if let Some(service) = table.get_proc_service(&String::from("TEST"), 1) {
@@ -389,6 +392,7 @@ mod tests {
                         }
                     },
                     Some(msg) = pending_msg.pull(), if !pending_msg.is_empty() => {
+                        assert_eq!(0, pending_msg.len());
                         assert_eq!(String::from("good"), msg.get_data().get_string(1)?.into_owned());
                         self.proc.rm_proc().await?;
                         return Ok(())
