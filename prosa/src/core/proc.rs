@@ -116,25 +116,25 @@
 //!         loop {
 //!             if let Some(msg) = self.internal_rx_queue.recv().await {
 //!                 match msg {
-//!                     InternalMsg::REQUEST(msg) => {
+//!                     InternalMsg::Request(msg) => {
 //!                         // Send the request to your adaptor and get a TVF object in return to respond to the sender
 //!                         let tvf = adaptor.process_request(msg.get_service(), msg.get_data());
 //!                         msg.return_to_sender(tvf).await.unwrap()
 //!                     }
-//!                     InternalMsg::RESPONSE(msg) => panic!(
+//!                     InternalMsg::Response(msg) => panic!(
 //!                         "The stub processor {} receive a response {:?}",
 //!                         self.get_proc_id(),
 //!                         msg
 //!                     ),
-//!                     InternalMsg::ERROR(err) => panic!(
+//!                     InternalMsg::Error(err) => panic!(
 //!                         "The stub processor {} receive an error {:?}",
 //!                         self.get_proc_id(),
 //!                         err
 //!                     ),
-//!                     InternalMsg::COMMAND(_) => todo!(),
-//!                     InternalMsg::CONFIG => todo!(),
-//!                     InternalMsg::SERVICE(table) => self.service = table,
-//!                     InternalMsg::SHUTDOWN => {
+//!                     InternalMsg::Command(_) => todo!(),
+//!                     InternalMsg::Config => todo!(),
+//!                     InternalMsg::Service(table) => self.service = table,
+//!                     InternalMsg::Shutdown => {
 //!                         adaptor.terminate();
 //!                         self.proc.rm_proc().await?;
 //!                         return Ok(());

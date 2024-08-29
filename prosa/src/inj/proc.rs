@@ -136,12 +136,12 @@ impl InjProc {
         A: Default + Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
     {
         match msg {
-            InternalMsg::REQUEST(msg) => panic!(
+            InternalMsg::Request(msg) => panic!(
                 "The inj processor {} receive a request {:?}",
                 self.get_proc_id(),
                 msg
             ),
-            InternalMsg::RESPONSE(msg) => {
+            InternalMsg::Response(msg) => {
                 let _enter_span = msg.enter_span();
                 meter_trans_duration.record(
                     msg.elapsed().as_secs_f64(),
@@ -159,15 +159,15 @@ impl InjProc {
                 // Build the next transaction
                 let _ = next_transaction.get_or_insert(adaptor.build_transaction());
             }
-            InternalMsg::ERROR(err) => panic!(
+            InternalMsg::Error(err) => panic!(
                 "The inj processor {} receive an error {:?}",
                 self.get_proc_id(),
                 err
             ),
-            InternalMsg::COMMAND(_) => todo!(),
-            InternalMsg::CONFIG => todo!(),
-            InternalMsg::SERVICE(table) => self.service = table,
-            InternalMsg::SHUTDOWN => {
+            InternalMsg::Command(_) => todo!(),
+            InternalMsg::Config => todo!(),
+            InternalMsg::Service(table) => self.service = table,
+            InternalMsg::Shutdown => {
                 adaptor.terminate();
                 self.proc.rm_proc().await?;
                 return Ok(());
@@ -224,7 +224,7 @@ where
             .get_proc_service(&self.settings.service_name, msg_id)
             .unwrap()
             .proc_queue
-            .send(InternalMsg::REQUEST(RequestMsg::new(
+            .send(InternalMsg::Request(RequestMsg::new(
                 msg_id,
                 self.settings.service_name.clone(),
                 next_transaction.take().unwrap(),
@@ -248,7 +248,7 @@ where
                         };
 
                         debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = name, service = self.settings.service_name, request = format!("{:?}", trans.get_data()));
-                        service.proc_queue.send(InternalMsg::REQUEST(trans)).await?;
+                        service.proc_queue.send(InternalMsg::Request(trans)).await?;
 
                         msg_id += 1;
                         regulator.notify_send_transaction();

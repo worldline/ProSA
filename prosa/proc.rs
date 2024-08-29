@@ -44,7 +44,7 @@ where
             tokio::select! {
                 Some(msg) = self.internal_rx_queue.recv() => {
                     match msg {
-                        InternalMsg::REQUEST(msg) => {
+                        InternalMsg::Request(msg) => {
                             info!("Proc {} receive a request: {:?}", self.get_proc_id(), msg);
 
 
@@ -52,21 +52,21 @@ where
                             pending_msgs.push(msg, Duration::from_millis(200));
                             //msg.return_to_sender(tvf).await.unwrap();
                         },
-                        InternalMsg::RESPONSE(msg) => {
+                        InternalMsg::Response(msg) => {
                             let _enter = msg.enter_span();
                             info!("Proc {} receive a response: {:?}", self.get_proc_id(), msg);
                         },
-                        InternalMsg::ERROR(err) => {
+                        InternalMsg::Error(err) => {
                             let _enter = err.enter_span();
                             info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
                         },
-                        InternalMsg::COMMAND(_) => todo!(),
-                        InternalMsg::CONFIG => todo!(),
-                        InternalMsg::SERVICE(table) => {
+                        InternalMsg::Command(_) => todo!(),
+                        InternalMsg::Config => todo!(),
+                        InternalMsg::Service(table) => {
                             debug!("New service table received:\n{}\n", table);
                             self.service = table;
                         },
-                        InternalMsg::SHUTDOWN => {
+                        InternalMsg::Shutdown => {
                             adaptor.terminate();
                             warn!("The processor will shut down");
                         },
@@ -82,14 +82,14 @@ where
                     let stub_service_name = String::from("STUB_TEST");
                     if let Some(service) = self.service.get_proc_service(&stub_service_name, msg_id) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::REQUEST(RequestMsg::new(msg_id, stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await.unwrap();
+                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(msg_id, stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await.unwrap();
                         msg_id += 1;
                     }
 
                     let proc_service_name = String::from("PROC_TEST");
                     if let Some(service) = self.service.get_proc_service(&proc_service_name, msg_id) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::REQUEST(RequestMsg::new(msg_id, proc_service_name, tvf, self.proc.get_service_queue()))).await.unwrap();
+                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(msg_id, proc_service_name, tvf, self.proc.get_service_queue()))).await.unwrap();
                         msg_id += 1;
                     }
                 },
