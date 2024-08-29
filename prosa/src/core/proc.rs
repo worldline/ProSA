@@ -394,7 +394,7 @@ where
 /// ```
 pub trait Proc<A>
 where
-    A: Default + Adaptor,
+    A: Adaptor,
 {
     /// Main loop of the processor
     fn internal_run(
@@ -410,7 +410,7 @@ where
     ///
     /// fn routine<A, P>(proc: P)
     /// where
-    ///     A: Default + Adaptor,
+    ///     A: Adaptor,
     ///     P: Proc<A> + std::marker::Send + 'static,
     /// {
     ///     Proc::<A>::run(proc, String::from("processor_name"));
