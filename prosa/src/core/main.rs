@@ -144,7 +144,7 @@ where
             .await
             .map_err(|e| {
                 BusError::InternalMainQueueError(
-                    "NEWPROCQUEUE".into(),
+                    "NewProcQueue".into(),
                     proc.get_proc_id(),
                     e.to_string(),
                 )
@@ -156,7 +156,9 @@ where
         self.internal_tx_queue
             .send(InternalMainMsg::DeleteProc(proc_id))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("DELPROC".into(), proc_id, e.to_string()))
+            .map_err(|e| {
+                BusError::InternalMainQueueError("DeleteProc".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to declare a new processor on the main bus
@@ -165,7 +167,7 @@ where
             .send(InternalMainMsg::DeleteProcQueue(proc_id, queue_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("DELPROCQUEUE".into(), proc_id, e.to_string())
+                BusError::InternalMainQueueError("DeleteProcQueue".into(), proc_id, e.to_string())
             })
     }
 
@@ -175,7 +177,7 @@ where
             .send(InternalMainMsg::NewProcService(names, proc_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("NEWPROCSRV".into(), proc_id, e.to_string())
+                BusError::InternalMainQueueError("NewProcService".into(), proc_id, e.to_string())
             })
     }
 
@@ -189,7 +191,9 @@ where
         self.internal_tx_queue
             .send(InternalMainMsg::NewService(names, proc_id, queue_id))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("NEWSRV".into(), proc_id, e.to_string()))
+            .map_err(|e| {
+                BusError::InternalMainQueueError("NewService".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to remove a service for a whole processor from the main bus
@@ -198,7 +202,7 @@ where
             .send(InternalMainMsg::DeleteProcService(names, proc_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("DELPROCSRV".into(), proc_id, e.to_string())
+                BusError::InternalMainQueueError("DeleteProcService".into(), proc_id, e.to_string())
             })
     }
 
@@ -212,7 +216,9 @@ where
         self.internal_tx_queue
             .send(InternalMainMsg::DeleteService(names, proc_id, queue_id))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("DELSRV".into(), proc_id, e.to_string()))
+            .map_err(|e| {
+                BusError::InternalMainQueueError("DeleteService".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to stop all processors
@@ -220,7 +226,7 @@ where
         self.internal_tx_queue
             .send(InternalMainMsg::Shutdown(reason))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("SHUTDOWN".into(), 0, e.to_string()))
+            .map_err(|e| BusError::InternalMainQueueError("Shutdown".into(), 0, e.to_string()))
     }
 
     /// Provide the ProSA name based on ProSA settings
