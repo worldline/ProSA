@@ -36,7 +36,7 @@ pub use prosa_macros::Adaptor;
 /// ```
 /// use prosa::core::adaptor::Adaptor;
 ///
-/// #[derive(Default, Adaptor)]
+/// #[derive(Adaptor)]
 /// struct MyAdaptor {}
 /// ```
 pub trait Adaptor {

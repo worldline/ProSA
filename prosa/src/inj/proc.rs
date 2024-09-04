@@ -133,7 +133,7 @@ impl InjProc {
         meter_trans_duration: &Histogram<f64>,
     ) -> Result<(), Box<dyn std::error::Error>>
     where
-        A: Default + Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
+        A: Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
     {
         match msg {
             InternalMsg::Request(msg) => panic!(
@@ -181,12 +181,11 @@ impl InjProc {
 #[proc]
 impl<A> Proc<A> for InjProc
 where
-    A: Default + Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
+    A: Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
         // Initiate an adaptor for the inj processor
-        let mut adaptor = A::default();
-        adaptor.init(self)?;
+        let mut adaptor = A::new(self)?;
 
         // meter
         let meter = self.proc.meter(name.clone());

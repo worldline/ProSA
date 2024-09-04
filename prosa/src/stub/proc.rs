@@ -70,12 +70,11 @@ pub struct StubProc {}
 #[proc]
 impl<A> Proc<A> for StubProc
 where
-    A: Default + Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
+    A: Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
         // Initiate an adaptor for the stub processor
-        let mut adaptor = A::default();
-        adaptor.init(self)?;
+        let mut adaptor = A::new(self)?;
 
         // Declare the processor
         self.proc.add_proc().await?;

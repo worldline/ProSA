@@ -14,7 +14,7 @@ extern crate self as prosa;
 /// use prosa::core::adaptor::Adaptor;
 /// use prosa::inj::adaptor::InjAdaptor;
 ///
-/// #[derive(Default, Adaptor)]
+/// #[derive(Adaptor)]
 /// pub struct MyInjAdaptor { }
 ///
 /// impl<M> InjAdaptor<M> for MyInjAdaptor
@@ -28,8 +28,8 @@ extern crate self as prosa;
 ///         + prosa_utils::msg::tvf::Tvf
 ///         + std::default::Default,
 /// {
-///     fn init(&mut self, _proc: &InjProc<M>) -> Result<(), Box<dyn std::error::Error>> {
-///         Ok(())
+///     fn new(_proc: &InjProc<M>) -> Result<Self, Box<dyn std::error::Error>> {
+///         Ok(Self {})
 ///     }
 ///     fn build_transaction(&mut self) -> M {
 ///         let mut msg = M::default();
@@ -51,7 +51,9 @@ where
 {
     /// Method called when the processor spawns
     /// This method is called only once so the processing will be thread safe
-    fn init(&mut self, proc: &InjProc<M>) -> Result<(), Box<dyn Error>>;
+    fn new(proc: &InjProc<M>) -> Result<Self, Box<dyn Error>>
+    where
+        Self: Sized;
     /// Method to build a transaction to inject
     fn build_transaction(&mut self) -> M;
     /// Method to process transaction response of the injection (to check the return code for example)
@@ -67,7 +69,7 @@ where
 }
 
 /// Dummy adaptor for the inj processor. Use to send a very basic message with _DUMMY_ in it.
-#[derive(Default, Adaptor)]
+#[derive(Adaptor)]
 pub struct InjDummyAdaptor {}
 
 impl<M> InjAdaptor<M> for InjDummyAdaptor
@@ -81,8 +83,8 @@ where
         + prosa_utils::msg::tvf::Tvf
         + std::default::Default,
 {
-    fn init(&mut self, _proc: &InjProc<M>) -> Result<(), Box<dyn Error>> {
-        Ok(())
+    fn new(_proc: &InjProc<M>) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {})
     }
 
     fn build_transaction(&mut self) -> M {

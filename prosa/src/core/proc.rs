@@ -27,12 +27,12 @@
 //! {
 //!     /// Method called when the processor spawns
 //!     /// This method is called only once so the processing will be thread safe
-//!     fn init(&mut self, proc: &MyProc<M>) -> Result<(), Box<dyn Error>>;
+//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn Error>> where Self: Sized;
 //!     /// Method to process incomming requests
 //!     fn process_request(&self, service_name: &str, request: &M) -> M;
 //! }
 //!
-//! #[derive(Default, Adaptor)]
+//! #[derive(Adaptor)]
 //! pub struct MyAdaptor {
 //!     // your adaptor vars here
 //! }
@@ -48,9 +48,9 @@
 //!     + prosa_utils::msg::tvf::Tvf
 //!     + std::default::Default,
 //! {
-//!     fn init(&mut self, proc: &MyProc<M>) -> Result<(), Box<dyn Error>> {
+//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn Error>> {
 //!         // Init your adaptor from processor parameters
-//!         Ok(())
+//!         Ok(Self {})
 //!     }
 //!
 //!     fn process_request(&self, service_name: &str, request: &M) -> M {
@@ -98,12 +98,11 @@
 //! #[proc]
 //! impl<A> Proc<A> for MyProc
 //! where
-//!     A: Default + Adaptor + MyAdaptorTrait<M> + std::marker::Send + std::marker::Sync,
+//!     A: Adaptor + MyAdaptorTrait<M> + std::marker::Send + std::marker::Sync,
 //! {
 //!     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
 //!         // Initiate an adaptor for the stub processor
-//!         let mut adaptor = A::default();
-//!         adaptor.init(self)?;
+//!         let mut adaptor = A::new(self)?;
 //!
 //!         // Declare the processor
 //!         self.proc.add_proc().await?;
