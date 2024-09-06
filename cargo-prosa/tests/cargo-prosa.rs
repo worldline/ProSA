@@ -72,6 +72,11 @@ fn project() -> Result<(), Box<dyn std::error::Error>> {
     cmd.arg("list");
     cmd.assert().success().stdout(predicate::str::is_match(
         r"Package prosa\[[0-9].[0-9].[0-9]\] \(ProSA core\)
+  - inj
+    Processor inj::proc::InjProc
+    Settings inj::proc::InjSettings
+    Adaptor:
+     - inj::adaptor::InjDummyAdaptor
   - main
     - core::main::MainProc
   - stub
