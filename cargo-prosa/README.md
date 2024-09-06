@@ -89,7 +89,7 @@ cargo prosa container --docker
 For your own needs, you can:
  - Select from which image the container need to be build `--image debian:stable-slim`
  - Along that you may have to specify the package manager use to install mandatory packages `--package_manager apt`
- - If you want to compile ProSA through a builder, you can specify it with `--builder rust:latest`. A multi stage container file will be create.
+ - If you want to compile ProSA through a builder, you can specify it with `--builder rust:latest`. A multi stage container file will be created.
 
 ### Deb package
 
