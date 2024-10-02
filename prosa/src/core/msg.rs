@@ -17,23 +17,23 @@ where
     M: Sized + Clone + Tvf,
 {
     /// Message to register a new spawned processor queue
-    NEWPROCQUEUE(ProcService<M>),
+    NewProcQueue(ProcService<M>),
     /// Message to indicate that a the processor stopped, delete all processor queues
-    DELPROC(u32),
+    DeleteProc(u32),
     /// Message to indicate that a the processor queue stopped, delete the processor queue
-    DELPROCQUEUE(u32, u32),
+    DeleteProcQueue(u32, u32),
     /// Message to declare new service(s) with their service name and the processor id (the processor should have been declared). Declare service(s) for the whole processor
-    NEWPROCSRV(Vec<String>, u32),
+    NewProcService(Vec<String>, u32),
     /// Message to declare new service(s) with their service name, the processor id (the processor should have been declared), and the queue id
-    NEWSRV(Vec<String>, u32, u32),
+    NewService(Vec<String>, u32, u32),
     /// Message to unregister a service for all the processor. Message that contain the service name and the processor id
-    DELPROCSRV(Vec<String>, u32),
+    DeleteProcService(Vec<String>, u32),
     /// Message to unregister service(s) for a processor queue. Message that contain service(s) name(s), the processor id, and the queue id
-    DELSRV(Vec<String>, u32, u32),
+    DeleteService(Vec<String>, u32, u32),
     /// Command to ask an action or a status to the main processor
-    COMMAND(String),
+    Command(String),
     /// Internal call for shutdown (with a reason)
-    SHUTDOWN(String),
+    Shutdown(String),
 }
 
 /// Internal ProSA message that define all message type that can be received by a processor
@@ -43,19 +43,19 @@ where
     M: Sized + Clone + Tvf,
 {
     /// Request Data message to process
-    REQUEST(RequestMsg<M>),
+    Request(RequestMsg<M>),
     /// Response of a data request message
-    RESPONSE(ResponseMsg<M>),
+    Response(ResponseMsg<M>),
     /// Response of a data request message by an error
-    ERROR(ErrorMsg<M>),
+    Error(ErrorMsg<M>),
     /// Command to ask an actiion or a status to the processor
-    COMMAND(String),
+    Command(String),
     /// Message to ask the processor to reload its configuration
-    CONFIG,
+    Config,
     /// Message to ask the processor to reload its service table
-    SERVICE(Arc<ServiceTable<M>>),
+    Service(Arc<ServiceTable<M>>),
     /// Message to ask the processor to shutdown
-    SHUTDOWN,
+    Shutdown,
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -172,7 +172,7 @@ where
         resp: M,
     ) -> Result<(), tokio::sync::mpsc::error::SendError<InternalMsg<M>>> {
         self.response_queue
-            .send(InternalMsg::RESPONSE(ResponseMsg {
+            .send(InternalMsg::Response(ResponseMsg {
                 id: self.id,
                 service: self.service,
                 span: self.span,
@@ -190,7 +190,7 @@ where
         err: ServiceError,
     ) -> Result<(), tokio::sync::mpsc::error::SendError<InternalMsg<M>>> {
         self.response_queue
-            .send(InternalMsg::ERROR(ErrorMsg {
+            .send(InternalMsg::Error(ErrorMsg {
                 id: self.id,
                 service: self.service,
                 span: self.span,

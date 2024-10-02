@@ -78,7 +78,7 @@ where
 ///     proc_queue[(Processor queue)]
 ///     proc_task[Processor task]
 ///     proc_io[Processor IOs]
-///     
+///
 ///     table <--> main_task
 ///     table --> proc_task
 ///     proc_task --> main_queue
@@ -140,11 +140,11 @@ where
     /// Method to declare a new processor on the main bus
     pub async fn add_proc_queue(&self, proc: ProcService<M>) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::NEWPROCQUEUE(proc.clone()))
+            .send(InternalMainMsg::NewProcQueue(proc.clone()))
             .await
             .map_err(|e| {
                 BusError::InternalMainQueueError(
-                    "NEWPROCQUEUE".into(),
+                    "NewProcQueue".into(),
                     proc.get_proc_id(),
                     e.to_string(),
                 )
@@ -154,28 +154,30 @@ where
     /// Method to remove an entire processor from the main bus
     pub async fn rm_proc(&self, proc_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::DELPROC(proc_id))
+            .send(InternalMainMsg::DeleteProc(proc_id))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("DELPROC".into(), proc_id, e.to_string()))
+            .map_err(|e| {
+                BusError::InternalMainQueueError("DeleteProc".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to declare a new processor on the main bus
     pub async fn rm_proc_queue(&self, proc_id: u32, queue_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::DELPROCQUEUE(proc_id, queue_id))
+            .send(InternalMainMsg::DeleteProcQueue(proc_id, queue_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("DELPROCQUEUE".into(), proc_id, e.to_string())
+                BusError::InternalMainQueueError("DeleteProcQueue".into(), proc_id, e.to_string())
             })
     }
 
     /// Method to declare a new service for a whole processor on the main bus
     pub async fn add_service_proc(&self, names: Vec<String>, proc_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::NEWPROCSRV(names, proc_id))
+            .send(InternalMainMsg::NewProcService(names, proc_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("NEWPROCSRV".into(), proc_id, e.to_string())
+                BusError::InternalMainQueueError("NewProcService".into(), proc_id, e.to_string())
             })
     }
 
@@ -187,18 +189,20 @@ where
         queue_id: u32,
     ) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::NEWSRV(names, proc_id, queue_id))
+            .send(InternalMainMsg::NewService(names, proc_id, queue_id))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("NEWSRV".into(), proc_id, e.to_string()))
+            .map_err(|e| {
+                BusError::InternalMainQueueError("NewService".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to remove a service for a whole processor from the main bus
     pub async fn rm_service_proc(&self, names: Vec<String>, proc_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::DELPROCSRV(names, proc_id))
+            .send(InternalMainMsg::DeleteProcService(names, proc_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("DELPROCSRV".into(), proc_id, e.to_string())
+                BusError::InternalMainQueueError("DeleteProcService".into(), proc_id, e.to_string())
             })
     }
 
@@ -210,17 +214,19 @@ where
         queue_id: u32,
     ) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::DELSRV(names, proc_id, queue_id))
+            .send(InternalMainMsg::DeleteService(names, proc_id, queue_id))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("DELSRV".into(), proc_id, e.to_string()))
+            .map_err(|e| {
+                BusError::InternalMainQueueError("DeleteService".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to stop all processors
     pub async fn stop(&self, reason: String) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::SHUTDOWN(reason))
+            .send(InternalMainMsg::Shutdown(reason))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("SHUTDOWN".into(), 0, e.to_string()))
+            .map_err(|e| BusError::InternalMainQueueError("Shutdown".into(), 0, e.to_string()))
     }
 
     /// Provide the ProSA name based on ProSA settings
@@ -309,7 +315,7 @@ where
             for proc_service in proc.values() {
                 if let Err(e) = proc_service
                     .proc_queue
-                    .send(InternalMsg::SERVICE(self.services.clone()))
+                    .send(InternalMsg::Service(self.services.clone()))
                     .await
                 {
                     // FIXME match the error. If it's a capacity error, don't drop the processor do something else
@@ -348,7 +354,7 @@ where
         let mut is_stopped = true;
         for proc in self.processors.values() {
             for proc_service in proc.values() {
-                if let Err(e) = proc_service.proc_queue.send(InternalMsg::SHUTDOWN).await {
+                if let Err(e) = proc_service.proc_queue.send(InternalMsg::Shutdown).await {
                     debug!("The {:?} seems already stopped: {}", proc_service, e);
                 } else {
                     is_stopped = false;
@@ -364,7 +370,7 @@ where
             tokio::select! {
                 Some(msg) = self.internal_rx_queue.recv() => {
                     match msg {
-                        InternalMainMsg::NEWPROCQUEUE(proc) => {
+                        InternalMainMsg::NewProcQueue(proc) => {
                             let proc_id = proc.get_proc_id();
                             let queue_id = proc.get_queue_id();
                             let proc_queue = proc.proc_queue.clone();
@@ -377,7 +383,7 @@ where
                             }
 
                             // Ask to the processor to load the service table
-                            if proc_queue.send(InternalMsg::SERVICE(self.services.clone())).await.is_err() {
+                            if proc_queue.send(InternalMsg::Service(self.services.clone())).await.is_err() {
                                 if let Some(proc_service) = self.processors.get_mut(&proc_id) {
                                     let _ = proc_service.remove(&queue_id);
                                 } else {
@@ -385,17 +391,17 @@ where
                                 }
                             }
                         },
-                        InternalMainMsg::DELPROC(proc_id) => {
+                        InternalMainMsg::DeleteProc(proc_id) => {
                             if self.remove_proc(proc_id).await.is_some() {
                                 prosa_main_update_srv!(self);
                             }
                         },
-                        InternalMainMsg::DELPROCQUEUE(proc_id, queue_id) => {
+                        InternalMainMsg::DeleteProcQueue(proc_id, queue_id) => {
                             if self.remove_proc_queue(proc_id, queue_id).await.is_some() {
                                 self.notify_srv_proc().await;
                             }
                         },
-                        InternalMainMsg::NEWPROCSRV(names, proc_id) => {
+                        InternalMainMsg::NewProcService(names, proc_id) => {
                             if let Some(proc_service) = self.processors.get(&proc_id) {
                                 let mut new_services = (*self.services).clone();
                                 for proc_queue in proc_service.values() {
@@ -407,7 +413,7 @@ where
                                 self.notify_srv_proc().await;
                             }
                         },
-                        InternalMainMsg::NEWSRV(names, proc_id, queue_id) => {
+                        InternalMainMsg::NewService(names, proc_id, queue_id) => {
                             if let Some(proc) = self.processors.get(&proc_id) {
                                 if let Some(proc_queue) = proc.get(&queue_id) {
                                     let mut new_services = (*self.services).clone();
@@ -419,7 +425,7 @@ where
                                 }
                             }
                         },
-                        InternalMainMsg::DELPROCSRV(names, proc_id) => {
+                        InternalMainMsg::DeleteProcService(names, proc_id) => {
                             let mut new_services = (*self.services).clone();
                             for name in names {
                                 new_services.rm_service_proc(&name, proc_id);
@@ -427,7 +433,7 @@ where
                             self.services = Arc::new(new_services);
                             self.notify_srv_proc().await;
                         },
-                        InternalMainMsg::DELSRV(names, proc_id, queue_id) => {
+                        InternalMainMsg::DeleteService(names, proc_id, queue_id) => {
                             let mut new_services = (*self.services).clone();
                             for name in names {
                                 new_services.rm_service(&name, proc_id, queue_id);
@@ -435,10 +441,10 @@ where
                             self.services = Arc::new(new_services);
                             self.notify_srv_proc().await;
                         },
-                        InternalMainMsg::COMMAND(cmd)=> {
+                        InternalMainMsg::Command(cmd)=> {
                             info!("Wan't to execute the command {}", cmd);
                         },
-                        InternalMainMsg::SHUTDOWN(reason) => {
+                        InternalMainMsg::Shutdown(reason) => {
                             warn!("ProSA need to stop: {}", reason);
                             self.stop().await;
 

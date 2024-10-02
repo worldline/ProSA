@@ -182,11 +182,11 @@ where
 ///     tokio::select! {
 ///         Some(msg) = queue.recv() => {
 ///             match msg {
-///                 InternalMsg::REQUEST(msg) => {
+///                 InternalMsg::Request(msg) => {
 ///                     // Push in the pending message, the message will wait a timeout of 200ms
 ///                     pending_msg.push(msg, Duration::from_millis(200));
 ///                 },
-///                 InternalMsg::RESPONSE(msg) => {
+///                 InternalMsg::Response(msg) => {
 ///                     let original_request: Option<RequestMsg<SimpleStringTvf>> = pending_msg.pull_msg(msg.get_id());
 ///                     println!("Receive a response: {:?}, from original request {:?}", msg, original_request);
 ///                 },
@@ -340,14 +340,14 @@ mod tests {
                 tokio::select! {
                     Some(msg) = self.internal_rx_queue.recv() => {
                         match msg {
-                            InternalMsg::REQUEST(_) => {
+                            InternalMsg::Request(_) => {
                                 assert_eq!(0, pending_timer.len());
                                 pending_timer.push(1, Duration::from_millis(100));
                                 assert_eq!(1, pending_timer.len());
                             },
-                            InternalMsg::SERVICE(table) => {
+                            InternalMsg::Service(table) => {
                                 if let Some(service) = table.get_proc_service(&String::from("TEST"), 1) {
-                                    service.proc_queue.send(InternalMsg::REQUEST(RequestMsg::new(1, String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.unwrap();
+                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.unwrap();
                                 }
                             },
                             _ => return Err(BusError::ProcCommError(self.get_proc_id(), 0, String::from("Wrong message"))),
@@ -376,16 +376,16 @@ mod tests {
                 tokio::select! {
                     Some(msg) = self.internal_rx_queue.recv() => {
                         match msg {
-                            InternalMsg::REQUEST(msg) => {
+                            InternalMsg::Request(msg) => {
                                 assert_eq!(0, pending_msg.len());
                                 pending_msg.push(msg, Duration::from_millis(100));
                                 assert_eq!(1, pending_msg.len());
                             },
-                            InternalMsg::SERVICE(table) => {
+                            InternalMsg::Service(table) => {
                                 if let Some(service) = table.get_proc_service(&String::from("TEST"), 1) {
                                     let mut msg: SimpleStringTvf = Default::default();
                                     msg.put_string(1, "good");
-                                    service.proc_queue.send(InternalMsg::REQUEST(RequestMsg::new(1, String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.unwrap();
+                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.unwrap();
                                 }
                             },
                             _ => return Err(BusError::ProcCommError(self.get_proc_id(), 0, String::from("Wrong message"))),

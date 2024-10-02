@@ -92,7 +92,7 @@ To build one, please refer to [cargo-prosa](./cargo-prosa/README.md).
 
 - [Jérémy HERGAULT](https://github.com/reneca)
 - [Anthony THOMAS](https://github.com/Timmy80)
-- [Olivier SCHYNS](https://github.com/SchynsO)
+- [Olivier SCHYNS](https://github.com/oschijns)
 - [René-Louis EYMARD](https://github.com/rleymard)
 
 ### Posterity

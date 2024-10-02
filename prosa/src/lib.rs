@@ -67,7 +67,7 @@ mod tests {
         }
     }
 
-    #[derive(Default, Adaptor)]
+    #[derive(Adaptor)]
     struct TestStubAdaptor {
         msg_count: u32,
     }
@@ -83,8 +83,8 @@ mod tests {
             + prosa_utils::msg::tvf::Tvf
             + std::default::Default,
     {
-        fn init(&mut self, _proc: &StubProc<M>) -> Result<(), Box<dyn Error>> {
-            Ok(())
+        fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn Error>> {
+            Ok(Self { msg_count: 0 })
         }
 
         fn process_request(&mut self, _service_name: &str, request: &M) -> M {
@@ -96,6 +96,7 @@ mod tests {
     }
 
     /// Test a ProSA with an injector processor sending transactions to a stub processor
+    #[allow(clippy::needless_return)]
     #[tokio::test]
     async fn prosa() {
         let test_settings = TestSettings::new(SERVICE_TEST);

@@ -70,12 +70,11 @@ pub struct StubProc {}
 #[proc]
 impl<A> Proc<A> for StubProc
 where
-    A: Default + Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
+    A: Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
         // Initiate an adaptor for the stub processor
-        let mut adaptor = A::default();
-        adaptor.init(self)?;
+        let mut adaptor = A::new(self)?;
 
         // Declare the processor
         self.proc.add_proc().await?;
@@ -88,25 +87,25 @@ where
         loop {
             if let Some(msg) = self.internal_rx_queue.recv().await {
                 match msg {
-                    InternalMsg::REQUEST(msg) => {
+                    InternalMsg::Request(msg) => {
                         let resp_data = adaptor.process_request(msg.get_service(), msg.get_data());
                         debug!(name: "stub_proc", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = name, stub_service = msg.get_service(), stub_req = format!("{:?}", msg.get_data()).to_string(), stub_resp = format!("{:?}", resp_data));
                         msg.return_to_sender(resp_data).await.unwrap()
                     }
-                    InternalMsg::RESPONSE(msg) => panic!(
+                    InternalMsg::Response(msg) => panic!(
                         "The stub processor {} receive a response {:?}",
                         self.get_proc_id(),
                         msg
                     ),
-                    InternalMsg::ERROR(err) => panic!(
+                    InternalMsg::Error(err) => panic!(
                         "The stub processor {} receive an error {:?}",
                         self.get_proc_id(),
                         err
                     ),
-                    InternalMsg::COMMAND(_) => todo!(),
-                    InternalMsg::CONFIG => todo!(),
-                    InternalMsg::SERVICE(table) => self.service = table,
-                    InternalMsg::SHUTDOWN => {
+                    InternalMsg::Command(_) => todo!(),
+                    InternalMsg::Config => todo!(),
+                    InternalMsg::Service(table) => self.service = table,
+                    InternalMsg::Shutdown => {
                         adaptor.terminate();
                         self.proc.rm_proc().await?;
                         return Ok(());
