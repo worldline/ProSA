@@ -96,6 +96,7 @@ mod tests {
     }
 
     /// Test a ProSA with an injector processor sending transactions to a stub processor
+    #[allow(clippy::needless_return)]
     #[tokio::test]
     async fn prosa() {
         let test_settings = TestSettings::new(SERVICE_TEST);

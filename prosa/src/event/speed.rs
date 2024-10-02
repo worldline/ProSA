@@ -360,6 +360,7 @@ mod tests {
         assert!(duration.as_millis() <= 4);
     }
 
+    #[allow(clippy::needless_return)]
     #[tokio::test]
     async fn regulator_test() {
         let mut regulator = Regulator::new(TPS, Duration::from_secs(3), 1, 5);

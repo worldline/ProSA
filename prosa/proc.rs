@@ -115,6 +115,7 @@ struct MySettings {
     // Can add parameters here
 }
 
+#[allow(clippy::needless_return)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // load the configuration
