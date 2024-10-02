@@ -4,3 +4,4 @@
 *.profraw
 .idea
 .vscode
+.DS_Store

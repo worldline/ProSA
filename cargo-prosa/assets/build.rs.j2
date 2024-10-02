@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::io::Write;
-use std::{{ '{' }}env, io{{ '}' }};
+use std::{{ '{' }}env, io, path{{ '}' }};
 use std::ffi::OsString;
-use std::fs;
-use std::path::Path;
+use std::{{ '{' }}fs, path::Path{{ '}' }};
 
 use cargo_prosa::builder::Desc;
 use cargo_prosa::cargo::{{ '{' }}CargoMetadata, Metadata{{ '}' }};
 use cargo_prosa::CONFIGURATION_FILENAME;
+{%- if deb_pkg %}
+use cargo_prosa::package::deb::DebPkg;
+{% endif %}
 
 fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Metadata>) -> io::Result<()> {{ '{' }}
     let mut f = fs::File::create(Path::new(&out_dir).join("settings.rs"))?;
@@ -114,7 +116,7 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Meta
             proc_id += 1;
             writeln!(f, "debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
             let proc_metadata = metadata.get(&processor.proc_name).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
-            if let Some(_) = &proc_metadata.settings {{ '{' }}
+            if proc_metadata.settings.is_some() {{ '{' }}
                 writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name().replace('-', "_"))?;
             {{ '}' }} else {{ '{' }}
                 writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, bus.clone());", processor.proc, desc.prosa.tvf, proc_id)?;
@@ -176,8 +178,73 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Meta
     writeln!(f, "{{ '}}' }}")
 {{ '}' }}
 
+fn write_target_config(out_dir: &OsString, target_dir: &Path) -> io::Result<()> {{ '{' }}
+    // Create temporary project to generate config file
+    let prosa_config_path = Path::new(&out_dir).join("prosa_config");
+    fs::create_dir_all(prosa_config_path.join("src"))?;
+    fs::copy(Path::new(&out_dir).join("settings.rs"), prosa_config_path.join("src").join("settings.rs"))?;
+
+    // Correct relative path in the Cargo.toml by the `out_dir` one
+    let cargo_content = fs::read_to_string("Cargo.toml")?.replace("\"../", format!("\"{}/../", env::current_dir()?.display()).as_str());
+    let mut cargo_dst = fs::File::create(&prosa_config_path.join("Cargo.toml"))?;
+    cargo_dst.write(cargo_content.as_bytes())?;
+
+    let mut f = fs::File::create(prosa_config_path.join("src").join("main.rs"))?;
+    writeln!(f, "use prosa::core::settings::Settings;\n")?;
+    writeln!(f, "use serde::{{ '{{' }}Deserialize, Serialize{{ '}}' }};\n")?;
+    writeln!(f, "include!(\"settings.rs\");\n")?;
+    writeln!(f, "fn main() -> std::io::Result<()> {{ '{{' }}")?;
+    writeln!(f, "    let args: Vec<String> = std::env::args().collect();")?;
+    writeln!(f, "    RunSettings::default().write_config(args.last().expect(\"Missing config path\"))")?;
+    writeln!(f, "{{ '}}' }}")?;
+
+    let config_build_yml = std::process::Command::new("cargo")
+        .args(["run", "--", target_dir.join("config.yml").to_str().unwrap()])
+        .current_dir(&prosa_config_path)
+        .output()
+        .expect("Failed to generate config.yml");
+    if !config_build_yml.status.success() {{ '{' }}
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            std::str::from_utf8(config_build_yml.stderr.as_slice()).unwrap_or(
+                format!(
+                    "Can't build config.yml config file {:?}",
+                    config_build_yml.status.code()
+                )
+                .as_str(),
+            ),
+        ));
+    {{ '}' }}
+
+    let config_build_toml = std::process::Command::new("cargo")
+        .args([
+            "run",
+            "--",
+            target_dir.join("config.toml").to_str().unwrap(),
+        ])
+        .current_dir(&prosa_config_path)
+        .output()
+        .expect("Failed to generate config.toml");
+    if !config_build_toml.status.success() {{ '{' }}
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            std::str::from_utf8(config_build_toml.stderr.as_slice()).unwrap_or(
+                format!(
+                    "Can't build config.toml config file {{ '{' }}:?{{ '}' }}",
+                    config_build_toml.status.code()
+                )
+                .as_str(),
+            ),
+        ));
+    {{ '}' }}
+
+    Ok(())
+{{ '}' }}
+
 fn main() {{ '{' }}
+    // Generate Rust code for ProSA
     let out_dir = env::var_os("OUT_DIR").unwrap();
+    let target_path = path::absolute("target").unwrap();
     let cargo_metadata = CargoMetadata::load_metadata().unwrap();
     let prosa_proc_metadata = cargo_metadata.prosa_proc_metadata();
     let prosa_desc = toml::from_str::<Desc>(fs::read_to_string(CONFIGURATION_FILENAME).unwrap().as_str()).unwrap();
@@ -186,6 +253,17 @@ fn main() {{ '{' }}
     write_config_rs(&out_dir, &prosa_desc, &cargo_metadata).unwrap();
     write_run_rs(&out_dir, &prosa_desc, &prosa_proc_metadata).unwrap();
 
+    write_target_config(&out_dir, &target_path).unwrap();
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=ProSA.toml");
+{%- if deb_pkg %}
+    println!("cargo:rerun-if-changed=Cargo.toml");
+
+    // Generate files for ProSA packages
+{% endif -%}
+{%- if deb_pkg %}
+    let deb_pkg = DebPkg::new(target_path.to_path_buf()).unwrap();
+    deb_pkg.write_package_data().unwrap();
+{% endif -%}
 {{ '}' }}

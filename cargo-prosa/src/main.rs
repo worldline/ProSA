@@ -14,7 +14,12 @@ use std::{
     str::FromStr,
 };
 
-use cargo_prosa::{builder::Desc, cargo::CargoMetadata, CONFIGURATION_FILENAME};
+use cargo_prosa::{
+    builder::Desc,
+    cargo::CargoMetadata,
+    package::{container::ContainerFile, deb::DebPkg},
+    CONFIGURATION_FILENAME,
+};
 use clap::{arg, Command};
 use tera::Tera;
 use toml_edit::DocumentMut;
@@ -102,8 +107,7 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
     let cargo_add_build_cargo_prosa = cargo!("add", Some(path), "--build", "cargo-prosa");
     let cargo_add_build_toml = cargo!("add", Some(path), "--build", "toml");
 
-    // FIXME put regular url instead of GIT when release in GitHub
-
+    // Run fmt to reformat code
     let _ = cargo!("fmt", Some(path), "-q");
 
     if cargo_add_prosa.status.success()
@@ -128,6 +132,44 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
         if !prosa_desc_config_path.exists() {
             Desc::default().create(prosa_desc_config_path)?;
         }
+
+        // Add optional parameters for deb package build
+        if let Some(tera::Value::Bool(true)) = context.get("deb_pkg") {
+            let cargo_toml = fs::read_to_string(prosa_path.join("Cargo.toml"))?;
+            let mut cargo_doc = cargo_toml
+                .parse::<DocumentMut>()
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            if let Some(toml_edit::Item::Table(package_table)) = cargo_doc.get_mut("package") {
+                if let Some(name) = context.get("name").and_then(|v| v.as_str()) {
+                    if let Some(toml_edit::Item::Table(metadata_table)) =
+                        package_table.get_mut("metadata")
+                    {
+                        if let Some(toml_edit::Item::Table(deb_table)) =
+                            metadata_table.get_mut("deb")
+                        {
+                            DebPkg::add_deb_pkg_metadata(deb_table, name);
+                        } else {
+                            let mut deb_table = toml_edit::Table::new();
+                            DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+
+                            metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+                        }
+                    } else {
+                        let mut deb_table = toml_edit::Table::new();
+                        DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+
+                        let mut metadata_table = toml_edit::Table::new();
+                        metadata_table.set_implicit(true);
+                        metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+
+                        package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
+                    }
+                }
+            }
+
+            let mut cargo_toml_file = fs::File::create(prosa_path.join("Cargo.toml"))?;
+            cargo_toml_file.write_all(cargo_doc.to_string().as_bytes())?;
+        }
     }
 
     Ok(())
@@ -146,17 +188,20 @@ fn cli() -> Command {
                 Command::new("new")
                     .about("Create a new ProSA package")
                     .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
+                    .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
                     .arg(arg!(<PATH> "Name of the new ProSA"))
                     .arg_required_else_help(true),
             )
             .subcommand(
                 Command::new("init")
                     .about("Create a new ProSA package in an existing directory")
+                    .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
                     .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
             )
             .subcommand(
                 Command::new("update")
                     .about("Update ProSA files to the latest skeleton")
+                    .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
             )
             .subcommand(
                 Command::new("add")
@@ -193,6 +238,15 @@ fn cli() -> Command {
                     .about("List all available ProSA component")
             )
             .subcommand(
+                Command::new("container")
+                    .about("Create a container file to containerize ProSA")
+                    .arg(arg!(--docker "Generate Dockerfile container format").action(clap::ArgAction::SetTrue))
+                    .arg(arg!(-i --image <IMG> "Base image to use for ProSA container image").default_value("debian:stable-slim"))
+                    .arg(arg!(-b --builder <BUILDER_IMG> "Builder to use to compile the ProSA"))
+                    .arg(arg!(-p --package_manager <PKG_MANAGER> "Indicate which package manager to use with the Docker image to install pre-requisite").default_value("apt"))
+                    .arg(arg!([PATH] "Path of the output container file to generate an image"))
+            )
+            .subcommand(
                 Command::new("completion")
                     .about("Output shell completion code for the specified shell (Bash, Elvish, Fish, PowerShell, or Zsh)")
                     .arg(arg!(<SHELL>))
@@ -220,6 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 args.push(path);
                 j2_context.insert("path", path);
+                j2_context.insert("deb_pkg", &matches.get_flag("deb"));
 
                 // Create the new Rust project
                 let cargo_new = std::process::Command::new("cargo").args(args).output()?;
@@ -241,8 +296,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     args.push(name);
                     j2_context.insert("name", name);
                 } else if let Some(name) = path.file_name() {
-                    j2_context.insert("name", name);
+                    j2_context.insert("name", &tera::Value::String(name.to_str().unwrap().into()));
                 }
+
+                j2_context.insert("deb_pkg", &matches.get_flag("deb"));
 
                 if let Some(path_name) = path.to_str() {
                     j2_context.insert("path", path_name);
@@ -263,15 +320,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )));
                 }
             }
-            Some(("update", _matches)) => {
+            Some(("update", matches)) => {
+                let package_metadata = CargoMetadata::load_package_metadata()?;
                 let mut j2_context = tera::Context::new();
-                let current_path = env::current_dir()?;
-                let path = current_path.as_path();
-                if let Some(name) = path.file_name() {
-                    j2_context.insert("name", name);
+                package_metadata.j2_context(&mut j2_context);
+                if !j2_context.contains_key("deb_pkg") {
+                    j2_context.insert("deb_pkg", &matches.get_flag("deb"));
                 }
 
-                if let Some(path_name) = path.to_str() {
+                if let Some(path_name) = env::current_dir()?.as_path().to_str() {
                     j2_context.insert("path", path_name);
                     init_prosa(path_name, &j2_context)?;
                 } else {
@@ -420,6 +477,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(("list", _matches)) => {
                 let cargo_metadata = CargoMetadata::load_metadata()?;
                 print!("{}", cargo_metadata);
+            }
+            Some(("container", matches)) => {
+                let container = ContainerFile::new(matches)?;
+                container.create_container_file()?;
+
+                // Help on use
+                print!("{}", container);
             }
             Some(("completion", matches)) => {
                 let shell = clap_complete::Shell::from_str(

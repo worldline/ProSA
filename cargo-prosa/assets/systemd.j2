@@ -1,0 +1,13 @@
+[Unit]
+{% if description is defined %}Description={{ description }}{% endif %}
+{% if documentation is defined %}Documentation={{ documentation }}{% endif %}
+After=network-online.target
+ConditionFileNotEmpty={{ config }}
+
+[Service]
+ExecStart={{ bin }} -c {{ config }}
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+Alias={{ name }}.service

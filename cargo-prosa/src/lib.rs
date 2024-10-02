@@ -11,6 +11,8 @@
 /// Configuration file name for ProSA. Define all processor list
 pub const CONFIGURATION_FILENAME: &str = "ProSA.toml";
 
+pub mod package;
+
 pub mod builder;
 
 pub mod cargo;
