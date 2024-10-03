@@ -261,24 +261,26 @@ pub(crate) fn proc_impl(
     let mut proc_args: ProcParams = std::default::Default::default();
     proc_args.parse_attr_args(args)?;
 
-    if let syn::Item::Struct(item_struct) = item {
-        let struct_output = generate_struct(item_struct, &proc_args)?;
-        let struct_impl_bus_param = generate_struct_impl_bus_param(&struct_output)?;
-        let struct_impl_config = generate_struct_impl_config(&struct_output, &proc_args)?;
-        Ok(quote! {
-            #struct_output
-            #struct_impl_bus_param
-            #struct_impl_config
-        })
-    } else if let syn::Item::Impl(item_impl) = item {
-        let impl_output = add_struct_impl(item_impl)?;
-        Ok(quote! {
-            #impl_output
-        })
-    } else {
-        Err(syn::Error::new(
+    match item {
+        syn::Item::Struct(item_struct) => {
+            let struct_output = generate_struct(item_struct, &proc_args)?;
+            let struct_impl_bus_param = generate_struct_impl_bus_param(&struct_output)?;
+            let struct_impl_config = generate_struct_impl_config(&struct_output, &proc_args)?;
+            Ok(quote! {
+                #struct_output
+                #struct_impl_bus_param
+                #struct_impl_config
+            })
+        }
+        syn::Item::Impl(item_impl) => {
+            let impl_output = add_struct_impl(item_impl)?;
+            Ok(quote! {
+                #impl_output
+            })
+        }
+        _ => Err(syn::Error::new(
             proc_macro2::Span::call_site(),
             "expected struct or impl expression",
-        ))
+        )),
     }
 }

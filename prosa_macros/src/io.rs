@@ -171,22 +171,24 @@ fn add_struct_impl(mut item_impl: syn::ItemImpl) -> syn::parse::Result<syn::Item
 
 /// Implementation of the procedural prosa_io macro
 pub(crate) fn io_impl(item: syn::Item) -> syn::parse::Result<proc_macro2::TokenStream> {
-    if let syn::Item::Struct(item_struct) = item {
-        let struct_output = generate_struct(item_struct)?;
-        let struct_impl = generate_struct_impl(&struct_output)?;
-        Ok(quote! {
-            #struct_output
-            #struct_impl
-        })
-    } else if let syn::Item::Impl(item_impl) = item {
-        let impl_output = add_struct_impl(item_impl)?;
-        Ok(quote! {
-            #impl_output
-        })
-    } else {
-        Err(syn::Error::new(
+    match item {
+        syn::Item::Struct(item_struct) => {
+            let struct_output = generate_struct(item_struct)?;
+            let struct_impl = generate_struct_impl(&struct_output)?;
+            Ok(quote! {
+                #struct_output
+                #struct_impl
+            })
+        }
+        syn::Item::Impl(item_impl) => {
+            let impl_output = add_struct_impl(item_impl)?;
+            Ok(quote! {
+                #impl_output
+            })
+        }
+        _ => Err(syn::Error::new(
             proc_macro2::Span::call_site(),
             "expected struct or impl expression",
-        ))
+        )),
     }
 }
