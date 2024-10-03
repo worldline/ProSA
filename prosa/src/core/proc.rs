@@ -169,9 +169,18 @@ pub use prosa_macros::proc_settings;
 /// use prosa::core::proc::proc_settings;
 ///
 /// #[proc_settings]
-/// #[derive(Default, Debug)]
+/// #[derive(Debug)]
 /// pub struct MySettings {
-///     my_param: Option<String>,
+///     my_param: String,
+/// }
+///
+/// #[proc_settings]
+/// impl Default for MySettings {
+///     fn default() -> Self {
+///         MySettings {
+///             my_param: "default param".into(),
+///         }
+///     }
 /// }
 /// ```
 pub trait ProcSettings {
@@ -430,5 +439,39 @@ where
                 rt.block_on(self.internal_run(proc_name)).unwrap();
             })
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prosa_macros::proc_settings;
+    use serde::Serialize;
+
+    extern crate self as prosa;
+
+    #[test]
+    fn test_proc_settings() {
+        #[proc_settings]
+        #[derive(Debug, Serialize)]
+        struct TestProcSettings {
+            name: String,
+        }
+
+        #[proc_settings]
+        impl Default for TestProcSettings {
+            fn default() -> Self {
+                let _test_settings = TestProcSettings {
+                    name: "test".into(),
+                };
+
+                TestProcSettings {
+                    name: "test".into(),
+                }
+            }
+        }
+
+        let test_proc_settings = TestProcSettings::default();
+        assert_eq!("test", test_proc_settings.name);
     }
 }

@@ -7,6 +7,7 @@
 //! Base library to defines procedural macros
 
 #![warn(missing_docs)]
+#![deny(unreachable_pub)]
 
 use proc_macro::TokenStream;
 use quote::quote;
