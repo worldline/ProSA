@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use opentelemetry::{
-    metrics::{Histogram, Unit},
-    KeyValue,
-};
+use opentelemetry::{metrics::Histogram, KeyValue};
 use prosa_macros::{proc, proc_settings};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -192,7 +189,7 @@ where
         let meter_trans_duration = meter
             .f64_histogram("prosa_inj_request_duration")
             .with_description("inj transaction processing duration")
-            .with_unit(Unit::new("seconds"))
+            .with_unit("seconds")
             .init();
 
         // Declare the processor

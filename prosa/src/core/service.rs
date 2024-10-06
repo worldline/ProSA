@@ -23,6 +23,16 @@ impl<M> ServiceTable<M>
 where
     M: Sized + Clone + Tvf,
 {
+    /// Getter to know if the service table is empty
+    pub fn is_empty(&self) -> bool {
+        self.table.is_empty()
+    }
+
+    /// Getter of the length of the service table (use for metrics)
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+
     /// Method to know if the service is available from a processor
     ///
     /// Call be the processor to know if a service is available (service test)

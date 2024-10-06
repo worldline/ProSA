@@ -1,6 +1,6 @@
 [package]
 name = "prosa-utils"
-version = "0.1.1"
+version = "0.1.2"
 authors.workspace = true
 description = "ProSA utils"
 homepage.workspace = true
@@ -14,8 +14,9 @@ default = ["full"]
 msg = []
 config = ["dep:glob","dep:serde","dep:toml","dep:serde_yaml"]
 config-openssl = ["config", "dep:openssl"]
-config-observability = ["dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp"]
-full = ["msg", "config", "config-openssl", "config-observability"]
+config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp"]
+config-observability-prometheus = ["config-observability", "dep:prometheus", "dep:prometheus_exporter", "dep:opentelemetry-prometheus"]
+full = ["msg", "config", "config-openssl", "config-observability", "config-observability-prometheus"]
 
 [package.metadata.prosa]
 tvf = ["msg::simple_string_tvf::SimpleStringTvf"]
@@ -23,6 +24,7 @@ tvf = ["msg::simple_string_tvf::SimpleStringTvf"]
 [dependencies]
 thiserror.workspace = true
 bytes.workspace = true
+url.workspace = true
 chrono = "0.4"
 hex = "0.4"
 
@@ -36,13 +38,17 @@ serde_yaml = { version = "0.9", optional = true }
 openssl = { version = "0.10", optional = true }
 
 # Config Observability
-tracing-core = { version = "0.1", optional = true }
-tracing-subscriber = { version = "0.3", features = ["std", "env-filter"], optional = true }
-tracing-opentelemetry = { version = "0.22", optional = true }
-opentelemetry = { version = "0.21", features = ["metrics", "trace", "logs"], optional = true }
-opentelemetry_sdk = { version = "0.21", features = ["metrics", "trace", "logs", "rt-tokio"], optional = true }
-opentelemetry-stdout = { version = "0.2", features = ["metrics", "trace", "logs"], optional = true }
-opentelemetry-otlp = { version = "0.14", features = ["metrics", "trace", "logs"], optional = true }
+log = { workspace = true, optional = true }
+tracing-core = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, features = ["std", "env-filter"], optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+opentelemetry = { workspace = true, optional = true }
+opentelemetry_sdk = { workspace = true, optional = true }
+opentelemetry-stdout = { workspace = true, optional = true }
+opentelemetry-otlp = { workspace = true, optional = true }
+prometheus = { workspace = true, optional = true }
+prometheus_exporter = { workspace = true, optional = true }
+opentelemetry-prometheus = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

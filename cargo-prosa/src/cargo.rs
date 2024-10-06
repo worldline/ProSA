@@ -44,7 +44,7 @@ pub struct ComponentVersion<'a> {
     pub version: &'a String,
 }
 
-impl<'a> fmt::Display for ComponentVersion<'a> {
+impl fmt::Display for ComponentVersion<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
             writeln!(f, "{}", self.name)?;
