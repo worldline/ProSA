@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use config::Config;
-use opentelemetry::global;
 use prosa::core::main::{MainProc, MainRunnable};
 use prosa::core::msg::{InternalMsg, Msg, RequestMsg};
 use prosa::core::proc::{proc, Proc, ProcBusParam, ProcConfig};
@@ -127,12 +126,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let my_settings = config.try_deserialize::<MySettings>()?;
     println!("My ProSA settings: {:?}", my_settings);
-
-    // metrics
-    global::set_meter_provider(my_settings.get_observability().build_meter_provider());
-
-    // logs
-    global::set_logger_provider(my_settings.get_observability().build_logger_provider());
 
     // traces
     let telemetry_filter = TelemetryFilter::new(LevelFilter::DEBUG);

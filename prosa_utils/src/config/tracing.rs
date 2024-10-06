@@ -16,7 +16,7 @@ use tracing_subscriber::layer;
 use super::ConfigError;
 
 /// Enum to define all metrics level
-#[derive(Default, Debug, Serialize, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Serialize, Copy, Clone, PartialEq, PartialOrd)]
 #[repr(u8)]
 pub enum TelemetryLevel {
     /// No level define
@@ -47,6 +47,19 @@ impl From<TelemetryLevel> for filter::LevelFilter {
     }
 }
 
+impl From<TelemetryLevel> for log::LevelFilter {
+    fn from(val: TelemetryLevel) -> Self {
+        match val {
+            TelemetryLevel::OFF => log::LevelFilter::Off,
+            TelemetryLevel::ERROR => log::LevelFilter::Error,
+            TelemetryLevel::WARN => log::LevelFilter::Warn,
+            TelemetryLevel::INFO => log::LevelFilter::Info,
+            TelemetryLevel::DEBUG => log::LevelFilter::Debug,
+            TelemetryLevel::TRACE => log::LevelFilter::Trace,
+        }
+    }
+}
+
 impl From<TelemetryLevel> for &str {
     fn from(val: TelemetryLevel) -> Self {
         match val {
@@ -60,10 +73,10 @@ impl From<TelemetryLevel> for &str {
     }
 }
 
-impl TryFrom<String> for TelemetryLevel {
+impl TryFrom<&str> for TelemetryLevel {
     type Error = ConfigError;
 
-    fn try_from(value: String) -> Result<Self, Self::Error> {
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
             "off" => Ok(TelemetryLevel::OFF),
             "error" => Ok(TelemetryLevel::ERROR),
@@ -71,12 +84,15 @@ impl TryFrom<String> for TelemetryLevel {
             "info" => Ok(TelemetryLevel::INFO),
             "debug" => Ok(TelemetryLevel::DEBUG),
             "trace" => Ok(TelemetryLevel::TRACE),
-            _ => Err(ConfigError::WrongValue("TelemetryLevel".into(), value)),
+            _ => Err(ConfigError::WrongValue(
+                "TelemetryLevel".into(),
+                value.to_string(),
+            )),
         }
     }
 }
 
-impl<'de> Visitor<'de> for TelemetryLevel {
+impl Visitor<'_> for TelemetryLevel {
     type Value = TelemetryLevel;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -221,5 +237,32 @@ impl<S> layer::Filter<S> for TelemetryFilter {
 
     fn max_level_hint(&self) -> Option<filter::LevelFilter> {
         Some(self.level)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn telemetry_level() {
+        assert!(
+            TelemetryLevel::try_from("warn").unwrap() < TelemetryLevel::INFO,
+            "{:?} < Info",
+            TelemetryLevel::try_from("warn")
+        );
+        assert_eq!(
+            "The config parameter TelemetryLevel have an incorrect value `wrong`".to_owned(),
+            TelemetryLevel::try_from("wrong").err().unwrap().to_string()
+        );
+
+        assert_eq!(
+            filter::LevelFilter::DEBUG,
+            filter::LevelFilter::from(TelemetryLevel::DEBUG)
+        );
+        assert_eq!(
+            log::LevelFilter::Error,
+            log::LevelFilter::from(TelemetryLevel::ERROR)
+        );
     }
 }

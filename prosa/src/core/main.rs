@@ -12,8 +12,10 @@ use super::proc::ProcBusParam;
 use super::service::{ProcService, ServiceTable};
 use super::settings::Settings;
 use opentelemetry::logs::LoggerProvider as _;
-use opentelemetry::metrics::MeterProvider;
+use opentelemetry::metrics::{Meter, MeterProvider};
 use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::KeyValue;
+use opentelemetry_appender_log::OpenTelemetryLogBridge;
 use prosa_utils::msg::tvf::{Tvf, TvfError};
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -99,7 +101,7 @@ where
 {
     internal_tx_queue: mpsc::Sender<InternalMainMsg<M>>,
     name: String,
-    meter_provider: opentelemetry_sdk::metrics::MeterProvider,
+    meter_provider: opentelemetry_sdk::metrics::SdkMeterProvider,
     logger_provider: opentelemetry_sdk::logs::LoggerProvider,
     tracer_provider: opentelemetry_sdk::trace::TracerProvider,
 }
@@ -123,11 +125,16 @@ where
         internal_tx_queue: mpsc::Sender<InternalMainMsg<M>>,
         settings: &S,
     ) -> Main<M> {
+        let logger_provider = settings.get_observability().build_logger_provider();
+        let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
+        let _ = log::set_boxed_logger(Box::new(otel_log_appender));
+        log::set_max_level(settings.get_observability().get_logger_level().into());
+
         Main {
             internal_tx_queue,
             name: settings.get_prosa_name(),
             meter_provider: settings.get_observability().build_meter_provider(),
-            logger_provider: settings.get_observability().build_logger_provider(),
+            logger_provider,
             tracer_provider: settings.get_observability().build_tracer_provider(),
         }
     }
@@ -246,7 +253,11 @@ where
 
     /// Provide the opentelemetry Tracer based on ProSA settings
     pub fn tracer(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::trace::Tracer {
-        self.tracer_provider.tracer(name)
+        self.tracer_provider
+            .tracer_builder(name)
+            .with_version(env!("CARGO_PKG_VERSION"))
+            .with_attributes([KeyValue::new("prosa_name", self.name.clone())])
+            .build()
     }
 }
 
@@ -255,9 +266,11 @@ pub struct MainProc<M>
 where
     M: Sized + Clone + Tvf,
 {
+    name: String,
     processors: HashMap<u32, HashMap<u32, ProcService<M>>>,
     services: Arc<ServiceTable<M>>,
     internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
+    meter: Meter,
 }
 
 impl<M> ProcBusParam for MainProc<M>
@@ -282,6 +295,16 @@ impl<M> MainProc<M>
 where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
+    /// Getter of the number of processors' queues
+    fn get_proc_queue_len(&self) -> usize {
+        let mut proc_queue_len = 0;
+        for proc_queue in self.processors.values() {
+            proc_queue_len += proc_queue.len();
+        }
+
+        proc_queue_len
+    }
+
     async fn remove_proc(&mut self, proc_id: u32) -> Option<HashMap<u32, ProcService<M>>> {
         if let Some(proc) = self.processors.remove(&proc_id) {
             let mut new_services = (*self.services).clone();
@@ -366,6 +389,47 @@ where
     }
 
     async fn internal_run(&mut self) -> Result<(), BusError> {
+        let prosa_name = self.name.clone();
+
+        // Monitor RAM usage
+        self.meter
+            .u64_observable_gauge("prosa_main_ram")
+            .with_description("RAM consumed by ProSA")
+            .with_unit("bytes")
+            .with_callback(move |observer| {
+                if let Some(usage) = memory_stats::memory_stats() {
+                    observer.observe(
+                        usage.physical_mem as u64,
+                        &[
+                            KeyValue::new("prosa_name", prosa_name.clone()),
+                            KeyValue::new("type", "physical"),
+                        ],
+                    );
+                    observer.observe(
+                        usage.virtual_mem as u64,
+                        &[
+                            KeyValue::new("prosa_name", prosa_name.clone()),
+                            KeyValue::new("type", "virtual"),
+                        ],
+                    );
+                }
+            })
+            .init();
+
+        // Monitor services
+        let services_meter = self
+            .meter
+            .u64_gauge("prosa_main_services")
+            .with_description("Services declared to the main task")
+            .init();
+        // Monitor processors objects
+        let processors_meter = self
+            .meter
+            .u64_gauge("prosa_main_processors")
+            .with_description("Processors declared to the main task")
+            .init();
+
+        let prosa_name = self.name.clone();
         loop {
             tokio::select! {
                 Some(msg) = self.internal_rx_queue.recv() => {
@@ -390,16 +454,25 @@ where
                                     let _ = self.processors.remove(&proc_id);
                                 }
                             }
+
+                            processors_meter.record(self.processors.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "tasks")]);
+                            processors_meter.record(self.get_proc_queue_len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "queues")]);
                         },
                         InternalMainMsg::DeleteProc(proc_id) => {
                             if self.remove_proc(proc_id).await.is_some() {
                                 prosa_main_update_srv!(self);
                             }
+
+                            processors_meter.record(self.processors.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "tasks")]);
+                            processors_meter.record(self.get_proc_queue_len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "queues")]);
                         },
                         InternalMainMsg::DeleteProcQueue(proc_id, queue_id) => {
                             if self.remove_proc_queue(proc_id, queue_id).await.is_some() {
                                 self.notify_srv_proc().await;
                             }
+
+                            processors_meter.record(self.processors.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "tasks")]);
+                            processors_meter.record(self.get_proc_queue_len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "queues")]);
                         },
                         InternalMainMsg::NewProcService(names, proc_id) => {
                             if let Some(proc_service) = self.processors.get(&proc_id) {
@@ -410,6 +483,7 @@ where
                                     }
                                 }
                                 self.services = Arc::new(new_services);
+                                services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
                                 self.notify_srv_proc().await;
                             }
                         },
@@ -421,6 +495,7 @@ where
                                         new_services.add_service(&name, proc_queue.clone());
                                     }
                                     self.services = Arc::new(new_services);
+                                    services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
                                     self.notify_srv_proc().await;
                                 }
                             }
@@ -431,6 +506,7 @@ where
                                 new_services.rm_service_proc(&name, proc_id);
                             }
                             self.services = Arc::new(new_services);
+                            services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
                             self.notify_srv_proc().await;
                         },
                         InternalMainMsg::DeleteService(names, proc_id, queue_id) => {
@@ -439,6 +515,7 @@ where
                                 new_services.rm_service(&name, proc_id, queue_id);
                             }
                             self.services = Arc::new(new_services);
+                            services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
                             self.notify_srv_proc().await;
                         },
                         InternalMainMsg::Command(cmd)=> {
@@ -465,29 +542,37 @@ where
     }
 }
 
+/// Name given to the main task of ProSA
+pub(crate) const MAIN_TASK_NAME: &str = "main";
+
 impl<M> MainRunnable<M> for MainProc<M>
 where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     fn create<S: Settings>(settings: &S) -> (Main<M>, MainProc<M>) {
         let (internal_tx_queue, internal_rx_queue) = mpsc::channel(2048);
+        let main = Main::new(internal_tx_queue, settings);
+        let name = main.name().clone();
+        let meter = main.meter("prosa_main_task_meter");
         (
-            Main::new(internal_tx_queue, settings),
+            main,
             MainProc {
+                name,
                 processors: Default::default(),
                 services: Arc::new(ServiceTable::default()),
                 internal_rx_queue,
+                meter,
             },
         )
     }
 
     fn run(mut self) -> std::thread::JoinHandle<()> {
         std::thread::Builder::new()
-            .name("main".into())
+            .name(MAIN_TASK_NAME.into())
             .spawn(move || {
                 let rt: Runtime = Builder::new_current_thread()
                     .enable_all()
-                    .thread_name("main")
+                    .thread_name(MAIN_TASK_NAME)
                     .build()
                     .unwrap();
                 rt.block_on(self.internal_run()).unwrap();

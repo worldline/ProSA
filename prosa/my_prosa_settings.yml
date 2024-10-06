@@ -1,10 +1,10 @@
 name: my-prosa
 
-otel:
+observability:
   level: DEBUG
   metrics:
-    stdout:
-      level: 0
+    prometheus:
+      endpoint: 0.0.0.0:9100
   traces:
     stdout:
       level: debug
