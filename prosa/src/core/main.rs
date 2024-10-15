@@ -159,7 +159,7 @@ where
     }
 
     /// Method to remove an entire processor from the main bus
-    pub async fn rm_proc(&self, proc_id: u32) -> Result<(), BusError> {
+    pub async fn remove_proc(&self, proc_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::DeleteProc(proc_id))
             .await
@@ -169,7 +169,7 @@ where
     }
 
     /// Method to declare a new processor on the main bus
-    pub async fn rm_proc_queue(&self, proc_id: u32, queue_id: u32) -> Result<(), BusError> {
+    pub async fn remove_proc_queue(&self, proc_id: u32, queue_id: u32) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::DeleteProcQueue(proc_id, queue_id))
             .await
@@ -204,7 +204,11 @@ where
     }
 
     /// Method to remove a service for a whole processor from the main bus
-    pub async fn rm_service_proc(&self, names: Vec<String>, proc_id: u32) -> Result<(), BusError> {
+    pub async fn remove_service_proc(
+        &self,
+        names: Vec<String>,
+        proc_id: u32,
+    ) -> Result<(), BusError> {
         self.internal_tx_queue
             .send(InternalMainMsg::DeleteProcService(names, proc_id))
             .await
@@ -214,7 +218,7 @@ where
     }
 
     /// Method to remove a service from the main bus
-    pub async fn rm_service(
+    pub async fn remove_service(
         &self,
         names: Vec<String>,
         proc_id: u32,
@@ -282,15 +286,6 @@ where
     }
 }
 
-/// Macro to notify processors for a change about service list
-macro_rules! prosa_main_update_srv {
-    ( $x:ident ) => {
-        if !$x.notify_srv_proc().await {
-            $x.notify_srv_proc().await;
-        }
-    };
-}
-
 impl<M> MainProc<M>
 where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
@@ -308,7 +303,7 @@ where
     async fn remove_proc(&mut self, proc_id: u32) -> Option<HashMap<u32, ProcService<M>>> {
         if let Some(proc) = self.processors.remove(&proc_id) {
             let mut new_services = (*self.services).clone();
-            new_services.rm_proc_services(proc_id);
+            new_services.remove_proc_services(proc_id);
             self.services = Arc::new(new_services);
             Some(proc)
         } else {
@@ -320,8 +315,10 @@ where
         if let Some(proc_service) = self.processors.get_mut(&proc_id) {
             if let Some(proc_queue) = proc_service.remove(&queue_id) {
                 let mut new_services = (*self.services).clone();
-                new_services
-                    .rm_proc_queue_services(proc_queue.get_proc_id(), proc_queue.get_queue_id());
+                new_services.remove_proc_queue_services(
+                    proc_queue.get_proc_id(),
+                    proc_queue.get_queue_id(),
+                );
                 self.services = Arc::new(new_services);
                 Some(proc_queue)
             } else {
@@ -389,9 +386,8 @@ where
     }
 
     async fn internal_run(&mut self) -> Result<(), BusError> {
-        let prosa_name = self.name.clone();
-
         // Monitor RAM usage
+        let prosa_name = self.name.clone();
         self.meter
             .u64_observable_gauge("prosa_main_ram")
             .with_description("RAM consumed by ProSA")
@@ -430,6 +426,46 @@ where
             .init();
 
         let prosa_name = self.name.clone();
+
+        /// Macro to notify processors for a change about service list
+        macro_rules! prosa_main_update_srv {
+            ( ) => {
+                if !self.notify_srv_proc().await {
+                    self.notify_srv_proc().await;
+                }
+            };
+        }
+
+        /// Macro to record a change to the services
+        macro_rules! prosa_main_record_services {
+            ( ) => {
+                services_meter.record(
+                    self.services.len() as u64,
+                    &[KeyValue::new("prosa_name", prosa_name.clone())],
+                );
+            };
+        }
+
+        /// Macro to record a change to the processors
+        macro_rules! prosa_main_record_proc {
+            ( ) => {
+                processors_meter.record(
+                    self.processors.len() as u64,
+                    &[
+                        KeyValue::new("prosa_name", prosa_name.clone()),
+                        KeyValue::new("type", "tasks"),
+                    ],
+                );
+                processors_meter.record(
+                    self.get_proc_queue_len() as u64,
+                    &[
+                        KeyValue::new("prosa_name", prosa_name.clone()),
+                        KeyValue::new("type", "queues"),
+                    ],
+                );
+            };
+        }
+
         loop {
             tokio::select! {
                 Some(msg) = self.internal_rx_queue.recv() => {
@@ -455,24 +491,21 @@ where
                                 }
                             }
 
-                            processors_meter.record(self.processors.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "tasks")]);
-                            processors_meter.record(self.get_proc_queue_len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "queues")]);
+                            prosa_main_record_proc!();
                         },
                         InternalMainMsg::DeleteProc(proc_id) => {
                             if self.remove_proc(proc_id).await.is_some() {
-                                prosa_main_update_srv!(self);
+                                prosa_main_update_srv!();
                             }
 
-                            processors_meter.record(self.processors.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "tasks")]);
-                            processors_meter.record(self.get_proc_queue_len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "queues")]);
+                            prosa_main_record_proc!();
                         },
                         InternalMainMsg::DeleteProcQueue(proc_id, queue_id) => {
                             if self.remove_proc_queue(proc_id, queue_id).await.is_some() {
-                                self.notify_srv_proc().await;
+                                prosa_main_update_srv!();
                             }
 
-                            processors_meter.record(self.processors.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "tasks")]);
-                            processors_meter.record(self.get_proc_queue_len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone()), KeyValue::new("type", "queues")]);
+                            prosa_main_record_proc!();
                         },
                         InternalMainMsg::NewProcService(names, proc_id) => {
                             if let Some(proc_service) = self.processors.get(&proc_id) {
@@ -483,8 +516,8 @@ where
                                     }
                                 }
                                 self.services = Arc::new(new_services);
-                                services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
-                                self.notify_srv_proc().await;
+                                prosa_main_record_services!();
+                                prosa_main_update_srv!();
                             }
                         },
                         InternalMainMsg::NewService(names, proc_id, queue_id) => {
@@ -495,28 +528,28 @@ where
                                         new_services.add_service(&name, proc_queue.clone());
                                     }
                                     self.services = Arc::new(new_services);
-                                    services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
-                                    self.notify_srv_proc().await;
+                                    prosa_main_record_services!();
+                                    prosa_main_update_srv!();
                                 }
                             }
                         },
                         InternalMainMsg::DeleteProcService(names, proc_id) => {
                             let mut new_services = (*self.services).clone();
                             for name in names {
-                                new_services.rm_service_proc(&name, proc_id);
+                                new_services.remove_service_proc(&name, proc_id);
                             }
                             self.services = Arc::new(new_services);
-                            services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
-                            self.notify_srv_proc().await;
+                            prosa_main_record_services!();
+                            prosa_main_update_srv!();
                         },
                         InternalMainMsg::DeleteService(names, proc_id, queue_id) => {
                             let mut new_services = (*self.services).clone();
                             for name in names {
-                                new_services.rm_service(&name, proc_id, queue_id);
+                                new_services.remove_service(&name, proc_id, queue_id);
                             }
                             self.services = Arc::new(new_services);
-                            services_meter.record(self.services.len() as u64, &[KeyValue::new("prosa_name", prosa_name.clone())]);
-                            self.notify_srv_proc().await;
+                            prosa_main_record_services!();
+                            prosa_main_update_srv!();
                         },
                         InternalMainMsg::Command(cmd)=> {
                             info!("Wan't to execute the command {}", cmd);
