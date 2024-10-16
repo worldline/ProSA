@@ -15,19 +15,43 @@ pub use prosa_macros::settings;
 /// Need to be implemented by the top settings layer of a ProSA
 ///
 /// ```
-/// use prosa::core::settings::Settings;
-/// use prosa_utils::config::observability::Observability;
-/// use prosa::core::settings::settings;
+/// use prosa::core::settings::{settings, Settings};
 /// use serde::Serialize;
 ///
-/// /// My ProSA setting structure
-/// #[derive(Serialize)]
+/// // My ProSA setting structure
+/// #[settings]
+/// #[derive(Debug, Serialize)]
 /// struct MySettings {
+///     test_val: String
+/// }
+///
+/// #[settings]
+/// impl Default for MySettings {
+///     fn default() -> Self {
+///         MySettings {
+///             test_val: "test".into(),
+///         }
+///     }
+/// }
+///
+/// assert_eq!("test", MySettings::default().test_val);
+/// ```
+///
+/// is equivalent to
+///
+/// ```
+/// use prosa::core::settings::Settings;
+/// use prosa_utils::config::observability::Observability;
+/// use serde::Serialize;
+///
+/// #[derive(Debug, Serialize)]
+/// struct MySameSettings {
+///     test_val: String,
 ///     name: Option<String>,
 ///     observability: Observability,
 /// }
 ///
-/// impl Settings for MySettings {
+/// impl Settings for MySameSettings {
 ///     fn get_prosa_name(&self) -> String {
 ///         if let Some(name) = &self.name {
 ///             name.clone()
@@ -47,10 +71,17 @@ pub use prosa_macros::settings;
 ///     }
 /// }
 ///
-/// // Equivalent to
-/// #[settings]
-/// #[derive(Serialize)]
-/// struct MySameSettings {}
+/// impl Default for MySameSettings {
+///     fn default() -> Self {
+///         MySameSettings {
+///             test_val: "test".into(),
+///             name: None,
+///             observability: Observability::default(),
+///         }
+///     }
+/// }
+///
+/// assert_eq!("test", MySameSettings::default().test_val);
 /// ```
 pub trait Settings: Serialize {
     /// Getter of the ProSA running name
@@ -78,5 +109,42 @@ pub trait Settings: Serialize {
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prosa_macros::settings;
+
+    extern crate self as prosa;
+
+    #[test]
+    fn test_settings() {
+        #[settings]
+        #[derive(Debug, Serialize)]
+        struct TestSettings {
+            name_test: String,
+            name_test2: String,
+        }
+
+        #[settings]
+        impl Default for TestSettings {
+            fn default() -> Self {
+                let _test_settings = TestSettings {
+                    name_test: "test".into(),
+                    name_test2: "test2".into(),
+                };
+
+                TestSettings {
+                    name_test: "test".into(),
+                    name_test2: "test2".into(),
+                }
+            }
+        }
+
+        let test_settings = TestSettings::default();
+        assert_eq!("test", test_settings.name_test);
+        assert_eq!("test2", test_settings.name_test2);
     }
 }
