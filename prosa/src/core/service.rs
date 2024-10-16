@@ -23,6 +23,16 @@ impl<M> ServiceTable<M>
 where
     M: Sized + Clone + Tvf,
 {
+    /// Getter to know if the service table is empty
+    pub fn is_empty(&self) -> bool {
+        self.table.is_empty()
+    }
+
+    /// Getter of the length of the service table (use for metrics)
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+
     /// Method to know if the service is available from a processor
     ///
     /// Call be the processor to know if a service is available (service test)
@@ -65,7 +75,7 @@ where
     /// Method to remove whole processor service from the table
     ///
     /// Can be call only by the main task to modify the service table
-    pub fn rm_service_proc(&mut self, name: &String, proc_id: u32) {
+    pub fn remove_service_proc(&mut self, name: &String, proc_id: u32) {
         if let Some(services) = self.table.get_mut(name) {
             services.retain(|s| s.proc_id != proc_id);
         }
@@ -74,7 +84,7 @@ where
     /// Method to remove a service from the table
     ///
     /// Can be call only by the main task to modify the service table
-    pub fn rm_service(&mut self, name: &String, proc_id: u32, queue_id: u32) {
+    pub fn remove_service(&mut self, name: &String, proc_id: u32, queue_id: u32) {
         if let Some(services) = self.table.get_mut(name) {
             services.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);
         }
@@ -83,7 +93,7 @@ where
     /// Method to remove all services from a given processor from the table
     ///
     /// Can be call only by the main task to modify the service table
-    pub fn rm_proc_services(&mut self, proc_id: u32) {
+    pub fn remove_proc_services(&mut self, proc_id: u32) {
         // This will let service with empty processors
         for service in self.table.values_mut() {
             service.retain(|s| s.proc_id != proc_id);
@@ -99,7 +109,7 @@ where
     /// Method to remove all services from a given processor queue from the table
     ///
     /// Can be call only by the main task to modify the service table
-    pub fn rm_proc_queue_services(&mut self, proc_id: u32, queue_id: u32) {
+    pub fn remove_proc_queue_services(&mut self, proc_id: u32, queue_id: u32) {
         // This will let service with empty processors
         for service in self.table.values_mut() {
             service.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);

@@ -135,7 +135,7 @@
 //!                     InternalMsg::Service(table) => self.service = table,
 //!                     InternalMsg::Shutdown => {
 //!                         adaptor.terminate();
-//!                         self.proc.rm_proc().await?;
+//!                         self.proc.remove_proc().await?;
 //!                         return Ok(());
 //!                     }
 //!                 }
@@ -270,8 +270,8 @@ where
     /// Method to remove the processor with a signal queue to the main task
     ///
     /// Once the processor is removed, all its associated service will be remove
-    pub async fn rm_proc(&self) -> Result<(), BusError> {
-        self.main.rm_proc(self.id).await?;
+    pub async fn remove_proc(&self) -> Result<(), BusError> {
+        self.main.remove_proc(self.id).await?;
         Ok(())
     }
 
@@ -293,8 +293,8 @@ where
     /// Method to remove the processor queue identify with a queue id to the main task
     ///
     /// Once the processor queue is removed, all its associated service will be remove
-    pub async fn rm_proc_queue(&self, queue_id: u32) -> Result<(), BusError> {
-        self.main.rm_proc_queue(self.id, queue_id).await?;
+    pub async fn remove_proc_queue(&self, queue_id: u32) -> Result<(), BusError> {
+        self.main.remove_proc_queue(self.id, queue_id).await?;
         Ok(())
     }
 
@@ -315,15 +315,17 @@ where
     }
 
     /// Method to remove a service for a whole processor from the main bus. The processor will no longuer receive those corresponding messages
-    pub async fn rm_service_proc(&self, names: Vec<String>) -> Result<(), BusError> {
-        self.main.rm_service_proc(names, self.get_proc_id()).await?;
+    pub async fn remove_service_proc(&self, names: Vec<String>) -> Result<(), BusError> {
+        self.main
+            .remove_service_proc(names, self.get_proc_id())
+            .await?;
         Ok(())
     }
 
     /// Method to remove a service from the main bus. The processor will no longuer receive those corresponding messages
-    pub async fn rm_service(&self, names: Vec<String>, queue_id: u32) -> Result<(), BusError> {
+    pub async fn remove_service(&self, names: Vec<String>, queue_id: u32) -> Result<(), BusError> {
         self.main
-            .rm_service(names, self.get_proc_id(), queue_id)
+            .remove_service(names, self.get_proc_id(), queue_id)
             .await?;
         Ok(())
     }

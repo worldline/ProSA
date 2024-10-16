@@ -107,7 +107,7 @@ where
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
                         adaptor.terminate();
-                        self.proc.rm_proc().await?;
+                        self.proc.remove_proc().await?;
                         return Ok(());
                     }
                 }

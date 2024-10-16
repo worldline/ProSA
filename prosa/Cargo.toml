@@ -49,9 +49,12 @@ glob = { version = "0.3" }
 toml = "0.8"
 serde_yaml = "0.9"
 
-tracing-opentelemetry = "0.22"
+log.workspace = true
+tracing-opentelemetry.workspace = true
 
-opentelemetry = { version = "0.21", features = ["metrics", "trace", "logs"] }
-opentelemetry_sdk = { version = "0.21", features = ["metrics", "trace", "logs", "rt-tokio"] }
-opentelemetry-stdout = { version = "0.2", features = ["metrics", "trace", "logs"]}
-opentelemetry-otlp = { version = "0.14", features = ["metrics", "trace", "logs"]}
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-stdout.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry-appender-log.workspace = true
+memory-stats = "1"
