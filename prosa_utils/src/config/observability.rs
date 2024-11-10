@@ -294,15 +294,8 @@ impl Default for TelemetryData {
 ///     let observability_settings = Observability::default();
 ///
 ///     // trace
-///     //global::set_tracer_provider(observability_settings.build_tracer_provider());
 ///     let filter = TelemetryFilter::default();
 ///     observability_settings.tracing_init(&filter);
-///
-///     // meter
-///     global::set_meter_provider(observability_settings.build_meter_provider());
-///
-///     // logger
-///     global::set_logger_provider(observability_settings.build_logger_provider());
 /// }
 /// ```
 #[derive(Debug, Deserialize, Serialize, Clone)]

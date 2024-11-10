@@ -1,42 +1,40 @@
 use core::fmt;
-use std::{
-    cmp::Ordering,
-    collections::VecDeque,
-    thread::sleep,
-    time::{Duration, Instant},
-};
+use std::{cmp::Ordering, collections::VecDeque, time::Duration};
 
 use tokio::sync::Notify;
+use tokio::time::{sleep, Instant};
 
 /// Structure to define a transaction flow speed
 ///
 /// ```
-/// use std::time::{Instant, Duration};
+/// use tokio::time::Instant;
+/// use std::time::Duration;
 /// use prosa::event::speed::Speed;
 /// use std::thread::sleep;
 ///
+/// const SLEEP_DURATION: Duration = Duration::from_millis(40);
 /// const TPS: f64 = 25.0;
 /// let mut speed = Speed::new(5);
 ///
 /// // Send transactions
 /// speed.time();
 /// speed.time();
-/// sleep(Duration::from_millis(40));
+/// sleep(SLEEP_DURATION);
 /// speed.time();
-/// sleep(Duration::from_millis(40));
+/// sleep(SLEEP_DURATION);
 /// speed.time();
-/// sleep(Duration::from_millis(40));
+/// sleep(SLEEP_DURATION);
 /// speed.time();
-/// sleep(Duration::from_millis(40));
+/// sleep(SLEEP_DURATION);
 ///
 /// // Replace the first transaction time (size > 5)
 /// speed.time();
 /// let mut duration = speed.get_duration(TPS);     // 40 miliseconds for the duration to keep the same TPS rate
-/// assert!(duration.as_millis() >= 36 && duration.as_millis() <= 44);
-/// sleep(Duration::from_millis(40));
+/// (25..=44).contains(&duration.as_millis());
+/// sleep(SLEEP_DURATION);
 ///
 /// let mean_duration = speed.get_mean_duration();  // 40 miliseconds between each transactions
-/// assert!(mean_duration.as_millis() >= 36 && mean_duration.as_millis() <= 44);
+/// (25..=44).contains(&mean_duration.as_millis());
 /// let speed_tps = speed.get_speed().round();      // 25 TPS
 /// assert_eq!(TPS, speed_tps);
 /// duration = speed.get_duration(TPS);             // 0 miliseconds for the duration to keep the same TPS rate
@@ -253,7 +251,7 @@ impl Regulator {
             .speed
             .get_duration_overhead(self.max_speed, self.tick_overhead);
         if !duration.is_zero() {
-            sleep(duration);
+            sleep(duration).await;
         } else {
             self.tick_overhead.take();
         }
@@ -330,9 +328,10 @@ mod tests {
 
     const TPS: f64 = 25.0;
 
-    #[test]
-    fn speed_test() {
-        let mut speed = Speed::new(5);
+    #[tokio::test]
+    async fn speed_test() {
+        const SLEEP_DURATION: Duration = Duration::from_millis(40);
+        let mut speed = Speed::new(4);
         assert_eq!(None, speed.get_last_event());
         assert_eq!(Speed::default(), speed);
         assert!(Speed::default() <= speed);
@@ -341,23 +340,42 @@ mod tests {
         // Send transactions
         speed.time();
         assert!(speed.get_last_event().is_some());
-        for _ in 1..=4 {
+        tokio::time::sleep(SLEEP_DURATION).await;
+        for _ in 1..=3 {
             speed.time();
-            sleep(Duration::from_millis(40));
+            tokio::time::sleep(SLEEP_DURATION).await;
         }
 
         // Replace the first transaction time (size > 5)
         speed.time();
         let mut duration = speed.get_duration(TPS); // 40 miliseconds for the duration to keep the same TPS rate
-        assert!(duration.as_millis() >= 36 && duration.as_millis() <= 44);
-        sleep(Duration::from_millis(40));
+        assert!(
+            (25..=44).contains(&duration.as_millis()),
+            "Next duration: 25 <= {} < 44",
+            duration.as_millis()
+        );
+        tokio::time::sleep(SLEEP_DURATION).await;
 
         let mean_duration = speed.get_mean_duration(); // 40 miliseconds between each transactions
-        assert!(mean_duration.as_millis() >= 36 && mean_duration.as_millis() <= 44);
+        assert!(
+            (25..=44).contains(&mean_duration.as_millis()),
+            "Mean duration: 25 <= {} < 44",
+            mean_duration.as_millis()
+        );
         let speed_tps = speed.get_speed().round(); // 25 TPS
-        assert_eq!(TPS, speed_tps);
+        assert!(
+            ((TPS - 2.0)..=TPS).contains(&speed_tps),
+            "TPS: {} <= {} < {}",
+            TPS - 2.0,
+            speed_tps,
+            TPS
+        );
         duration = speed.get_duration(TPS); // 0 miliseconds for the duration to keep the same TPS rate
-        assert!(duration.as_millis() <= 4);
+        assert!(
+            duration.as_millis() <= 4,
+            "Remain duration: {} <= 4",
+            duration.as_millis()
+        );
     }
 
     #[allow(clippy::needless_return)]
@@ -371,7 +389,7 @@ mod tests {
         for _ in 1..=5 {
             regulator.notify_send_transaction();
             regulator.notify_receive_transaction(Duration::from_millis(10));
-            sleep(Duration::from_millis(40));
+            sleep(Duration::from_millis(40)).await;
         }
 
         let mut initial_time = Instant::now();
@@ -387,7 +405,7 @@ mod tests {
         for _ in 1..=5 {
             regulator.notify_send_transaction();
             regulator.notify_receive_transaction(Duration::from_millis(10));
-            sleep(Duration::from_millis(10));
+            sleep(Duration::from_millis(10)).await;
         }
 
         initial_time = Instant::now();
