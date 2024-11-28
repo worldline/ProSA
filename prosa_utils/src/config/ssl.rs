@@ -169,8 +169,7 @@ impl fmt::Display for Store {
 ///
 ///     let client_config = SslConfig::default();
 ///     if let Ok(mut ssl_context_builder) = client_config.init_tls_client_context() {
-///         let ssl_context = ssl_context_builder.build();
-///         let ssl = Ssl::new(&ssl_context).unwrap();
+///         let ssl = ssl_context_builder.build().configure().unwrap().into_ssl("localhost").unwrap();
 ///         let mut stream = SslStream::new(ssl, stream).unwrap();
 ///         if let Err(e) = Pin::new(&mut stream).connect().await {
 ///             if e.code() != ErrorCode::ZERO_RETURN {
@@ -198,13 +197,13 @@ impl fmt::Display for Store {
 ///     let listener = TcpListener::bind("0.0.0.0:4443").await?;
 ///
 ///     let server_config = SslConfig::new_cert_key("cert.pem".into(), "cert.key".into(), Some("passphrase".into()));
-///     if let Ok(mut ssl_context_builder) = server_config.init_tls_server_context() {
+///     if let Ok(mut ssl_context_builder) = server_config.init_tls_server_context(None) {
 ///         ssl_context_builder.set_verify(SslVerifyMode::NONE);
 ///         let ssl_context = ssl_context_builder.build();
 ///
 ///         loop {
 ///             let (stream, cli_addr) = listener.accept().await?;
-///             let ssl = Ssl::new(&ssl_context).unwrap();
+///             let ssl = Ssl::new(&ssl_context.context()).unwrap();
 ///             let mut stream = SslStream::new(ssl, stream).unwrap();
 ///             if let Err(e) = Pin::new(&mut stream).accept().await {
 ///                 if e.code() != ErrorCode::ZERO_RETURN {
@@ -419,7 +418,8 @@ impl SslConfig {
                     while let Some(length) = current_split.first() {
                         if current_split.len() > *length as usize {
                             let (left, right) = current_split.split_at(*length as usize + 1);
-                            cli_alpn.insert(String::from_utf8(left[1..].to_vec()).unwrap(), left);
+                            cli_alpn
+                                .insert(String::from_utf8(left[1..].to_vec()).unwrap(), &left[1..]);
                             current_split = right;
                         } else {
                             return Err(AlpnError::ALERT_FATAL);
@@ -475,7 +475,7 @@ impl SslConfig {
     /// use prosa_utils::config::ssl::SslConfig;
     ///
     /// let server_config = SslConfig::new_pkcs12("server.pkcs12".into());
-    /// if let Ok(mut ssl_context_builder) = server_config.init_tls_server_context() {
+    /// if let Ok(mut ssl_context_builder) = server_config.init_tls_server_context(None) {
     ///     let ssl_context = ssl_context_builder.build();
     /// }
     /// ```

@@ -484,7 +484,7 @@ mod tests {
             );
             if let Stream::Ssl(s) = &stream {
                 assert_eq!(
-                    Some(b"\x07prosa/1".as_slice()),
+                    Some(b"prosa/1".as_slice()),
                     s.ssl().selected_alpn_protocol()
                 );
             } else {
