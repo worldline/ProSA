@@ -20,7 +20,7 @@ extern crate self as prosa;
 
 /// Inj settings for service and speed parameters
 #[proc_settings]
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct InjSettings {
     /// Service to inject to
     service_name: String,
@@ -80,6 +80,19 @@ impl InjSettings {
             self.max_concurrents_send,
             self.speed_interval,
         )
+    }
+}
+
+#[proc_settings]
+impl Default for InjSettings {
+    fn default() -> InjSettings {
+        InjSettings {
+            service_name: Default::default(),
+            max_speed: InjSettings::default_max_speed(),
+            timeout_threshold: InjSettings::default_timeout_threshold(),
+            max_concurrents_send: InjSettings::default_max_concurrents_send(),
+            speed_interval: InjSettings::default_speed_interval(),
+        }
     }
 }
 

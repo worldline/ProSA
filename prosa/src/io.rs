@@ -1,629 +1,15 @@
 //! Module that define IO that could be use by a ProSA processor
 use std::{
-    fmt, io,
-    os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd},
-    pin::Pin,
-    task::{Context, Poll},
+    fmt,
+    net::{SocketAddrV4, SocketAddrV6},
+    path::Path,
 };
 
-use openssl::ssl::{self, SslContext};
 pub use prosa_macros::io;
-use prosa_utils::config::ssl::SslConfig;
-use serde::{Deserialize, Serialize};
-use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf},
-    net::{TcpStream, ToSocketAddrs},
-};
-use tokio_openssl::SslStream;
 use url::Url;
 
-/// ProSA socket object to handle TCP/SSL socket with or without proxy
-#[derive(Debug)]
-pub enum Stream {
-    /// TCP socket
-    Tcp(TcpStream),
-    /// SSL socket
-    Ssl(SslStream<TcpStream>),
-    /// TCP socket using Http proxy
-    TcpHttpProxy(TcpStream),
-    /// SSL socket using Http proxy
-    SslHttpProxy(SslStream<TcpStream>),
-}
-
-impl Stream {
-    #[cfg_attr(doc, aquamarine::aquamarine)]
-    /// Connect a TCP socket to a distant
-    ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///
-    ///     client -- TCP --> server
-    /// ```
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use url::Url;
-    /// use prosa::io::Stream;
-    ///
-    /// async fn connecting() -> Result<(), io::Error> {
-    ///     let stream: Stream = Stream::connect_tcp("worldline.com:80").await?;
-    ///
-    ///     // Handle the stream like any tokio stream
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn connect_tcp<A>(addr: A) -> Result<Stream, io::Error>
-    where
-        A: ToSocketAddrs,
-    {
-        Ok(Stream::Tcp(TcpStream::connect(addr).await?))
-    }
-
-    /// Method to create an SSL stream from a TCP stream
-    async fn create_ssl(
-        tcp_stream: TcpStream,
-        ssl_context: &ssl::SslContext,
-    ) -> Result<SslStream<TcpStream>, io::Error> {
-        let ssl = ssl::Ssl::new(ssl_context).unwrap();
-        let mut stream = SslStream::new(ssl, tcp_stream).unwrap();
-        if let Err(e) = Pin::new(&mut stream).connect().await {
-            if e.code() != ssl::ErrorCode::ZERO_RETURN {
-                return Err(io::Error::new(
-                    io::ErrorKind::Interrupted,
-                    format!("Can't connect the SSL socket `{}`", e),
-                ));
-            }
-        }
-
-        Ok(stream)
-    }
-
-    #[cfg_attr(doc, aquamarine::aquamarine)]
-    /// Connect an SSL socket to a distant
-    ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///
-    ///     client -- TCP+TLS --> server
-    /// ```
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use url::Url;
-    /// use prosa_utils::config::ssl::SslConfig;
-    /// use prosa::io::Stream;
-    ///
-    /// async fn connecting() -> Result<(), io::Error> {
-    ///     let ssl_config = SslConfig::default();
-    ///     if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-    ///         let ssl_context = ssl_context_builder.build();
-    ///         let stream: Stream = Stream::connect_ssl("worldline.com:443", &ssl_context).await?;
-    ///
-    ///         // Handle the stream like any tokio stream
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn connect_ssl<A>(addr: A, ssl_context: &ssl::SslContext) -> Result<Stream, io::Error>
-    where
-        A: ToSocketAddrs,
-    {
-        Ok(Stream::Ssl(
-            Self::create_ssl(TcpStream::connect(addr).await?, ssl_context).await?,
-        ))
-    }
-
-    /// Method to connect a TCP stream through an HTTP proxy
-    async fn connect_http_proxy(
-        host: &str,
-        port: u16,
-        proxy: &Url,
-    ) -> Result<TcpStream, io::Error> {
-        let proxy_addrs = proxy.socket_addrs(|| proxy.port_or_known_default())?;
-        let mut tcp_stream = TcpStream::connect(&*proxy_addrs).await?;
-        if let (username, Some(password)) = (proxy.username(), proxy.password()) {
-            if let Err(e) = async_http_proxy::http_connect_tokio_with_basic_auth(
-                &mut tcp_stream,
-                host,
-                port,
-                username,
-                password,
-            )
-            .await
-            {
-                return Err(io::Error::new(
-                    io::ErrorKind::ConnectionAborted,
-                    format!("Can't connect to the http proxy with basic_auth `{}`", e),
-                ));
-            }
-        } else if let Err(e) =
-            async_http_proxy::http_connect_tokio(&mut tcp_stream, host, port).await
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::ConnectionAborted,
-                format!("Can't connect to the http proxy `{}`", e),
-            ));
-        }
-
-        Ok(tcp_stream)
-    }
-
-    #[cfg_attr(doc, aquamarine::aquamarine)]
-    /// Connect a TCP socket to a distant through an HTTP proxy
-    ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///     proxy[Proxy]
-    ///
-    ///     client -- TCP --> proxy
-    ///     proxy --> server
-    /// ```
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use url::Url;
-    /// use prosa::io::Stream;
-    ///
-    /// async fn connecting() -> Result<(), io::Error> {
-    ///     let proxy_url = Url::parse("http://user:pwd@proxy:3128").unwrap();
-    ///     let stream: Stream = Stream::connect_tcp_with_http_proxy("worldline.com", 443, &proxy_url).await?;
-    ///
-    ///     // Handle the stream like any tokio stream
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn connect_tcp_with_http_proxy(
-        host: &str,
-        port: u16,
-        proxy: &Url,
-    ) -> Result<Stream, io::Error> {
-        Ok(Stream::TcpHttpProxy(
-            Self::connect_http_proxy(host, port, proxy).await?,
-        ))
-    }
-
-    #[cfg_attr(doc, aquamarine::aquamarine)]
-    /// Connect an SSL socket to a distant through an HTTP proxy
-    ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///     proxy[Proxy]
-    ///
-    ///     client -- TCP+TLS --> proxy
-    ///     proxy --> server
-    /// ```
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use url::Url;
-    /// use prosa_utils::config::ssl::SslConfig;
-    /// use prosa::io::Stream;
-    ///
-    /// async fn connecting() -> Result<(), io::Error> {
-    ///     let proxy_url = Url::parse("http://user:pwd@proxy:3128").unwrap();
-    ///     let ssl_config = SslConfig::default();
-    ///     if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-    ///         let ssl_context = ssl_context_builder.build();
-    ///         let stream: Stream = Stream::connect_ssl_with_http_proxy("worldline.com", 443, &ssl_context, &proxy_url).await?;
-    ///
-    ///         // Handle the stream like any tokio stream
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn connect_ssl_with_http_proxy(
-        host: &str,
-        port: u16,
-        ssl_context: &ssl::SslContext,
-        proxy: &Url,
-    ) -> Result<Stream, io::Error> {
-        Ok(Stream::SslHttpProxy(
-            Self::create_ssl(
-                Self::connect_http_proxy(host, port, proxy).await?,
-                ssl_context,
-            )
-            .await?,
-        ))
-    }
-
-    #[cfg_attr(doc, aquamarine::aquamarine)]
-    /// Accept an SSL socket from a TcpListener
-    ///
-    /// ```mermaid
-    /// graph RL
-    ///     clients[Clients]
-    ///     server[Server]
-    ///
-    ///     clients --> server
-    /// ```
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use tokio::net::TcpListener;
-    /// use prosa_utils::config::ssl::SslConfig;
-    /// use prosa::io::Stream;
-    ///
-    /// async fn listenning() -> Result<(), io::Error> {
-    ///     let ssl_context = SslConfig::default().init_tls_server_context().unwrap().build();
-    ///     let listener = TcpListener::bind("0.0.0.0:4443").await?;
-    ///
-    ///     loop {
-    ///         let (stream, cli_addr) = listener.accept().await?;
-    ///         let stream = Stream::accept_ssl(stream, &ssl_context).await?;
-    ///
-    ///         // Use stream ...
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn accept_ssl(stream: TcpStream, context: &SslContext) -> Result<Stream, io::Error> {
-        let ssl = ssl::Ssl::new(context)?;
-        let mut ssl_stream = SslStream::new(ssl, stream).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Can't create SslStream: {}", e),
-            )
-        })?;
-        if let Err(e) = Pin::new(&mut ssl_stream).accept().await {
-            if e.code() != ssl::ErrorCode::ZERO_RETURN {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Can't accept the client: {}", e),
-                ));
-            }
-        }
-
-        Ok(Stream::Ssl(ssl_stream))
-    }
-
-    /// Sets the value of the TCP_NODELAY option on the ProSA socket
-    pub fn set_nodelay(&self, nodelay: bool) -> Result<(), io::Error> {
-        match self {
-            Stream::Tcp(s) => s.set_nodelay(nodelay),
-            Stream::Ssl(s) => s.get_ref().set_nodelay(nodelay),
-            Stream::TcpHttpProxy(s) => s.set_nodelay(nodelay),
-            Stream::SslHttpProxy(s) => s.get_ref().set_nodelay(nodelay),
-        }
-    }
-
-    /// Gets the value of the TCP_NODELAY option for the ProSA socket
-    pub fn nodelay(&self) -> Result<bool, io::Error> {
-        match self {
-            Stream::Tcp(s) => s.nodelay(),
-            Stream::Ssl(s) => s.get_ref().nodelay(),
-            Stream::TcpHttpProxy(s) => s.nodelay(),
-            Stream::SslHttpProxy(s) => s.get_ref().nodelay(),
-        }
-    }
-
-    /// Sets the value for the IP_TTL option on the ProSA socket
-    pub fn set_ttl(&self, ttl: u32) -> Result<(), io::Error> {
-        match self {
-            Stream::Tcp(s) => s.set_ttl(ttl),
-            Stream::Ssl(s) => s.get_ref().set_ttl(ttl),
-            Stream::TcpHttpProxy(s) => s.set_ttl(ttl),
-            Stream::SslHttpProxy(s) => s.get_ref().set_ttl(ttl),
-        }
-    }
-
-    /// Gets the value of the IP_TTL option for the ProSA socket
-    pub fn ttl(&self) -> Result<u32, io::Error> {
-        match self {
-            Stream::Tcp(s) => s.ttl(),
-            Stream::Ssl(s) => s.get_ref().ttl(),
-            Stream::TcpHttpProxy(s) => s.ttl(),
-            Stream::SslHttpProxy(s) => s.get_ref().ttl(),
-        }
-    }
-}
-
-impl AsFd for Stream {
-    fn as_fd(&self) -> BorrowedFd<'_> {
-        match self {
-            Stream::Tcp(s) => s.as_fd(),
-            Stream::Ssl(s) => s.get_ref().as_fd(),
-            Stream::TcpHttpProxy(s) => s.as_fd(),
-            Stream::SslHttpProxy(s) => s.get_ref().as_fd(),
-        }
-    }
-}
-
-impl AsRawFd for Stream {
-    fn as_raw_fd(&self) -> RawFd {
-        match self {
-            Stream::Tcp(s) => s.as_raw_fd(),
-            Stream::Ssl(s) => s.get_ref().as_raw_fd(),
-            Stream::TcpHttpProxy(s) => s.as_raw_fd(),
-            Stream::SslHttpProxy(s) => s.get_ref().as_raw_fd(),
-        }
-    }
-}
-
-impl AsyncRead for Stream {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Stream::Tcp(s) => {
-                let stream = Pin::new(s);
-                stream.poll_read(cx, buf)
-            }
-            Stream::Ssl(s) => {
-                let stream = Pin::new(s);
-                stream.poll_read(cx, buf)
-            }
-            Stream::TcpHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_read(cx, buf)
-            }
-            Stream::SslHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_read(cx, buf)
-            }
-        }
-    }
-}
-
-impl AsyncWrite for Stream {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Stream::Tcp(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write(cx, buf)
-            }
-            Stream::Ssl(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write(cx, buf)
-            }
-            Stream::TcpHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write(cx, buf)
-            }
-            Stream::SslHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write(cx, buf)
-            }
-        }
-    }
-
-    fn poll_write_vectored(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        bufs: &[io::IoSlice<'_>],
-    ) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Stream::Tcp(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write_vectored(cx, bufs)
-            }
-            Stream::Ssl(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write_vectored(cx, bufs)
-            }
-            Stream::TcpHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write_vectored(cx, bufs)
-            }
-            Stream::SslHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_write_vectored(cx, bufs)
-            }
-        }
-    }
-
-    fn is_write_vectored(&self) -> bool {
-        match self {
-            Stream::Tcp(s) => s.is_write_vectored(),
-            Stream::Ssl(s) => s.is_write_vectored(),
-            Stream::TcpHttpProxy(s) => s.is_write_vectored(),
-            Stream::SslHttpProxy(s) => s.is_write_vectored(),
-        }
-    }
-
-    #[inline]
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Stream::Tcp(s) => {
-                let stream = Pin::new(s);
-                stream.poll_flush(cx)
-            }
-            Stream::Ssl(s) => {
-                let stream = Pin::new(s);
-                stream.poll_flush(cx)
-            }
-            Stream::TcpHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_flush(cx)
-            }
-            Stream::SslHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_flush(cx)
-            }
-        }
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Stream::Tcp(s) => {
-                let stream = Pin::new(s);
-                stream.poll_shutdown(cx)
-            }
-            Stream::Ssl(s) => {
-                let stream = Pin::new(s);
-                stream.poll_shutdown(cx)
-            }
-            Stream::TcpHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_shutdown(cx)
-            }
-            Stream::SslHttpProxy(s) => {
-                let stream = Pin::new(s);
-                stream.poll_shutdown(cx)
-            }
-        }
-    }
-}
-
-impl From<TcpStream> for Stream {
-    fn from(stream: TcpStream) -> Self {
-        Stream::Tcp(stream)
-    }
-}
-
-/// Configuration struct of an network target
-///
-/// ```
-/// use tokio::io;
-/// use url::Url;
-/// use prosa::io::{TargetSetting, Stream};
-///
-/// async fn connecting() -> Result<(), io::Error> {
-///     let wl_target = TargetSetting::new(Url::parse("https://worldline.com").unwrap(), None, None);
-///     let stream: Stream = wl_target.connect().await?;
-///
-///     // Handle the stream like any tokio stream
-///
-///     Ok(())
-/// }
-/// ```
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct TargetSetting {
-    /// Url of the target destination
-    pub url: Url,
-    /// SSL configuration for target destination
-    pub ssl: Option<SslConfig>,
-    /// Optional proxy use to reach the target
-    pub proxy: Option<Url>,
-    #[serde(skip)]
-    /// SSL configuration for target destination
-    pub ssl_context: Option<SslContext>,
-}
-
-impl TargetSetting {
-    /// Method to create manually a target
-    pub fn new(url: Url, ssl: Option<SslConfig>, proxy: Option<Url>) -> TargetSetting {
-        let mut target = TargetSetting {
-            url,
-            ssl,
-            proxy,
-            ssl_context: None,
-        };
-
-        target.init_ssl_context();
-        target
-    }
-
-    /// Method to known if the url indicate an SSL protocol
-    pub fn url_is_ssl(url: &Url) -> bool {
-        let scheme = url.scheme();
-        if scheme.ends_with("+ssl") || scheme.ends_with("+tls") {
-            true
-        } else {
-            matches!(url.scheme(), "ssl" | "tls" | "https")
-        }
-    }
-
-    /// Method to init the ssl context out of the ssl target configuration.
-    /// Must be call when the configuration is retrieved
-    pub fn init_ssl_context(&mut self) {
-        if let Some(ssl_config) = &self.ssl {
-            if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-                self.ssl_context = Some(ssl_context_builder.build());
-            }
-        }
-    }
-
-    /// Method to connect a ProSA stream to the remote target using the configuration
-    pub async fn connect(&self) -> Result<Stream, io::Error> {
-        let ssl_context = if self.ssl_context.is_some() {
-            self.ssl_context.clone()
-        } else if let Some(ssl_config) = &self.ssl {
-            if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-                Some(ssl_context_builder.build())
-            } else {
-                None
-            }
-        } else if Self::url_is_ssl(&self.url) {
-            let ssl_config = SslConfig::default();
-            if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-                Some(ssl_context_builder.build())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        if let Some(proxy_url) = &self.proxy {
-            if let Some(ssl_cx) = ssl_context {
-                Stream::connect_ssl_with_http_proxy(
-                    self.url.host_str().unwrap_or_default(),
-                    self.url.port_or_known_default().unwrap_or_default(),
-                    &ssl_cx,
-                    proxy_url,
-                )
-                .await
-            } else {
-                Stream::connect_tcp_with_http_proxy(
-                    self.url.host_str().unwrap_or_default(),
-                    self.url.port_or_known_default().unwrap_or_default(),
-                    proxy_url,
-                )
-                .await
-            }
-        } else {
-            let addrs = self.url.socket_addrs(|| self.url.port_or_known_default())?;
-            if let Some(ssl_cx) = ssl_context {
-                Stream::connect_ssl(&*addrs, &ssl_cx).await
-            } else {
-                Stream::connect_tcp(&*addrs).await
-            }
-        }
-    }
-}
-
-impl fmt::Display for TargetSetting {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut url = self.url.clone();
-        if self.ssl.is_some() {
-            let url_scheme = url.scheme();
-            if url_scheme.is_empty() {
-                let _ = url.set_scheme("ssl");
-            } else if !url_scheme.ends_with("ssl")
-                && !url_scheme.ends_with("tls")
-                && !url_scheme.ends_with("https")
-                && !url_scheme.ends_with("wss")
-            {
-                let _ = url.set_scheme(format!("{}+ssl", url_scheme).as_str());
-            }
-        }
-
-        if let Some(proxy_url) = &self.proxy {
-            writeln!(f, "{} -proxy {}", url, proxy_url)
-        } else {
-            writeln!(f, "{}", url)
-        }
-    }
-}
+pub mod listener;
+pub mod stream;
 
 /// Trait to define ProSA IO.
 /// Implement with the procedural macro io
@@ -643,4 +29,477 @@ pub trait IO {
         &mut self,
         frame: F,
     ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
+}
+
+/// Method to known if the url indicate an SSL protocol
+///
+/// ```
+/// use url::Url;
+/// use prosa::io::url_is_ssl;
+///
+/// assert!(!url_is_ssl(&Url::parse("http://localhost").unwrap()));
+/// assert!(url_is_ssl(&Url::parse("https://localhost").unwrap()));
+/// ```
+pub fn url_is_ssl(url: &Url) -> bool {
+    let scheme = url.scheme();
+    if scheme.ends_with("+ssl") || scheme.ends_with("+tls") {
+        true
+    } else {
+        matches!(url.scheme(), "ssl" | "tls" | "https" | "wss")
+    }
+}
+
+/// Internal Socket adress enum to define IPv4, IPv6 and unix socket.
+#[derive(Debug)]
+pub enum SocketAddr {
+    #[cfg(target_family = "unix")]
+    /// UNIX socket address
+    Unix(tokio::net::unix::SocketAddr),
+    /// IPv4 address
+    V4(SocketAddrV4),
+    /// IPv6 address
+    V6(SocketAddrV6),
+}
+
+impl SocketAddr {
+    /// Returns true if this is a loopback address (IPv4: 127.0.0.0/8, IPv6: ::1).
+    /// These properties are defined by [IETF RFC 1122](https://tools.ietf.org/html/rfc1122), and [IETF RFC 4291 section 2.5.3](https://tools.ietf.org/html/rfc4291#section-2.5.3).
+    pub fn is_loopback(&self) -> bool {
+        match self {
+            #[cfg(target_family = "unix")]
+            SocketAddr::Unix(_) => true,
+            SocketAddr::V4(ipv4) => ipv4.ip().is_loopback(),
+            SocketAddr::V6(ipv6) => ipv6.ip().is_loopback(),
+        }
+    }
+
+    /// Returns the port number associated with this socket address.
+    pub const fn port(&self) -> u16 {
+        match self {
+            #[cfg(target_family = "unix")]
+            SocketAddr::Unix(_) => 0u16,
+            SocketAddr::V4(ipv4) => ipv4.port(),
+            SocketAddr::V6(ipv6) => ipv6.port(),
+        }
+    }
+
+    /// Changes the port number associated with this socket address.
+    pub fn set_port(&mut self, port: u16) {
+        match self {
+            #[cfg(target_family = "unix")]
+            SocketAddr::Unix(_) => {}
+            SocketAddr::V4(ipv4) => ipv4.set_port(port),
+            SocketAddr::V6(ipv6) => ipv6.set_port(port),
+        }
+    }
+}
+
+impl PartialEq for SocketAddr {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            #[cfg(target_family = "unix")]
+            (SocketAddr::Unix(s), SocketAddr::Unix(o)) => s.as_pathname() == o.as_pathname(),
+            (SocketAddr::V4(s), SocketAddr::V4(o)) => s == o,
+            (SocketAddr::V6(s), SocketAddr::V6(o)) => s == o,
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for SocketAddr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            #[cfg(target_family = "unix")]
+            SocketAddr::Unix(path) => write!(
+                f,
+                "{}",
+                path.as_pathname()
+                    .unwrap_or(Path::new("undefined"))
+                    .display()
+            ),
+            SocketAddr::V4(ipv4) => write!(f, "{}", ipv4),
+            SocketAddr::V6(ipv6) => write!(f, "{}", ipv6),
+        }
+    }
+}
+
+impl From<std::net::SocketAddr> for SocketAddr {
+    fn from(addr: std::net::SocketAddr) -> Self {
+        match addr {
+            std::net::SocketAddr::V4(ipv4) => SocketAddr::V4(ipv4),
+            std::net::SocketAddr::V6(ipv6) => SocketAddr::V6(ipv6),
+        }
+    }
+}
+
+#[cfg(target_family = "unix")]
+impl From<tokio::net::unix::SocketAddr> for SocketAddr {
+    fn from(addr: tokio::net::unix::SocketAddr) -> Self {
+        SocketAddr::Unix(addr)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures_util::future;
+    use listener::{ListenerSetting, StreamListener};
+    use openssl::ssl::SslVerifyMode;
+    use prosa_utils::config::ssl::{SslConfig, Store};
+    use std::{env, os::fd::AsRawFd as _};
+    use stream::{Stream, TargetSetting};
+    use tokio::{
+        fs::File,
+        io::{AsyncReadExt as _, AsyncWriteExt},
+    };
+
+    use super::*;
+
+    #[cfg(target_family = "unix")]
+    #[tokio::test]
+    async fn unix_client_server() {
+        let addr = "/tmp/prosa_unix_client_server_test.sock";
+        let listener = StreamListener::Unix(tokio::net::UnixListener::bind(addr).unwrap());
+        assert!(listener.as_raw_fd() > 0);
+        assert!(
+            format!("{:?}", listener).contains("UnixListener"),
+            "listener `{:?}` don't contain UnixListener",
+            listener
+        );
+        assert!(
+            format!("{:?}", listener).contains(addr),
+            "listener `{:?}` don't contain {}",
+            listener,
+            addr
+        );
+        assert_eq!(
+            "unix:///tmp/prosa_unix_client_server_test.sock",
+            &listener.to_string()
+        );
+
+        let server = async move {
+            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            assert!(client_addr.is_loopback());
+
+            let mut buf = [0; 5];
+            client_stream.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"ProSA");
+
+            client_stream.write_all(b"Worldline").await.unwrap();
+        };
+
+        let client = async {
+            let mut stream = Stream::connect_unix(addr).await.unwrap();
+            assert!(stream.as_raw_fd() > 0);
+            assert!(
+                format!("{:?}", stream).contains("UnixStream"),
+                "stream `{:?}` don't contain UnixStream",
+                stream
+            );
+            assert!(
+                format!("{:?}", stream).contains(addr),
+                "stream `{:?}` don't contain {}",
+                stream,
+                addr
+            );
+
+            stream.write_all(b"ProSA").await.unwrap();
+
+            let mut buf = vec![];
+            stream.read_to_end(&mut buf).await.unwrap();
+            assert_eq!(buf, b"Worldline");
+
+            let _ = stream.shutdown().await;
+        };
+
+        future::join(server, client).await;
+        std::fs::remove_file(addr).unwrap();
+    }
+
+    #[tokio::test]
+    async fn tcp_client_server() {
+        let addr = "localhost:41800";
+        let listener = StreamListener::bind(addr).await.unwrap();
+        assert!(listener.as_raw_fd() > 0);
+        assert!(
+            format!("{:?}", listener).contains("Tcp"),
+            "listener `{:?}` don't contain Tcp",
+            listener
+        );
+        assert!(
+            format!("{:?}", listener).contains("TcpListener"),
+            "listener `{:?}` don't contain TcpListener",
+            listener
+        );
+        assert!(listener.to_string().starts_with("tcp://"));
+
+        let server = async move {
+            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            assert!(client_addr.is_loopback());
+
+            let mut buf = [0; 5];
+            client_stream.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"ProSA");
+
+            // Should do nothing
+            client_stream = listener.handshake(client_stream).await.unwrap();
+
+            client_stream.write_all(b"Worldline").await.unwrap();
+        };
+
+        let client = async {
+            let mut stream = Stream::connect_tcp(addr).await.unwrap();
+            assert!(stream.as_raw_fd() > 0);
+            assert!(
+                format!("{:?}", stream).contains("Tcp"),
+                "stream `{:?}` don't contain Tcp",
+                stream
+            );
+            assert!(
+                format!("{:?}", stream).contains("TcpStream"),
+                "stream `{:?}` don't contain TcpStream",
+                stream
+            );
+            assert!(stream.to_string().starts_with("tcp://"));
+
+            stream.write_all(b"ProSA").await.unwrap();
+
+            let mut buf = vec![];
+            stream.read_to_end(&mut buf).await.unwrap();
+            assert_eq!(buf, b"Worldline");
+
+            let _ = stream.shutdown().await;
+        };
+
+        future::join(server, client).await;
+    }
+
+    #[tokio::test]
+    async fn ssl_client_server() {
+        let addr = "localhost:41443";
+        let addr_url = Url::parse(format!("tls://{}", addr).as_str()).unwrap();
+
+        let ssl_config = SslConfig::default();
+        let ssl_acceptor = ssl_config
+            .init_tls_server_context(addr_url.domain())
+            .unwrap()
+            .build();
+        let listener = StreamListener::bind(addr)
+            .await
+            .unwrap()
+            .ssl_acceptor(ssl_acceptor, Some(ssl_config.get_ssl_timeout()));
+        assert!(listener.as_raw_fd() > 0);
+        assert!(
+            format!("{:?}", listener).contains("Ssl"),
+            "listener `{:?}` don't contain Ssl",
+            listener
+        );
+        assert!(
+            format!("{:?}", listener).contains("TcpListener"),
+            "listener `{:?}` don't contain TcpListener",
+            listener
+        );
+        assert!(listener.to_string().starts_with("ssl://"));
+
+        let server = async move {
+            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            assert!(client_addr.is_loopback());
+
+            let mut buf = [0; 5];
+            client_stream.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"ProSA");
+
+            client_stream.write_all(b"Worldline").await.unwrap();
+        };
+
+        let client = async {
+            let mut ssl_client_context = ssl_config.init_tls_client_context().unwrap();
+            ssl_client_context.set_verify(SslVerifyMode::NONE);
+
+            let mut stream = Stream::connect_ssl(&addr_url, &ssl_client_context.build())
+                .await
+                .unwrap();
+            assert!(stream.as_raw_fd() > 0);
+            assert!(
+                format!("{:?}", stream).contains("Ssl"),
+                "stream `{:?}` don't contain Ssl",
+                stream
+            );
+            assert!(stream.to_string().starts_with("ssl://"));
+
+            stream.write_all(b"ProSA").await.unwrap();
+
+            let mut buf = vec![];
+            stream.read_to_end(&mut buf).await.unwrap();
+            assert_eq!(buf, b"Worldline");
+
+            let _ = stream.shutdown().await;
+        };
+
+        future::join(server, client).await;
+    }
+
+    #[tokio::test]
+    async fn ssl_client_server_raw() {
+        let addr = "localhost:41453";
+        let addr_url = Url::parse(format!("tls://{}", addr).as_str()).unwrap();
+
+        let ssl_config = SslConfig::default();
+        let ssl_acceptor = ssl_config
+            .init_tls_server_context(addr_url.domain())
+            .unwrap()
+            .build();
+        let listener = StreamListener::bind(addr)
+            .await
+            .unwrap()
+            .ssl_acceptor(ssl_acceptor, Some(ssl_config.get_ssl_timeout()));
+        assert!(listener.as_raw_fd() > 0);
+        assert!(
+            format!("{:?}", listener).contains("Ssl"),
+            "listener `{:?}` don't contain Ssl",
+            listener
+        );
+        assert!(
+            format!("{:?}", listener).contains("TcpListener"),
+            "listener `{:?}` don't contain TcpListener",
+            listener
+        );
+        assert!(listener.to_string().starts_with("ssl://"));
+
+        let server = async move {
+            let (mut client_stream, client_addr) = listener.accept_raw().await.unwrap();
+            assert!(client_addr.is_loopback());
+            client_stream = listener.handshake(client_stream).await.unwrap();
+
+            let mut buf = [0; 5];
+            client_stream.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"ProSA");
+
+            client_stream.write_all(b"Worldline").await.unwrap();
+        };
+
+        let client = async {
+            let mut ssl_client_context = ssl_config.init_tls_client_context().unwrap();
+            ssl_client_context.set_verify(SslVerifyMode::NONE);
+
+            let mut stream = Stream::connect_ssl(&addr_url, &ssl_client_context.build())
+                .await
+                .unwrap();
+            assert!(stream.as_raw_fd() > 0);
+            assert!(
+                format!("{:?}", stream).contains("Ssl"),
+                "stream `{:?}` don't contain Ssl",
+                stream
+            );
+            assert!(stream.to_string().starts_with("ssl://"));
+
+            stream.write_all(b"ProSA").await.unwrap();
+
+            let mut buf = vec![];
+            stream.read_to_end(&mut buf).await.unwrap();
+            assert_eq!(buf, b"Worldline");
+
+            let _ = stream.shutdown().await;
+        };
+
+        future::join(server, client).await;
+    }
+
+    #[tokio::test]
+    async fn ssl_client_server_with_config() {
+        let temp_cert_dir = env::temp_dir();
+        let addr_str = "tls://localhost:41463";
+        let addr = Url::parse(addr_str).unwrap();
+
+        let mut server_ssl_config = SslConfig::default();
+        server_ssl_config.set_alpn(vec!["prosa/1".into(), "h2".into()]);
+
+        let listener_settings = ListenerSetting::new(addr.clone(), Some(server_ssl_config));
+        assert!(
+            format!("{:?}", listener_settings).contains("tls")
+                && format!("{:?}", listener_settings).contains("localhost")
+                && format!("{:?}", listener_settings).contains("41463"),
+            "`{:?}` Not contain the address {}",
+            listener_settings,
+            addr_str
+        );
+        assert!(
+            listener_settings.to_string().starts_with(addr_str),
+            "`{}` Not start with the address {}",
+            listener_settings,
+            addr_str
+        );
+        assert!(listener_settings.to_string().starts_with(addr_str));
+
+        let listener = listener_settings.bind().await.unwrap();
+        if let StreamListener::Ssl(_, acceptor, _) = &listener {
+            let server_cert = acceptor.context().certificate().unwrap();
+            let mut server_cert_file = File::create(temp_cert_dir.join("prosa_test_server.pem"))
+                .await
+                .unwrap();
+            server_cert_file
+                .write_all(&server_cert.to_pem().unwrap())
+                .await
+                .unwrap();
+        }
+        assert!(listener.as_raw_fd() > 0);
+        assert!(
+            format!("{:?}", listener).contains("Ssl"),
+            "listener `{:?}` don't contain Ssl",
+            listener
+        );
+        assert!(
+            format!("{:?}", listener).contains("TcpListener"),
+            "listener `{:?}` don't contain TcpListener",
+            listener
+        );
+
+        let server = async move {
+            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            assert!(client_addr.is_loopback());
+
+            let mut buf = [0; 5];
+            client_stream.read_exact(&mut buf).await.unwrap();
+            assert_eq!(&buf, b"ProSA");
+
+            // Should do nothing
+            client_stream = listener.handshake(client_stream).await.unwrap();
+
+            client_stream.write_all(b"Worldline").await.unwrap();
+        };
+
+        let mut client_ssl_config = SslConfig::default();
+        client_ssl_config.set_alpn(vec!["http/1.1".into(), "prosa/1".into()]);
+        let ssl_store = Store::new(temp_cert_dir.to_str().unwrap().to_string() + "/");
+        client_ssl_config.set_store(ssl_store);
+        let target_settings = TargetSetting::new(addr, Some(client_ssl_config), None);
+        assert_eq!(addr_str, target_settings.to_string());
+
+        let client = async {
+            let mut stream = target_settings.connect().await.unwrap();
+            assert!(stream.as_raw_fd() > 0);
+            assert!(
+                format!("{:?}", stream).contains("Ssl"),
+                "stream `{:?}` don't contain Ssl",
+                stream
+            );
+            if let Stream::Ssl(s) = &stream {
+                assert_eq!(
+                    Some(b"prosa/1".as_slice()),
+                    s.ssl().selected_alpn_protocol()
+                );
+            } else {
+                panic!("Should be an SSL stream for client");
+            }
+
+            stream.write_all(b"ProSA").await.unwrap();
+
+            let mut buf = vec![];
+            stream.read_to_end(&mut buf).await.unwrap();
+            assert_eq!(buf, b"Worldline");
+
+            let _ = stream.shutdown().await;
+        };
+
+        future::join(server, client).await;
+    }
 }
