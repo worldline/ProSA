@@ -24,11 +24,13 @@ include = [
 [workspace.dependencies]
 prosa-utils = { version = "0.1.2", path = "prosa_utils" }
 prosa-macros = { version = "0.1.2", path = "prosa_macros" }
-thiserror = "1"
-aquamarine = "0.5"
+thiserror = "2"
+aquamarine = "0.6"
 bytes = "1"
 url = { version = "2", features = ["serde"] }
-tokio = "1"
+tokio = { version = "1", features = ["fs", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+config = { version = "0.15", default-features = false, features = ["toml", "json", "yaml", "json5", "convert-case", "async"] }
+toml = "0.8"
 
 # Config Observability
 log = "0.4"

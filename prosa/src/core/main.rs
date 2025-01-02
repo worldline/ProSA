@@ -583,20 +583,35 @@ where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     fn create<S: Settings>(settings: &S) -> (Main<M>, MainProc<M>) {
+        fn inner<M>(
+            main: Main<M>,
+            internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
+        ) -> (Main<M>, MainProc<M>)
+        where
+            M: Sized
+                + Clone
+                + Debug
+                + Tvf
+                + Default
+                + 'static
+                + std::marker::Send
+                + std::marker::Sync,
+        {
+            let name = main.name().clone();
+            let meter = main.meter("prosa_main_task_meter");
+            (
+                main,
+                MainProc {
+                    name,
+                    processors: Default::default(),
+                    services: Arc::new(ServiceTable::default()),
+                    internal_rx_queue,
+                    meter,
+                },
+            )
+        }
         let (internal_tx_queue, internal_rx_queue) = mpsc::channel(2048);
-        let main = Main::new(internal_tx_queue, settings);
-        let name = main.name().clone();
-        let meter = main.meter("prosa_main_task_meter");
-        (
-            main,
-            MainProc {
-                name,
-                processors: Default::default(),
-                services: Arc::new(ServiceTable::default()),
-                internal_rx_queue,
-                meter,
-            },
-        )
+        inner(Main::new(internal_tx_queue, settings), internal_rx_queue)
     }
 
     fn run(mut self) -> std::thread::JoinHandle<()> {

@@ -39,9 +39,9 @@ pub struct ComponentVersion<'a> {
     /// Name of the component
     pub name: String,
     /// Name of the component's crate
-    pub crate_name: &'a String,
+    pub crate_name: &'a str,
     /// Version of the component
-    pub version: &'a String,
+    pub version: &'a str,
 }
 
 impl fmt::Display for ComponentVersion<'_> {
@@ -61,7 +61,7 @@ impl fmt::Display for ComponentVersion<'_> {
 }
 
 /// Metadata of a ProSA processor
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Metadata {
     /// Name of the ProSA package (not included in the metadata)
     #[serde(skip_deserializing)]
@@ -249,7 +249,7 @@ impl PackageMetadata {
     }
 
     /// Getter of the ProSA Processor or Adaptor if present
-    pub fn get_prosa_proc_metadata(&self) -> Option<HashMap<String, Metadata>> {
+    pub fn get_prosa_proc_metadata(&self) -> Option<HashMap<&str, Metadata>> {
         if let Some(metadata) = self
             .metadata
             .as_ref()
@@ -259,7 +259,7 @@ impl PackageMetadata {
             for (name, data) in metadata {
                 if name != "main" && name != "tvf" {
                     if let Ok(prosa_metadata) = serde_json::from_value::<Metadata>(data.clone()) {
-                        proc_metadata.insert(name.clone(), prosa_metadata);
+                        proc_metadata.insert(name.as_str(), prosa_metadata);
                     }
                 }
             }
@@ -489,13 +489,13 @@ impl CargoMetadata {
     }
 
     /// Method to get all merged ProSA proc metadata
-    pub fn prosa_proc_metadata(&self) -> HashMap<String, Metadata> {
-        let mut prosa_list: HashMap<String, Metadata> = HashMap::with_capacity(self.packages.len());
+    pub fn prosa_proc_metadata(&self) -> HashMap<&str, Metadata> {
+        let mut prosa_list: HashMap<&str, Metadata> = HashMap::with_capacity(self.packages.len());
         for package in &self.packages {
             if let Some(prosa_metadata) = package.get_prosa_proc_metadata() {
                 for (prosa_proc_name, mut prosa_proc_metadata) in prosa_metadata {
                     prosa_proc_metadata.specify(&package.name, package.description.clone());
-                    if let Some(prosa_existing_metadata) = prosa_list.get_mut(&prosa_proc_name) {
+                    if let Some(prosa_existing_metadata) = prosa_list.get_mut(prosa_proc_name) {
                         prosa_existing_metadata.merge(prosa_proc_metadata);
                     } else {
                         prosa_list.insert(prosa_proc_name, prosa_proc_metadata);

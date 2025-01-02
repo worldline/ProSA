@@ -62,15 +62,17 @@ fn render_build_rs<P>(path: P, ctx: &tera::Context) -> Result<(), tera::Error>
 where
     P: AsRef<Path>,
 {
-    const RENDER_FILENAME: &str = "build.rs";
-    let mut tera_build = Tera::default();
-    tera_build.add_raw_template(
-        RENDER_FILENAME,
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/build.rs.j2")),
-    )?;
+    fn inner(file: fs::File, ctx: &tera::Context) -> Result<(), tera::Error> {
+        const RENDER_FILENAME: &str = "build.rs";
+        let mut tera_build = Tera::default();
+        tera_build.add_raw_template(
+            RENDER_FILENAME,
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/build.rs.j2")),
+        )?;
 
-    let build_file = fs::File::create(&path).map_err(tera::Error::io_error)?;
-    tera_build.render_to(RENDER_FILENAME, ctx, build_file)
+        tera_build.render_to(RENDER_FILENAME, ctx, file)
+    }
+    inner(fs::File::create(&path).map_err(tera::Error::io_error)?, ctx)
 }
 
 /// Function to render jinja build.rs file into prosa project
@@ -78,15 +80,17 @@ fn render_main_rs<P>(path: P, ctx: &tera::Context) -> Result<(), tera::Error>
 where
     P: AsRef<Path>,
 {
-    const RENDER_FILENAME: &str = "main.rs";
-    let mut tera_build = Tera::default();
-    tera_build.add_raw_template(
-        RENDER_FILENAME,
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/main.rs.j2")),
-    )?;
+    fn inner(file: fs::File, ctx: &tera::Context) -> Result<(), tera::Error> {
+        const RENDER_FILENAME: &str = "main.rs";
+        let mut tera_build = Tera::default();
+        tera_build.add_raw_template(
+            RENDER_FILENAME,
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/main.rs.j2")),
+        )?;
 
-    let main_file = fs::File::create(&path).map_err(tera::Error::io_error)?;
-    tera_build.render_to(RENDER_FILENAME, ctx, main_file)
+        tera_build.render_to(RENDER_FILENAME, ctx, file)
+    }
+    inner(fs::File::create(&path).map_err(tera::Error::io_error)?, ctx)
 }
 
 /// Function to initiate ProSA project file (or update them if existing)
@@ -98,9 +102,21 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
     let cargo_add_prosa_utils = cargo!("add", Some(path), "prosa-utils");
     let cargo_add_clap = cargo!("add", Some(path), "clap");
     let cargo_add_daemonize = cargo!("add", Some(path), "daemonize");
-    let cargo_add_tokio = cargo!("add", Some(path), "tokio");
+    let cargo_add_tokio = cargo!(
+        "add",
+        Some(path),
+        "tokio",
+        "-F",
+        "macros,rt,rt-multi-thread"
+    );
     let cargo_add_serde = cargo!("add", Some(path), "serde");
-    let cargo_add_config = cargo!("add", Some(path), "config");
+    let cargo_add_config = cargo!(
+        "add",
+        Some(path),
+        "config",
+        "-F",
+        "toml,json,yaml,json5,convert-case,async"
+    );
     let cargo_add_tracing = cargo!("add", Some(path), "tracing");
 
     // Add build dependencies
@@ -345,7 +361,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(processor) = matches.get_one::<String>("PROCESSOR") {
                     if let Some(proc_metadata) = CargoMetadata::load_metadata()?
                         .prosa_proc_metadata()
-                        .get(processor)
+                        .get(processor.as_str())
                     {
                         let mut proc_desc = proc_metadata.get_proc_desc(
                             matches.get_one::<String>("adaptor").map(|x| x.as_str()),

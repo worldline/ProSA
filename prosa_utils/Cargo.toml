@@ -12,7 +12,7 @@ include.workspace = true
 [features]
 default = ["full"]
 msg = []
-config = ["dep:glob","dep:serde","dep:toml","dep:serde_yaml"]
+config = ["dep:glob","dep:serde","dep:serde_yaml"]
 config-openssl = ["config", "dep:openssl"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp"]
 config-observability-prometheus = ["config-observability", "dep:prometheus", "dep:prometheus_exporter", "dep:opentelemetry-prometheus"]
@@ -31,7 +31,6 @@ hex = "0.4"
 # Config
 glob = { version = "0.3", optional = true }
 serde = { version = "1", optional = true, features = ["derive"] }
-toml = { version = "0.8", optional = true }
 serde_yaml = { version = "0.9", optional = true }
 
 # Config OpenSSL
@@ -51,5 +50,5 @@ prometheus_exporter = { workspace = true, optional = true }
 opentelemetry-prometheus = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full"] }
+tokio.workspace = true
 tokio-openssl = "0.6"

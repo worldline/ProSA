@@ -11,7 +11,7 @@ use cargo_prosa::CONFIGURATION_FILENAME;
 use cargo_prosa::package::deb::DebPkg;
 {% endif %}
 
-fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Metadata>) -> io::Result<()> {{ '{' }}
+fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metadata>) -> io::Result<()> {{ '{' }}
     let mut f = fs::File::create(Path::new(&out_dir).join("settings.rs"))?;
     writeln!(f, "use prosa::core::settings::settings;")?;
 
@@ -21,7 +21,7 @@ fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String,
         writeln!(f, "#[derive(Default, Debug, Deserialize, Serialize)]")?;
         writeln!(f, "pub struct RunSettings {{ '{{' }}")?;
         for processor in processors {{ '{' }}
-            let proc_metadata = metadata.get(&processor.proc_name).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
+            let proc_metadata = metadata.get(processor.proc_name.as_str()).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
             if let Some(settings) = &proc_metadata.settings {{ '{' }}
                 if let Some(description) = &proc_metadata.description {{ '{' }}
                     writeln!(f, "    /// {{ '{}' }}", description)?;
@@ -100,7 +100,7 @@ fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetada
     writeln!(f, "{{ '}}' }}\n")
 {{ '}' }}
 
-fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Metadata>) -> io::Result<()> {{ '{' }}
+fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metadata>) -> io::Result<()> {{ '{' }}
     let mut f = fs::File::create(Path::new(&out_dir).join("run.rs"))?;
 
     writeln!(f, "fn new_main(settings: &RunSettings) -> (prosa::core::main::Main<{{ '{}' }}>, {{ '{}' }}<{{ '{}' }}>) {{ '{{' }}", desc.prosa.tvf, desc.prosa.main, desc.prosa.tvf)?;
@@ -115,7 +115,7 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<String, Meta
         for processor in processors {{ '{' }}
             proc_id += 1;
             writeln!(f, "debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
-            let proc_metadata = metadata.get(&processor.proc_name).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
+            let proc_metadata = metadata.get(processor.proc_name.as_str()).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
             if proc_metadata.settings.is_some() {{ '{' }}
                 writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name().replace('-', "_"))?;
             {{ '}' }} else {{ '{' }}
@@ -186,8 +186,8 @@ fn write_target_config(out_dir: &OsString, target_dir: &Path) -> io::Result<()> 
 
     // Correct relative path in the Cargo.toml by the `out_dir` one
     let cargo_content = fs::read_to_string("Cargo.toml")?.replace("\"../", format!("\"{}/../", env::current_dir()?.display()).as_str());
-    let mut cargo_dst = fs::File::create(&prosa_config_path.join("Cargo.toml"))?;
-    cargo_dst.write(cargo_content.as_bytes())?;
+    let mut cargo_dst = fs::File::create(prosa_config_path.join("Cargo.toml"))?;
+    cargo_dst.write_all(cargo_content.as_bytes())?;
 
     let mut f = fs::File::create(prosa_config_path.join("src").join("main.rs"))?;
     writeln!(f, "use prosa::core::settings::Settings;\n")?;

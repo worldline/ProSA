@@ -30,7 +30,7 @@ adaptor = ["stub::adaptor::StubParotAdaptor"]
 prosa-utils = { workspace = true, features = ["msg", "config", "config-observability"] }
 prosa-macros = { workspace = true }
 bytes = {workspace = true}
-chrono= "0.4"
+chrono = "0.4"
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["std", "env-filter"]}
 thiserror.workspace = true
@@ -40,14 +40,14 @@ rlimit = "0.10"
 aquamarine.workspace = true
 
 openssl = { version = "0.10" }
-tokio = { workspace = true, features = ["full"] }
+tokio.workspace = true
 tokio-openssl = "0.6"
 async-http-proxy = { version = "1", features = ["runtime-tokio","basic-auth"] }
 
 serde = { version = "1", features = ["derive"] }
-config = "0.13"
+config.workspace = true
 glob = { version = "0.3" }
-toml = "0.8"
+toml.workspace = true
 serde_yaml = "0.9"
 
 log.workspace = true
