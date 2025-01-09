@@ -16,8 +16,8 @@ proc-macro = true
 syn = "2"
 quote = "1"
 proc-macro2 = "1"
-chrono = "0.4"
+chrono.workspace = true
 
 [dev-dependencies]
-bytes = { workspace = true }
-prosa-utils = { workspace = true }
+bytes.workspace = true
+prosa-utils.workspace = true

@@ -28,9 +28,8 @@ adaptor = ["stub::adaptor::StubParotAdaptor"]
 
 [dependencies]
 prosa-utils = { workspace = true, features = ["msg", "config", "config-observability"] }
-prosa-macros = { workspace = true }
-bytes = {workspace = true}
-chrono = "0.4"
+prosa-macros.workspace = true
+bytes.workspace = true
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["std", "env-filter"]}
 thiserror.workspace = true

@@ -25,7 +25,7 @@ tvf = ["msg::simple_string_tvf::SimpleStringTvf"]
 thiserror.workspace = true
 bytes.workspace = true
 url.workspace = true
-chrono = "0.4"
+chrono.workspace = true
 hex = "0.4"
 
 # Config
