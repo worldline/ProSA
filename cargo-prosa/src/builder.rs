@@ -194,13 +194,16 @@ impl Desc {
     where
         P: AsRef<Path>,
     {
-        let mut toml_file = fs::File::create(&path)?;
-        writeln!(toml_file, "# ProSA definition")?;
-        writeln!(
-            toml_file,
-            "{}",
-            toml::to_string(&self).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
-        )
+        fn inner(desc: &Desc, mut file: fs::File) -> Result<(), io::Error> {
+            writeln!(file, "# ProSA definition")?;
+            writeln!(
+                file,
+                "{}",
+                toml::to_string(&desc)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+            )
+        }
+        inner(self, fs::File::create(&path)?)
     }
 
     /// Method to read a ProSA toml description file
