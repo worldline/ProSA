@@ -1,11 +1,6 @@
-use std::error::Error;
-
-use crate::core::{adaptor::Adaptor, proc::ProcConfig};
-
 use super::proc::StubProc;
-
+use crate::core::{adaptor::Adaptor, error::NewAdaptorError, proc::ProcConfig};
 extern crate self as prosa;
-
 use opentelemetry::metrics::Meter;
 
 /// Adaptator trait for the stub processor
@@ -15,6 +10,7 @@ use opentelemetry::metrics::Meter;
 /// use prosa::stub::proc::StubProc;
 /// use prosa::core::adaptor::Adaptor;
 /// use prosa::stub::adaptor::StubAdaptor;
+/// use prosa::core::error::NewAdaptorError;
 ///
 /// #[derive(Adaptor)]
 /// pub struct MyStubAdaptor { }
@@ -30,7 +26,7 @@ use opentelemetry::metrics::Meter;
 ///         + prosa_utils::msg::tvf::Tvf
 ///         + std::default::Default,
 /// {
-///     fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn std::error::Error>> {
+///     fn new(_proc: &StubProc<M>) -> Result<Self, NewAdaptorError> {
 ///         Ok(Self {})
 ///     }
 ///     fn process_request(&mut self, service_name: &str, request: &M) -> M {
@@ -53,7 +49,7 @@ where
 {
     /// Method called when the processor spawns
     /// This method is called only once so the processing will be thread safe
-    fn new(proc: &StubProc<M>) -> Result<Self, Box<dyn Error>>
+    fn new(proc: &StubProc<M>) -> Result<Self, NewAdaptorError>
     where
         Self: Sized;
     /// Method to process incomming requests
@@ -78,7 +74,7 @@ where
         + prosa_utils::msg::tvf::Tvf
         + std::default::Default,
 {
-    fn new(proc: &StubProc<M>) -> Result<Self, Box<dyn Error>> {
+    fn new(proc: &StubProc<M>) -> Result<Self, NewAdaptorError> {
         Ok(Self {
             meter: proc.get_proc_param().meter("stub_adaptor"),
         })

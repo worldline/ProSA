@@ -7,6 +7,7 @@
 //!
 //! Main can be consider as a service bus that routing processor messages.
 
+use super::error::BusError;
 use super::msg::{InternalMainMsg, InternalMsg};
 use super::proc::ProcBusParam;
 use super::service::{ProcService, ServiceTable};
@@ -16,11 +17,10 @@ use opentelemetry::logs::LoggerProvider as _;
 use opentelemetry::metrics::{Meter, MeterProvider};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_appender_log::OpenTelemetryLogBridge;
-use prosa_utils::msg::tvf::{Tvf, TvfError};
+use prosa_utils::msg::tvf::Tvf;
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::{collections::HashMap, fmt::Debug};
-use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::{
     runtime::{Builder, Runtime},
@@ -38,32 +38,6 @@ where
 
     /// Method call to run the main task (must be called before processor creation)
     fn run(self) -> std::thread::JoinHandle<()>;
-}
-
-/// Error define for ProSA bus error (for message exchange)
-#[derive(Debug, Eq, Error, PartialEq)]
-pub enum BusError {
-    /// Error that indicate the queue can forward the internal main message
-    #[error("The Queue can't send the internal main message {0}, proc_id={1}, reason={2}")]
-    InternalMainQueueError(String, u32, String),
-    /// Error that indicate the queue can forward the internal message
-    #[error("The Queue can't send the internal message: {0}")]
-    InternalQueueError(String),
-    /// Error that indicate the queue can forward the internal message
-    #[error("The Processor {0}/{1} can't be contacted: {2}")]
-    ProcCommError(u32, u32, String),
-    /// Error on the internal TVF message use for internal exchange
-    #[error("The internal message is not correct: {0}")]
-    InternalTvfError(#[from] TvfError),
-}
-
-impl<M> From<mpsc::error::SendError<InternalMsg<M>>> for BusError
-where
-    M: Sized + Clone + Tvf,
-{
-    fn from(error: mpsc::error::SendError<InternalMsg<M>>) -> Self {
-        BusError::InternalQueueError(error.to_string())
-    }
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -150,7 +124,7 @@ where
             .send(InternalMainMsg::NewProcQueue(proc.clone()))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError(
+                BusError::InternalMainQueue(
                     "NewProcQueue".into(),
                     proc.get_proc_id(),
                     e.to_string(),
@@ -163,9 +137,7 @@ where
         self.internal_tx_queue
             .send(InternalMainMsg::DeleteProc(proc_id))
             .await
-            .map_err(|e| {
-                BusError::InternalMainQueueError("DeleteProc".into(), proc_id, e.to_string())
-            })
+            .map_err(|e| BusError::InternalMainQueue("DeleteProc".into(), proc_id, e.to_string()))
     }
 
     /// Method to declare a new processor on the main bus
@@ -174,7 +146,7 @@ where
             .send(InternalMainMsg::DeleteProcQueue(proc_id, queue_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("DeleteProcQueue".into(), proc_id, e.to_string())
+                BusError::InternalMainQueue("DeleteProcQueue".into(), proc_id, e.to_string())
             })
     }
 
@@ -184,7 +156,7 @@ where
             .send(InternalMainMsg::NewProcService(names, proc_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("NewProcService".into(), proc_id, e.to_string())
+                BusError::InternalMainQueue("NewProcService".into(), proc_id, e.to_string())
             })
     }
 
@@ -198,9 +170,7 @@ where
         self.internal_tx_queue
             .send(InternalMainMsg::NewService(names, proc_id, queue_id))
             .await
-            .map_err(|e| {
-                BusError::InternalMainQueueError("NewService".into(), proc_id, e.to_string())
-            })
+            .map_err(|e| BusError::InternalMainQueue("NewService".into(), proc_id, e.to_string()))
     }
 
     /// Method to remove a service for a whole processor from the main bus
@@ -213,7 +183,7 @@ where
             .send(InternalMainMsg::DeleteProcService(names, proc_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("DeleteProcService".into(), proc_id, e.to_string())
+                BusError::InternalMainQueue("DeleteProcService".into(), proc_id, e.to_string())
             })
     }
 
@@ -228,7 +198,7 @@ where
             .send(InternalMainMsg::DeleteService(names, proc_id, queue_id))
             .await
             .map_err(|e| {
-                BusError::InternalMainQueueError("DeleteService".into(), proc_id, e.to_string())
+                BusError::InternalMainQueue("DeleteService".into(), proc_id, e.to_string())
             })
     }
 
@@ -237,7 +207,7 @@ where
         self.internal_tx_queue
             .send(InternalMainMsg::Shutdown(reason))
             .await
-            .map_err(|e| BusError::InternalMainQueueError("Shutdown".into(), 0, e.to_string()))
+            .map_err(|e| BusError::InternalMainQueue("Shutdown".into(), 0, e.to_string()))
     }
 
     /// Provide the ProSA name based on ProSA settings
@@ -339,7 +309,7 @@ where
                     .await
                 {
                     // FIXME match the error. If it's a capacity error, don't drop the processor do something else
-                    return Err(BusError::ProcCommError(
+                    return Err(BusError::ProcComm(
                         proc_service.get_proc_id(),
                         proc_service.get_queue_id(),
                         e.to_string(),
@@ -353,9 +323,7 @@ where
 
     /// Method to notify all processor that the service table have changed
     async fn notify_srv_proc(&mut self) -> bool {
-        if let Err(BusError::ProcCommError(proc_id, queue_id, _)) =
-            self.notify_srv_proc_queue().await
-        {
+        if let Err(BusError::ProcComm(proc_id, queue_id, _)) = self.notify_srv_proc_queue().await {
             // The processor doesn't exist anymore so remove it
             if queue_id > 0 {
                 self.remove_proc_queue(proc_id, queue_id).await;

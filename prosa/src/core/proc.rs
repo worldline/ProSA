@@ -13,6 +13,7 @@
 //! use prosa::core::proc::{proc_settings, proc, Proc, ProcBusParam};
 //! use prosa::core::adaptor::Adaptor;
 //! use prosa::core::msg::{Msg, InternalMsg};
+//! use prosa::core::error::{ProcError, NewAdaptorError};
 //!
 //! pub trait MyAdaptorTrait<M>
 //! where
@@ -27,7 +28,7 @@
 //! {
 //!     /// Method called when the processor spawns
 //!     /// This method is called only once so the processing will be thread safe
-//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn Error>> where Self: Sized;
+//!     fn new(proc: &MyProc<M>) -> Result<Self, NewAdaptorError> where Self: Sized;
 //!     /// Method to process incomming requests
 //!     fn process_request(&self, service_name: &str, request: &M) -> M;
 //! }
@@ -48,7 +49,7 @@
 //!     + prosa_utils::msg::tvf::Tvf
 //!     + std::default::Default,
 //! {
-//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn Error>> {
+//!     fn new(proc: &MyProc<M>) -> Result<Self, NewAdaptorError> {
 //!         // Init your adaptor from processor parameters
 //!         Ok(Self {})
 //!     }
@@ -100,7 +101,7 @@
 //! where
 //!     A: Adaptor + MyAdaptorTrait<M> + std::marker::Send + std::marker::Sync,
 //! {
-//!     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
+//!     async fn internal_run(&mut self, name: String) -> Result<(), ProcError> {
 //!         // Initiate an adaptor for the stub processor
 //!         let mut adaptor = A::new(self)?;
 //!
@@ -146,7 +147,8 @@
 //! ```
 
 use super::adaptor::Adaptor;
-use super::main::BusError;
+use super::error::BusError;
+use super::error::ProcError;
 use super::{main::Main, msg::InternalMsg, service::ProcService};
 use config::File;
 use config::{Config, ConfigError};
@@ -410,7 +412,7 @@ where
     fn internal_run(
         &mut self,
         name: String,
-    ) -> impl std::future::Future<Output = Result<(), Box<dyn std::error::Error>>> + Send;
+    ) -> impl std::future::Future<Output = Result<(), ProcError>> + Send;
 
     /// Method to run the processor
     ///

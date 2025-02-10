@@ -8,6 +8,7 @@ use tracing::debug;
 use crate::{
     core::{
         adaptor::Adaptor,
+        error::ProcError,
         msg::{InternalMsg, Msg, RequestMsg},
         proc::{Proc, ProcBusParam as _},
     },
@@ -141,7 +142,7 @@ impl InjProc {
         regulator: &mut Regulator,
         next_transaction: &mut Option<M>,
         meter_trans_duration: &Histogram<f64>,
-    ) -> Result<(), Box<dyn std::error::Error>>
+    ) -> Result<(), ProcError>
     where
         A: Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
     {
@@ -193,7 +194,7 @@ impl<A> Proc<A> for InjProc
 where
     A: Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
+    async fn internal_run(&mut self, name: String) -> Result<(), ProcError> {
         // Initiate an adaptor for the inj processor
         let mut adaptor = A::new(self)?;
 

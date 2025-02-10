@@ -316,7 +316,8 @@ mod tests {
     };
 
     use crate::core::{
-        main::{BusError, MainProc, MainRunnable},
+        error::BusError,
+        main::{MainProc, MainRunnable},
         msg::{InternalMsg, Msg, RequestMsg},
         proc::{ProcBusParam, ProcConfig},
     };
@@ -350,7 +351,7 @@ mod tests {
                                     service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.unwrap();
                                 }
                             },
-                            _ => return Err(BusError::ProcCommError(self.get_proc_id(), 0, String::from("Wrong message"))),
+                            _ => return Err(BusError::ProcComm(self.get_proc_id(), 0, String::from("Wrong message"))),
                         }
                     },
                     Some(timer_id) = pending_timer.pull(), if !pending_timer.is_empty() => {
@@ -388,7 +389,7 @@ mod tests {
                                     service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.unwrap();
                                 }
                             },
-                            _ => return Err(BusError::ProcCommError(self.get_proc_id(), 0, String::from("Wrong message"))),
+                            _ => return Err(BusError::ProcComm(self.get_proc_id(), 0, String::from("Wrong message"))),
                         }
                     },
                     Some(msg) = pending_msg.pull(), if !pending_msg.is_empty() => {
@@ -406,7 +407,7 @@ mod tests {
                 .await
                 .is_err()
             {
-                Err(BusError::InternalQueueError(String::from(
+                Err(BusError::InternalQueue(String::from(
                     "Timer is not working",
                 )))
             } else {
@@ -419,7 +420,7 @@ mod tests {
                 .await
                 .is_err()
             {
-                Err(BusError::InternalQueueError(String::from(
+                Err(BusError::InternalQueue(String::from(
                     "pending msgs is not working",
                 )))
             } else {
