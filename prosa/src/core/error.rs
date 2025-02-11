@@ -1,25 +1,79 @@
+use std::time::Duration;
+
 use super::msg::InternalMsg;
 use prosa_utils::msg::tvf::{Tvf, TvfError};
 use tokio::sync::mpsc;
 
-/// Processor Error
-#[derive(thiserror::Error, Debug)]
-pub enum ProcError {
-    /// Error encountered when reading the request
-    #[error("Could not read the request {0}")]
-    Bus(#[from] BusError),
+/// Processor error
+pub trait ProcError: std::error::Error {
+    /// Method to know if the processor can be restart because the error is temporary and can be recover
+    fn recoverable(&self) -> bool;
+    /// Method to know the period between the restart of the processor (restart immediatly by default)
+    fn recovery_duration(&self) -> Duration {
+        Duration::ZERO
+    }
+}
 
-    /// Error encountered when processing the request
-    #[error("Could not process the request {0}")]
-    Send(#[from] SendError),
+impl<'a, E: ProcError + 'a> From<E> for Box<dyn ProcError + 'a> {
+    fn from(err: E) -> Box<dyn ProcError + 'a> {
+        Box::new(err)
+    }
+}
 
-    /// Error raised when creating the adaptor to process the request
-    #[error("Failed to create the adaptor: {0}")]
-    NewAdaptor(#[from] NewAdaptorError),
+impl<'a, E: ProcError + Send + Sync + 'a> From<E> for Box<dyn ProcError + Send + Sync + 'a> {
+    fn from(err: E) -> Box<dyn ProcError + Send + Sync + 'a> {
+        Box::new(err)
+    }
+}
 
-    /// Error raised by the adaptor when treating the message
-    #[error("Could not adapt the message: {0}")]
-    Adapt(#[from] AdaptError),
+impl<M> ProcError for tokio::sync::mpsc::error::SendError<InternalMsg<M>>
+where
+    M: Sized + Clone + Tvf,
+{
+    fn recoverable(&self) -> bool {
+        true
+    }
+}
+
+impl ProcError for std::io::Error {
+    fn recoverable(&self) -> bool {
+        matches!(
+            self.kind(),
+            std::io::ErrorKind::ConnectionReset
+                | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::NotConnected
+                | std::io::ErrorKind::BrokenPipe
+                | std::io::ErrorKind::WouldBlock
+                | std::io::ErrorKind::InvalidData
+                | std::io::ErrorKind::TimedOut
+                | std::io::ErrorKind::WriteZero
+                | std::io::ErrorKind::Interrupted
+                | std::io::ErrorKind::UnexpectedEof
+                | std::io::ErrorKind::OutOfMemory
+        )
+    }
+}
+
+impl ProcError for openssl::error::Error {
+    fn recoverable(&self) -> bool {
+        if let Some(reason) = self.reason() {
+            reason.contains("SSL_")
+        } else {
+            false
+        }
+    }
+}
+
+impl ProcError for openssl::error::ErrorStack {
+    fn recoverable(&self) -> bool {
+        for error in self.errors() {
+            if !error.recoverable() {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 /// Error define for ProSA bus error (for message exchange)
@@ -42,6 +96,12 @@ pub enum BusError {
     InternalTvfMsg(#[from] TvfError),
 }
 
+impl ProcError for BusError {
+    fn recoverable(&self) -> bool {
+        matches!(self, BusError::InternalMainQueue(_, _, _))
+    }
+}
+
 impl<M> From<mpsc::error::SendError<InternalMsg<M>>> for BusError
 where
     M: Sized + Clone + Tvf,
@@ -49,40 +109,4 @@ where
     fn from(error: mpsc::error::SendError<InternalMsg<M>>) -> Self {
         BusError::InternalQueue(error.to_string())
     }
-}
-
-/// Error encountered when sending a message
-#[derive(thiserror::Error, Debug)]
-pub enum SendError {
-    /// Error encountered when sending a message
-    #[error("Could not send the message {0}")]
-    Send(String),
-}
-
-impl<M> From<mpsc::error::SendError<M>> for SendError {
-    fn from(error: mpsc::error::SendError<M>) -> Self {
-        SendError::Send(error.to_string())
-    }
-}
-
-impl<M> From<mpsc::error::SendError<M>> for ProcError {
-    fn from(error: mpsc::error::SendError<M>) -> Self {
-        ProcError::Send(SendError::Send(error.to_string()))
-    }
-}
-
-/// Error raised when creating the adaptor to process the request
-#[derive(thiserror::Error, Debug)]
-pub enum NewAdaptorError {
-    /// Error raised when the adaptor could not be created
-    #[error("Unexpected error: {0}")]
-    Unexpected(String),
-}
-
-/// Error raised by the adaptor when treating the message
-#[derive(thiserror::Error, Debug)]
-pub enum AdaptError {
-    /// Error raised when the message could not be transformed
-    #[error("Unexpected error: {0}")]
-    Unexpected(String),
 }

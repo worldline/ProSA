@@ -28,7 +28,10 @@ impl<A> Proc<A> for MyProcClass
 where
     A: Default + Adaptor + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, _name: String) -> Result<(), ProcError> {
+    async fn internal_run(
+        &mut self,
+        _name: String,
+    ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         let mut adaptor = A::default();
         self.proc.add_proc().await?;
         self.proc

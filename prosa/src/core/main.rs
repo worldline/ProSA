@@ -7,7 +7,7 @@
 //!
 //! Main can be consider as a service bus that routing processor messages.
 
-use super::error::BusError;
+use super::error::{BusError, ProcError};
 use super::msg::{InternalMainMsg, InternalMsg};
 use super::proc::ProcBusParam;
 use super::service::{ProcService, ServiceTable};
@@ -87,6 +87,10 @@ where
     fn get_proc_id(&self) -> u32 {
         0
     }
+
+    fn name(&self) -> &String {
+        &self.name
+    }
 }
 
 impl<M> Main<M>
@@ -133,9 +137,13 @@ where
     }
 
     /// Method to remove an entire processor from the main bus
-    pub async fn remove_proc(&self, proc_id: u32) -> Result<(), BusError> {
+    pub async fn remove_proc(
+        &self,
+        proc_id: u32,
+        proc_err: Option<Box<dyn ProcError + Send + Sync>>,
+    ) -> Result<(), BusError> {
         self.internal_tx_queue
-            .send(InternalMainMsg::DeleteProc(proc_id))
+            .send(InternalMainMsg::DeleteProc(proc_id, proc_err))
             .await
             .map_err(|e| BusError::InternalMainQueue("DeleteProc".into(), proc_id, e.to_string()))
     }
@@ -253,6 +261,10 @@ where
 {
     fn get_proc_id(&self) -> u32 {
         0
+    }
+
+    fn name(&self) -> &String {
+        &self.name
     }
 }
 
@@ -387,9 +399,11 @@ where
             .with_description("Services declared to the main task")
             .init();
         // Monitor processors objects
+        let mut crashed_proc = 0;
+        let mut restarted_proc = 0;
         let processors_meter = self
             .meter
-            .u64_gauge("prosa_main_processors")
+            .u64_gauge("prosa_processors")
             .with_description("Processors declared to the main task")
             .init();
 
@@ -431,6 +445,20 @@ where
                         KeyValue::new("type", "queues"),
                     ],
                 );
+                processors_meter.record(
+                    crashed_proc,
+                    &[
+                        KeyValue::new("prosa_name", prosa_name.clone()),
+                        KeyValue::new("type", "crashed"),
+                    ],
+                );
+                processors_meter.record(
+                    restarted_proc,
+                    &[
+                        KeyValue::new("prosa_name", prosa_name.clone()),
+                        KeyValue::new("type", "restarted"),
+                    ],
+                );
             };
         }
 
@@ -461,9 +489,17 @@ where
 
                             prosa_main_record_proc!();
                         },
-                        InternalMainMsg::DeleteProc(proc_id) => {
+                        InternalMainMsg::DeleteProc(proc_id, proc_err) => {
                             if self.remove_proc(proc_id).await.is_some() {
                                 prosa_main_update_srv!();
+                            }
+
+                            if let Some(err) = proc_err {
+                                if err.recoverable() {
+                                    restarted_proc += 1;
+                                } else {
+                                    crashed_proc += 1;
+                                }
                             }
 
                             prosa_main_record_proc!();

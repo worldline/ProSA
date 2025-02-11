@@ -1,8 +1,5 @@
 use super::proc::InjProc;
-use crate::core::{
-    adaptor::Adaptor,
-    error::{AdaptError, NewAdaptorError},
-};
+use crate::core::{adaptor::Adaptor, error::ProcError};
 extern crate self as prosa;
 
 /// Adaptator trait for the inj processor
@@ -12,7 +9,7 @@ extern crate self as prosa;
 /// use prosa::inj::proc::InjProc;
 /// use prosa::core::adaptor::Adaptor;
 /// use prosa::inj::adaptor::InjAdaptor;
-/// use prosa::core::error::NewAdaptorError;
+/// use prosa::core::error::ProcError;
 ///
 /// #[derive(Adaptor)]
 /// pub struct MyInjAdaptor { }
@@ -28,7 +25,7 @@ extern crate self as prosa;
 ///         + prosa_utils::msg::tvf::Tvf
 ///         + std::default::Default,
 /// {
-///     fn new(_proc: &InjProc<M>) -> Result<Self, NewAdaptorError> {
+///     fn new(_proc: &InjProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
 ///         Ok(Self {})
 ///     }
 ///     fn build_transaction(&mut self) -> M {
@@ -51,7 +48,7 @@ where
 {
     /// Method called when the processor spawns
     /// This method is called only once so the processing will be thread safe
-    fn new(proc: &InjProc<M>) -> Result<Self, NewAdaptorError>
+    fn new(proc: &InjProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>>
     where
         Self: Sized;
     /// Method to build a transaction to inject
@@ -59,7 +56,11 @@ where
     /// Method to process transaction response of the injection (to check the return code for example)
     /// if an error is trigger, the injection and the processor will stop
     /// By default response are ignored
-    fn process_response(&mut self, _response: &M, _service_name: &str) -> Result<(), AdaptError> {
+    fn process_response(
+        &mut self,
+        _response: &M,
+        _service_name: &str,
+    ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         Ok(())
     }
 }
@@ -79,7 +80,7 @@ where
         + prosa_utils::msg::tvf::Tvf
         + std::default::Default,
 {
-    fn new(_proc: &InjProc<M>) -> Result<Self, NewAdaptorError> {
+    fn new(_proc: &InjProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
         Ok(Self {})
     }
 

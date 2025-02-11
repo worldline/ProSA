@@ -42,7 +42,7 @@ mod tests {
     use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
     use serde::Serialize;
 
-    use crate::core::error::NewAdaptorError;
+    use crate::core::error::ProcError;
 
     const SERVICE_TEST: &str = "PROSA_TEST";
     const WAIT_TIME: time::Duration = time::Duration::from_secs(5);
@@ -84,7 +84,7 @@ mod tests {
             + prosa_utils::msg::tvf::Tvf
             + std::default::Default,
     {
-        fn new(_proc: &StubProc<M>) -> Result<Self, NewAdaptorError> {
+        fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
             Ok(Self { msg_count: 0 })
         }
 

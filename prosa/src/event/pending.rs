@@ -357,7 +357,7 @@ mod tests {
                     Some(timer_id) = pending_timer.pull(), if !pending_timer.is_empty() => {
                         assert_eq!(0, pending_timer.len());
                         assert_eq!(1, timer_id);
-                        self.proc.remove_proc().await?;
+                        self.proc.remove_proc(None).await?;
                         return Ok(())
                     },
                 }
@@ -395,7 +395,7 @@ mod tests {
                     Some(msg) = pending_msg.pull(), if !pending_msg.is_empty() => {
                         assert_eq!(0, pending_msg.len());
                         assert_eq!(String::from("good"), msg.get_data().get_string(1)?.into_owned());
-                        self.proc.remove_proc().await?;
+                        self.proc.remove_proc(None).await?;
                         return Ok(())
                     },
                 }

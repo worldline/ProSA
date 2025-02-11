@@ -167,6 +167,11 @@ fn generate_struct_impl_bus_param(
             fn get_proc_id(&self) -> u32 {
                 self.proc.get_proc_id()
             }
+
+            #[doc=concat!(" Getter of the ", stringify!(#item_ident), " processor Name")]
+            fn name(&self) -> &std::string::String {
+                self.proc.name()
+            }
         }
     })
 }
@@ -208,6 +213,25 @@ fn generate_struct_impl_config(
 
             fn get_proc_param(&self) -> &prosa::core::proc::ProcParam<M> {
                 &self.proc
+            }
+        }
+    })
+}
+
+fn generate_struct_impl_epilogue(
+    item_struct: &syn::ItemStruct,
+) -> syn::parse::Result<proc_macro2::TokenStream> {
+    let item_ident = &item_struct.ident;
+    let item_generics = &item_struct.generics;
+
+    Ok(quote! {
+        // The definition must be done for the protocol
+        impl #item_generics prosa::core::proc::ProcEpilogue for #item_ident #item_generics
+        where
+            M: 'static + std::marker::Send + std::marker::Sync + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default,
+        {
+            async fn remove_proc(&self, err: std::option::Option<Box<dyn prosa::core::error::ProcError + Send + Sync>>) -> Result<(), prosa::core::error::BusError> {
+                self.proc.remove_proc(err).await
             }
         }
     })
@@ -266,10 +290,12 @@ pub(crate) fn proc_impl(
             let struct_output = generate_struct(item_struct, &proc_args)?;
             let struct_impl_bus_param = generate_struct_impl_bus_param(&struct_output)?;
             let struct_impl_config = generate_struct_impl_config(&struct_output, &proc_args)?;
+            let struct_impl_epilogue = generate_struct_impl_epilogue(&struct_output)?;
             Ok(quote! {
                 #struct_output
                 #struct_impl_bus_param
                 #struct_impl_config
+                #struct_impl_epilogue
             })
         }
         syn::Item::Impl(item_impl) => {

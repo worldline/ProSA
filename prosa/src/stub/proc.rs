@@ -73,7 +73,7 @@ impl<A> Proc<A> for StubProc
 where
     A: Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, name: String) -> Result<(), ProcError> {
+    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Initiate an adaptor for the stub processor
         let mut adaptor = A::new(self)?;
 
@@ -108,7 +108,7 @@ where
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
                         adaptor.terminate();
-                        self.proc.remove_proc().await?;
+                        self.proc.remove_proc(None).await?;
                         return Ok(());
                     }
                 }
