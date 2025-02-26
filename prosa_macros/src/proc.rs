@@ -169,7 +169,7 @@ fn generate_struct_impl_bus_param(
             }
 
             #[doc=concat!(" Getter of the ", stringify!(#item_ident), " processor Name")]
-            fn name(&self) -> &std::string::String {
+            fn name(&self) -> &std::primitive::str {
                 self.proc.name()
             }
         }
@@ -220,9 +220,16 @@ fn generate_struct_impl_config(
 
 fn generate_struct_impl_epilogue(
     item_struct: &syn::ItemStruct,
+    args: &ProcParams,
 ) -> syn::parse::Result<proc_macro2::TokenStream> {
     let item_ident = &item_struct.ident;
     let item_generics = &item_struct.generics;
+
+    let restart_settings_quote = if args.settings.is_some() {
+        quote! { prosa::core::proc::ProcSettings::get_proc_restart_delay(&self.settings) }
+    } else {
+        quote! { (std::time::Duration::from_millis(50), 300) }
+    };
 
     Ok(quote! {
         // The definition must be done for the protocol
@@ -230,6 +237,10 @@ fn generate_struct_impl_epilogue(
         where
             M: 'static + std::marker::Send + std::marker::Sync + std::marker::Sized + std::clone::Clone + std::fmt::Debug + prosa_utils::msg::tvf::Tvf + std::default::Default,
         {
+            fn get_proc_restart_delay(&self) -> (std::time::Duration, u32) {
+                #restart_settings_quote
+            }
+
             async fn remove_proc(&self, err: std::option::Option<Box<dyn prosa::core::error::ProcError + Send + Sync>>) -> Result<(), prosa::core::error::BusError> {
                 self.proc.remove_proc(err).await
             }
@@ -290,7 +301,7 @@ pub(crate) fn proc_impl(
             let struct_output = generate_struct(item_struct, &proc_args)?;
             let struct_impl_bus_param = generate_struct_impl_bus_param(&struct_output)?;
             let struct_impl_config = generate_struct_impl_config(&struct_output, &proc_args)?;
-            let struct_impl_epilogue = generate_struct_impl_epilogue(&struct_output)?;
+            let struct_impl_epilogue = generate_struct_impl_epilogue(&struct_output, &proc_args)?;
             Ok(quote! {
                 #struct_output
                 #struct_impl_bus_param

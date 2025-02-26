@@ -200,8 +200,8 @@ where
         self.proc_id
     }
 
-    fn name(&self) -> &String {
-        &self.proc_name
+    fn name(&self) -> &str {
+        self.proc_name.as_str()
     }
 }
 

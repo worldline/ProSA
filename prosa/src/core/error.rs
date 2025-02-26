@@ -57,6 +57,7 @@ impl ProcError for std::io::Error {
 impl ProcError for openssl::error::Error {
     fn recoverable(&self) -> bool {
         if let Some(reason) = self.reason() {
+            // If it's an SSL protocol error, consider that can be recoverable. It's may be temporary related to a distant.
             reason.contains("SSL_")
         } else {
             false

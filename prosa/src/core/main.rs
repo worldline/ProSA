@@ -88,8 +88,8 @@ where
         0
     }
 
-    fn name(&self) -> &String {
-        &self.name
+    fn name(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -263,8 +263,8 @@ where
         0
     }
 
-    fn name(&self) -> &String {
-        &self.name
+    fn name(&self) -> &str {
+        self.name.as_str()
     }
 }
 
