@@ -475,8 +475,7 @@ impl CargoMetadata {
                 ))
             }
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
+            Err(io::Error::other(
                 std::str::from_utf8(cargo_metadata.stderr.as_slice()).unwrap_or(
                     format!(
                         "Can't retrieve package metadata {:?}",

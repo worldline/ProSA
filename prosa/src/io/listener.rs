@@ -211,10 +211,7 @@ impl StreamListener {
                     })?
                 {
                     if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Can't accept the client: {}", e),
-                        ));
+                        return Err(io::Error::other(format!("Can't accept the client: {}", e)));
                     }
                 }
 
@@ -280,10 +277,10 @@ impl StreamListener {
                         })?
                     {
                         if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("Can't accept the client: {}", e),
-                            ));
+                            return Err(io::Error::other(format!(
+                                "Can't accept the client: {}",
+                                e
+                            )));
                         }
                     }
 
