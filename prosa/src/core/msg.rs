@@ -236,8 +236,7 @@ where
     }
 
     fn enter_span(&self) -> span::Entered {
-        let enter = self.span.enter();
-        enter
+        self.span.enter()
     }
 
     fn elapsed(&self) -> Duration {
