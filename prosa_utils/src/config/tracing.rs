@@ -1,15 +1,15 @@
 //! Definition of tracing object use for configuration
 
-use serde::de;
-use serde::de::Unexpected;
-use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
+use serde::de;
+use serde::de::Unexpected;
+use serde::de::Visitor;
 use std::collections::HashMap;
 use std::fmt;
 use tracing_core::Event;
-use tracing_core::{subscriber::Interest, Metadata};
+use tracing_core::{Metadata, subscriber::Interest};
 use tracing_subscriber::filter;
 use tracing_subscriber::layer;
 

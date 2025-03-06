@@ -18,7 +18,7 @@ use tokio::{
 use tokio_openssl::SslStream;
 use url::Url;
 
-use super::{url_is_ssl, SocketAddr};
+use super::{SocketAddr, url_is_ssl};
 
 /// ProSA socket object to handle TCP/SSL socket with or without proxy
 #[derive(Debug)]

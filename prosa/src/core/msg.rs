@@ -6,7 +6,7 @@ use std::{
 use prosa_utils::msg::tvf::Tvf;
 use tokio::sync::mpsc;
 use tracing::span;
-use tracing::{event, Level, Span};
+use tracing::{Level, Span, event};
 
 use super::service::{ProcService, ServiceError, ServiceTable};
 

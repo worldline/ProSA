@@ -39,7 +39,7 @@ mod tests {
         adaptor::StubAdaptor,
         proc::{StubProc, StubSettings},
     };
-    use prosa_macros::{settings, Adaptor};
+    use prosa_macros::{Adaptor, settings};
     use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
     use serde::Serialize;
 

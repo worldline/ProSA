@@ -1,7 +1,7 @@
 use super::buffer::{generate_list, generate_map};
 use super::literal::{convert_literal, identify_literal};
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{Error, Ident};
 
 /// The types that can be added to a TVF buffer
@@ -153,7 +153,10 @@ pub(crate) fn generate_value(
                     if let Some(output_type) = output_type {
                         Ok((group.to_token_stream(), output_type))
                     } else {
-                        Err(Error::new_spanned(group, "Type cannot be deduced from an expression in parenthesis. Please use `as` cast."))
+                        Err(Error::new_spanned(
+                            group,
+                            "Type cannot be deduced from an expression in parenthesis. Please use `as` cast.",
+                        ))
                     }
                 }
             }

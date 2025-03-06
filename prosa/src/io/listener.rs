@@ -18,7 +18,7 @@ use tokio::{
 };
 use url::Url;
 
-use super::{stream::Stream, url_is_ssl, SocketAddr};
+use super::{SocketAddr, stream::Stream, url_is_ssl};
 
 /// ProSA socket object to handle TCP/SSL server socket
 pub enum StreamListener {

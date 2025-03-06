@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 use std::{env, fs};
 
-use assert_cmd::{cargo, Command};
+use assert_cmd::{Command, cargo};
 use cargo_prosa::CONFIGURATION_FILENAME;
-use predicates::prelude::predicate;
 use predicates::Predicate;
+use predicates::prelude::predicate;
 
 /// Getter of a ProSA cargo command to test
 fn cargo_prosa_command() -> Result<Command, cargo::CargoError> {
@@ -103,7 +103,9 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     ]);
     cmd.assert().success().stdout("Will add ProSA processor stub-1 (stub)\n  Processor prosa::stub::proc::StubProc\n  Adaptor prosa::stub::adaptor::StubParotAdaptor\n\n");
 
-    let predicate_stub_proc = predicate::str::contains("[[proc]]\nname = \"stub-1\"\nproc_name = \"stub\"\nproc = \"prosa::stub::proc::StubProc\"\nadaptor = \"prosa::stub::adaptor::StubParotAdaptor\"");
+    let predicate_stub_proc = predicate::str::contains(
+        "[[proc]]\nname = \"stub-1\"\nproc_name = \"stub\"\nproc = \"prosa::stub::proc::StubProc\"\nadaptor = \"prosa::stub::adaptor::StubParotAdaptor\"",
+    );
     assert!(!predicate_stub_proc.eval(fs::read_to_string(&prosa_toml_path)?.as_str()));
 
     // Add a stub processor
@@ -148,11 +150,13 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     cmd.assert().success();
 
     // Test if build have generated everything
-    assert!(prosa_path
-        .join("target")
-        .join("prosa-deb")
-        .join("service")
-        .exists());
+    assert!(
+        prosa_path
+            .join("target")
+            .join("prosa-deb")
+            .join("service")
+            .exists()
+    );
 
     // Try to update the ProSA
     let build_path = prosa_path.join("build.rs");

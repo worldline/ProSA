@@ -1,9 +1,9 @@
 use super::value::ValueType;
 use chrono::Datelike;
 use proc_macro2::{Literal, TokenStream};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use std::num::ParseIntError;
-use syn::{parse_quote, Error, Lit};
+use syn::{Error, Lit, parse_quote};
 
 /// Given a literal, identify the corresponding TVF type
 pub(crate) fn identify_literal(literal: &Literal) -> Result<ValueType, Error> {

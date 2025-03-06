@@ -15,12 +15,12 @@ use std::{
 };
 
 use cargo_prosa::{
+    CONFIGURATION_FILENAME,
     builder::Desc,
     cargo::CargoMetadata,
     package::{container::ContainerFile, deb::DebPkg},
-    CONFIGURATION_FILENAME,
 };
-use clap::{arg, Command};
+use clap::{Command, arg};
 use tera::Tera;
 use toml_edit::DocumentMut;
 

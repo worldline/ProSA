@@ -1,7 +1,7 @@
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
-    parse::{Parse, Parser},
     ItemImpl,
+    parse::{Parse, Parser},
 };
 
 /// Function to add default member to Default trait impl

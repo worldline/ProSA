@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use opentelemetry::{metrics::Histogram, KeyValue};
+use opentelemetry::{KeyValue, metrics::Histogram};
 use prosa_macros::{proc, proc_settings};
 use serde::{Deserialize, Serialize};
 use tracing::debug;

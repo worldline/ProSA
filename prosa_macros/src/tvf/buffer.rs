@@ -1,6 +1,6 @@
-use super::value::{generate_value, ValueType};
+use super::value::{ValueType, generate_value};
 use proc_macro2::{Group, Spacing, TokenStream, TokenTree};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{Error, Ident};
 
 /// From `[ a, b, c, ... ]` Generate a list buffer

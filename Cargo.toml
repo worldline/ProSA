@@ -11,7 +11,7 @@ members = [
 authors = ["Jeremy HERGAULT <jeremy.hergault@worldline.com>", "Anthony THOMAS <anthony.thomas@worldline.com>", "Olivier SCHYNS <olivier.schyns@worldline.com>", "Rene-Louis EYMARD <rene-louis.eymard@worldline.com>"]
 homepage = "https://worldline.com/"
 repository = "https://github.com/worldline/ProSA"
-edition = "2021"
+edition = "2024"
 license = "LGPL-3.0-or-later"
 
 include = [
@@ -22,8 +22,8 @@ include = [
 ]
 
 [workspace.dependencies]
-prosa-utils = { version = "0.1.2", path = "prosa_utils" }
-prosa-macros = { version = "0.1.2", path = "prosa_macros" }
+prosa-utils = { version = "0.2.0", path = "prosa_utils" }
+prosa-macros = { version = "0.2.0", path = "prosa_macros" }
 thiserror = "2"
 aquamarine = "0.6"
 bytes = "1"
