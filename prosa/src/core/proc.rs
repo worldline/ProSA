@@ -13,6 +13,7 @@
 //! use prosa::core::proc::{proc_settings, proc, Proc, ProcBusParam};
 //! use prosa::core::adaptor::Adaptor;
 //! use prosa::core::msg::{Msg, InternalMsg};
+//! use prosa::core::error::ProcError;
 //!
 //! pub trait MyAdaptorTrait<M>
 //! where
@@ -27,7 +28,7 @@
 //! {
 //!     /// Method called when the processor spawns
 //!     /// This method is called only once so the processing will be thread safe
-//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn Error>> where Self: Sized;
+//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> where Self: Sized;
 //!     /// Method to process incomming requests
 //!     fn process_request(&self, service_name: &str, request: &M) -> M;
 //! }
@@ -48,7 +49,7 @@
 //!     + prosa_utils::msg::tvf::Tvf
 //!     + std::default::Default,
 //! {
-//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn Error>> {
+//!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
 //!         // Init your adaptor from processor parameters
 //!         Ok(Self {})
 //!     }
@@ -100,7 +101,7 @@
 //! where
 //!     A: Adaptor + MyAdaptorTrait<M> + std::marker::Send + std::marker::Sync,
 //! {
-//!     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn std::error::Error>> {
+//!     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
 //!         // Initiate an adaptor for the stub processor
 //!         let mut adaptor = A::new(self)?;
 //!
@@ -135,7 +136,7 @@
 //!                     InternalMsg::Service(table) => self.service = table,
 //!                     InternalMsg::Shutdown => {
 //!                         adaptor.terminate();
-//!                         self.proc.remove_proc().await?;
+//!                         self.proc.remove_proc(None).await?;
 //!                         return Ok(());
 //!                     }
 //!                 }
@@ -146,16 +147,18 @@
 //! ```
 
 use super::adaptor::Adaptor;
-use super::main::BusError;
+use super::error::{BusError, ProcError};
 use super::{main::Main, msg::InternalMsg, service::ProcService};
-use config::File;
-use config::{Config, ConfigError};
+use config::{Config, ConfigError, File};
 use glob::glob;
+use log::{error, warn};
 use prosa_utils::msg::tvf::Tvf;
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::time::Duration;
 use tokio::runtime;
 use tokio::sync::mpsc;
+use tokio::time::sleep;
 
 // Export proc macro
 pub use prosa_macros::proc;
@@ -187,6 +190,10 @@ pub trait ProcSettings {
     /// Getter of the processor's adaptor configuration path
     fn get_adaptor_config_path(&self) -> Option<&String>;
 
+    /// Getter of the restart delay that must be apply to the processor if an error is trigger.
+    /// Return the duration to be add to every restart, and the max duration wait between restarts in seconds.
+    fn get_proc_restart_delay(&self) -> (Duration, u32);
+
     /// Getter of the processor's adaptor configuration
     fn get_adaptor_config<C>(&self) -> Result<C, ::config::ConfigError>
     where
@@ -214,12 +221,29 @@ pub trait ProcSettings {
 pub trait ProcBusParam {
     /// Getter of the processor id
     fn get_proc_id(&self) -> u32;
+
+    /// Provide the ProSA name based on ProSA settings
+    fn name(&self) -> &str;
 }
 
 impl Debug for dyn ProcBusParam {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "Processor {}", self.get_proc_id())
+        write!(f, "Processor[{}] {}", self.get_proc_id(), self.name())
     }
+}
+
+/// Trait to define all processor handle functions
+pub trait ProcEpilogue {
+    /// Getter to know timer for processor restart in case of error
+    fn get_proc_restart_delay(&self) -> (std::time::Duration, u32);
+
+    /// Method to remove the processor with a signal queue to the main task
+    ///
+    /// Once the processor is removed, all its associated service will be remove
+    fn remove_proc(
+        &self,
+        err: Option<Box<dyn ProcError + Send + Sync>>,
+    ) -> impl std::future::Future<Output = Result<(), BusError>>;
 }
 
 #[derive(Debug, Clone)]
@@ -239,6 +263,10 @@ where
 {
     fn get_proc_id(&self) -> u32 {
         self.id
+    }
+
+    fn name(&self) -> &str {
+        self.main.name()
     }
 }
 
@@ -270,8 +298,11 @@ where
     /// Method to remove the processor with a signal queue to the main task
     ///
     /// Once the processor is removed, all its associated service will be remove
-    pub async fn remove_proc(&self) -> Result<(), BusError> {
-        self.main.remove_proc(self.id).await?;
+    pub async fn remove_proc(
+        &self,
+        err: Option<Box<dyn ProcError + Send + Sync>>,
+    ) -> Result<(), BusError> {
+        self.main.remove_proc(self.id, err).await?;
         Ok(())
     }
 
@@ -328,11 +359,6 @@ where
             .remove_service(names, self.get_proc_id(), queue_id)
             .await?;
         Ok(())
-    }
-
-    /// Provide the ProSA name based on ProSA settings
-    pub fn name(&self) -> &String {
-        self.main.name()
     }
 
     /// Provide the opentelemetry Meter based on ProSA settings
@@ -402,7 +428,7 @@ where
 ///     adaptor <--> task
 ///     end
 /// ```
-pub trait Proc<A>
+pub trait Proc<A>: ProcEpilogue
 where
     A: Adaptor,
 {
@@ -410,7 +436,7 @@ where
     fn internal_run(
         &mut self,
         name: String,
-    ) -> impl std::future::Future<Output = Result<(), Box<dyn std::error::Error>>> + Send;
+    ) -> impl std::future::Future<Output = Result<(), Box<dyn ProcError + Send + Sync>>> + Send;
 
     /// Method to run the processor
     ///
@@ -438,7 +464,50 @@ where
                     .thread_name(proc_name.clone())
                     .build()
                     .unwrap();
-                rt.block_on(self.internal_run(proc_name)).unwrap();
+                let proc_restart_delay = self.get_proc_restart_delay();
+                let mut wait_time = proc_restart_delay.0;
+                loop {
+                    if let Err(proc_err) = rt.block_on(self.internal_run(proc_name.clone())) {
+                        let recovery_duration = proc_err.recovery_duration();
+
+                        // Log and restart if needed
+                        if proc_err.recoverable() {
+                            warn!(
+                                "Processor {} encounter an error `{}`. Will restart after {}ms",
+                                proc_name,
+                                proc_err,
+                                (wait_time + recovery_duration).as_millis()
+                            );
+
+                            // Notify the main task of the error
+                            if rt.block_on(self.remove_proc(Some(proc_err))).is_err() {
+                                return;
+                            }
+                        } else {
+                            error!(
+                                "Processor {} encounter a fatal error `{}`",
+                                proc_name, proc_err
+                            );
+
+                            // Notify the main task of the error
+                            let _ = rt.block_on(self.remove_proc(Some(proc_err)));
+                            return;
+                        }
+
+                        // Wait a graceful time before restarting the processor
+                        rt.block_on(sleep(wait_time + recovery_duration));
+                    } else {
+                        // Remove the proc from main
+                        let _ = rt.block_on(self.remove_proc(None));
+                        return;
+                    }
+
+                    // Don't wait more than the restart delay parameter
+                    if wait_time.as_secs() < proc_restart_delay.1 as u64 {
+                        wait_time += proc_restart_delay.0;
+                        wait_time *= 2;
+                    }
+                }
             })
             .unwrap();
     }

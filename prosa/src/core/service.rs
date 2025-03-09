@@ -147,6 +147,7 @@ where
     M: Sized + Clone + Tvf,
 {
     proc_id: u32,
+    proc_name: String,
     queue_id: u32,
     /// Processor queue use to send transactionnal message to the processor
     pub proc_queue: mpsc::Sender<InternalMsg<M>>,
@@ -164,6 +165,7 @@ where
     ) -> ProcService<M> {
         ProcService {
             proc_id: proc.get_proc_id(),
+            proc_name: proc.name().to_string(),
             queue_id,
             proc_queue,
         }
@@ -173,6 +175,7 @@ where
     pub fn new_proc(proc: &ProcParam<M>, queue_id: u32) -> ProcService<M> {
         ProcService {
             proc_id: proc.get_proc_id(),
+            proc_name: proc.name().to_string(),
             queue_id,
             proc_queue: proc.get_service_queue(),
         }
@@ -195,6 +198,10 @@ where
 {
     fn get_proc_id(&self) -> u32 {
         self.proc_id
+    }
+
+    fn name(&self) -> &str {
+        self.proc_name.as_str()
     }
 }
 

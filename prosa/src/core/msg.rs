@@ -8,7 +8,10 @@ use tokio::sync::mpsc;
 use tracing::span;
 use tracing::{Level, Span, event};
 
-use super::service::{ProcService, ServiceError, ServiceTable};
+use super::{
+    error::ProcError,
+    service::{ProcService, ServiceError, ServiceTable},
+};
 
 /// Internal ProSA message that define all message type that can be received by the main ProSA processor
 #[derive(Debug)]
@@ -18,8 +21,8 @@ where
 {
     /// Message to register a new spawned processor queue
     NewProcQueue(ProcService<M>),
-    /// Message to indicate that a the processor stopped, delete all processor queues
-    DeleteProc(u32),
+    /// Message to indicate that a the processor stopped (and the error if there is any), delete all processor queues
+    DeleteProc(u32, Option<Box<dyn ProcError + Send + Sync>>),
     /// Message to indicate that a the processor queue stopped, delete the processor queue
     DeleteProcQueue(u32, u32),
     /// Message to declare new service(s) with their service name and the processor id (the processor should have been declared). Declare service(s) for the whole processor

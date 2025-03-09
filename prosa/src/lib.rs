@@ -20,7 +20,6 @@ pub mod stub;
 #[cfg(test)]
 mod tests {
     use std::{
-        error::Error,
         sync::atomic::{AtomicU32, Ordering},
         time,
     };
@@ -42,6 +41,8 @@ mod tests {
     use prosa_macros::{Adaptor, settings};
     use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
     use serde::Serialize;
+
+    use crate::core::error::ProcError;
 
     const SERVICE_TEST: &str = "PROSA_TEST";
     const WAIT_TIME: time::Duration = time::Duration::from_secs(5);
@@ -83,7 +84,7 @@ mod tests {
             + prosa_utils::msg::tvf::Tvf
             + std::default::Default,
     {
-        fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn Error>> {
+        fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
             Ok(Self { msg_count: 0 })
         }
 

@@ -87,6 +87,26 @@ fn generate_proc_settings_struct(
                 .parse2(quote! { adaptor_config_path: std::option::Option<std::string::String> })
                 .unwrap(),
         );
+
+        // Restart duration period
+        fields.named.push(
+            syn::Field::parse_named
+                .parse2(quote! {
+                    #[serde(skip_serializing)]
+                    proc_restart_duration_period: std::option::Option<std::time::Duration>
+                })
+                .unwrap(),
+        );
+
+        // Max restart period
+        fields.named.push(
+            syn::Field::parse_named
+                .parse2(quote! {
+                    #[serde(skip_serializing)]
+                    proc_max_restart_period: std::option::Option<std::primitive::u32>
+                })
+                .unwrap(),
+        );
     }
 
     Ok(item_struct)
@@ -101,6 +121,10 @@ fn generate_struct_impl_proc_settings(
         impl prosa::core::proc::ProcSettings for #item_ident {
             fn get_adaptor_config_path(&self) -> std::option::Option<&std::string::String> {
                 self.adaptor_config_path.as_ref()
+            }
+
+            fn get_proc_restart_delay(&self) -> (std::time::Duration, u32) {
+                (self.proc_restart_duration_period.unwrap_or(std::time::Duration::from_millis(50)), self.proc_max_restart_period.unwrap_or(300))
             }
         }
     })
@@ -121,6 +145,18 @@ pub(crate) fn proc_settings_impl(item: syn::Item) -> syn::parse::Result<proc_mac
             x.fields.push_value(
                 syn::FieldValue::parse
                     .parse2(quote! { adaptor_config_path: None })
+                    .unwrap(),
+            );
+            x.fields.push_punct(syn::token::Comma::default());
+            x.fields.push_value(
+                syn::FieldValue::parse
+                    .parse2(quote! { proc_restart_duration_period: None })
+                    .unwrap(),
+            );
+            x.fields.push_punct(syn::token::Comma::default());
+            x.fields.push_value(
+                syn::FieldValue::parse
+                    .parse2(quote! { proc_max_restart_period: None })
                     .unwrap(),
             );
             x.fields.push_punct(syn::token::Comma::default());

@@ -1,6 +1,6 @@
-use std::time::Duration;
-
 use config::Config;
+use prosa::core::adaptor::Adaptor;
+use prosa::core::error::ProcError;
 use prosa::core::main::{MainProc, MainRunnable};
 use prosa::core::msg::{InternalMsg, Msg, RequestMsg};
 use prosa::core::proc::{Proc, ProcBusParam, ProcConfig, proc};
@@ -11,12 +11,10 @@ use prosa::stub::adaptor::StubParotAdaptor;
 use prosa::stub::proc::{StubProc, StubSettings};
 use prosa_utils::config::tracing::TelemetryFilter;
 use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
-
 use serde::{Deserialize, Serialize};
-use tracing::metadata::LevelFilter;
-
-use prosa::core::adaptor::Adaptor;
+use std::time::Duration;
 use tokio::time;
+use tracing::metadata::LevelFilter;
 use tracing::{debug, info, warn};
 
 #[derive(Default, Adaptor)]
@@ -30,7 +28,10 @@ impl<A> Proc<A> for MyProcClass
 where
     A: Default + Adaptor + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, _name: String) -> Result<(), Box<dyn std::error::Error>> {
+    async fn internal_run(
+        &mut self,
+        _name: String,
+    ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         let mut adaptor = A::default();
         self.proc.add_proc().await?;
         self.proc
