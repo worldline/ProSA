@@ -80,15 +80,15 @@ impl ProcError for openssl::error::ErrorStack {
 /// Error define for ProSA bus error (for message exchange)
 #[derive(Debug, Eq, thiserror::Error, PartialEq)]
 pub enum BusError {
-    /// Error that indicate the queue can forward the internal main message
+    /// Error that indicate the queue can't forward the internal main message
     #[error("The Queue can't send the internal main message {0}, proc_id={1}, reason={2}")]
     InternalMainQueue(String, u32, String),
 
-    /// Error that indicate the queue can forward the internal message
+    /// Error that indicate the queue can't forward the internal message
     #[error("The Queue can't send the internal message: {0}")]
     InternalQueue(String),
 
-    /// Error that indicate the queue can forward the internal message
+    /// Error that indicate the queue can't forward the internal message
     #[error("The Processor {0}/{1} can't be contacted: {2}")]
     ProcComm(u32, u32, String),
 
