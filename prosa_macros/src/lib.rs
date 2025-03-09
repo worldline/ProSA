@@ -11,7 +11,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parser, parse_macro_input, punctuated::Punctuated, Token};
+use syn::{Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
 
 mod adaptor;
 mod io;

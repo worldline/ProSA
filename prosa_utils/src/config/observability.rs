@@ -7,8 +7,8 @@ use opentelemetry_otlp::{ExportConfig, Protocol, WithExportConfig};
 use opentelemetry_sdk::{
     logs::LoggerProvider,
     metrics::{
-        reader::{DefaultAggregationSelector, DefaultTemporalitySelector},
         PeriodicReader, SdkMeterProvider,
+        reader::{DefaultAggregationSelector, DefaultTemporalitySelector},
     },
     runtime,
     trace::{Tracer, TracerProvider},

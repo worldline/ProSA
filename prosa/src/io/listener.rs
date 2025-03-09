@@ -18,7 +18,7 @@ use tokio::{
 };
 use url::Url;
 
-use super::{stream::Stream, url_is_ssl, SocketAddr};
+use super::{SocketAddr, stream::Stream, url_is_ssl};
 
 /// ProSA socket object to handle TCP/SSL server socket
 pub enum StreamListener {
@@ -211,10 +211,7 @@ impl StreamListener {
                     })?
                 {
                     if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Can't accept the client: {}", e),
-                        ));
+                        return Err(io::Error::other(format!("Can't accept the client: {}", e)));
                     }
                 }
 
@@ -280,10 +277,10 @@ impl StreamListener {
                         })?
                     {
                         if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("Can't accept the client: {}", e),
-                            ));
+                            return Err(io::Error::other(format!(
+                                "Can't accept the client: {}",
+                                e
+                            )));
                         }
                     }
 

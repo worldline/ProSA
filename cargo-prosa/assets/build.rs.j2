@@ -204,8 +204,7 @@ fn write_target_config(out_dir: &OsString, target_dir: &Path) -> io::Result<()> 
         .output()
         .expect("Failed to generate config.yml");
     if !config_build_yml.status.success() {{ '{' }}
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             std::str::from_utf8(config_build_yml.stderr.as_slice()).unwrap_or(
                 format!(
                     "Can't build config.yml config file {:?}",
@@ -226,8 +225,7 @@ fn write_target_config(out_dir: &OsString, target_dir: &Path) -> io::Result<()> 
         .output()
         .expect("Failed to generate config.toml");
     if !config_build_toml.status.success() {{ '{' }}
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             std::str::from_utf8(config_build_toml.stderr.as_slice()).unwrap_or(
                 format!(
                     "Can't build config.toml config file {{ '{' }}:?{{ '}' }}",

@@ -1,7 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::spanned::Spanned;
 use syn::Token;
+use syn::spanned::Spanned;
 use syn::{parse::Parser, punctuated::Punctuated};
 
 use crate::add_angle_bracketed;

@@ -2,7 +2,7 @@ use core::fmt;
 use std::{cmp::Ordering, collections::VecDeque, time::Duration};
 
 use tokio::sync::Notify;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 
 /// Structure to define a transaction flow speed
 ///
@@ -383,8 +383,14 @@ mod tests {
     async fn regulator_test() {
         let mut regulator = Regulator::new(TPS, Duration::from_secs(3), 1, 5);
         assert_eq!(0f64, regulator.get_speed());
-        assert_eq!(" - Tps                            : 0 / 5\n - Timeout Threshold              : 5000 ms\n - Maximum concurents transactions: 1\n", Regulator::default().to_string().as_str());
-        assert_eq!(" - Tps                            : 0 / 25\n - Timeout Threshold              : 3000 ms\n - Maximum concurents transactions: 1\n", regulator.to_string().as_str());
+        assert_eq!(
+            " - Tps                            : 0 / 5\n - Timeout Threshold              : 5000 ms\n - Maximum concurents transactions: 1\n",
+            Regulator::default().to_string().as_str()
+        );
+        assert_eq!(
+            " - Tps                            : 0 / 25\n - Timeout Threshold              : 3000 ms\n - Maximum concurents transactions: 1\n",
+            regulator.to_string().as_str()
+        );
 
         for _ in 1..=5 {
             regulator.notify_send_transaction();
@@ -397,9 +403,11 @@ mod tests {
         regulator.notify_send_transaction();
         assert!(initial_time.elapsed() <= Duration::from_millis(1));
 
-        assert!(timeout(Duration::from_millis(400), regulator.tick())
-            .await
-            .is_err());
+        assert!(
+            timeout(Duration::from_millis(400), regulator.tick())
+                .await
+                .is_err()
+        );
         regulator.notify_receive_transaction(Duration::from_millis(10));
 
         for _ in 1..=5 {

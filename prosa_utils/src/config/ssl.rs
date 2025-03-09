@@ -10,7 +10,7 @@ use openssl::{
     nid::Nid,
     pkey::PKey,
     ssl::{AlpnError, SslContextBuilder, SslFiletype, SslMethod, SslVerifyMode},
-    x509::{extension::SubjectAlternativeName, X509NameBuilder, X509},
+    x509::{X509, X509NameBuilder, extension::SubjectAlternativeName},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,7 +21,7 @@ use std::{
     time::{self, Duration},
 };
 
-use super::{os_country, ConfigError};
+use super::{ConfigError, os_country};
 
 /// SSL configuration object for store certificates
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]

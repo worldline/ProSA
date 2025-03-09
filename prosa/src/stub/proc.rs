@@ -4,7 +4,7 @@ use tracing::debug;
 
 use crate::core::adaptor::Adaptor;
 use crate::core::msg::{InternalMsg, Msg};
-use crate::core::proc::{proc, Proc, ProcBusParam};
+use crate::core::proc::{Proc, ProcBusParam, proc};
 
 use super::adaptor::StubAdaptor;
 
