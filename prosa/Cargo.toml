@@ -9,9 +9,9 @@ edition.workspace = true
 license.workspace = true
 include.workspace = true
 
-[[bin]]
+[[example]]
 name = "proc"
-path = "proc.rs"
+path = "examples/proc.rs"
 
 [package.metadata.prosa]
 main = ["core::main::MainProc"]
