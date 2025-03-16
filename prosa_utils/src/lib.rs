@@ -7,7 +7,12 @@
 //! Utils for ProSA
 
 #![warn(missing_docs)]
+
+#[cfg(feature = "msg")]
 pub mod msg;
 
 #[cfg(feature = "config")]
 pub mod config;
+
+#[cfg(feature = "queue")]
+pub mod queue;
