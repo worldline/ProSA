@@ -17,6 +17,7 @@ config-openssl = ["config", "dep:openssl", "dep:openssl-sys"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored", "openssl-sys/vendored"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:prometheus"]
 config-observability-prometheus = ["config-observability", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
+queue = []
 full = ["msg", "config", "config-openssl", "config-observability", "config-observability-prometheus"]
 
 [package.metadata.docs.rs]
