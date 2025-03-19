@@ -347,7 +347,7 @@ mod tests {
                                 assert_eq!(1, pending_timer.len());
                             },
                             InternalMsg::Service(table) => {
-                                if let Some(service) = table.get_proc_service(&String::from("TEST"), 1) {
+                                if let Some(service) = table.get_proc_service("TEST", 1) {
                                     service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.unwrap();
                                 }
                             },
@@ -383,7 +383,7 @@ mod tests {
                                 assert_eq!(1, pending_msg.len());
                             },
                             InternalMsg::Service(table) => {
-                                if let Some(service) = table.get_proc_service(&String::from("TEST"), 1) {
+                                if let Some(service) = table.get_proc_service("TEST", 1) {
                                     let mut msg: SimpleStringTvf = Default::default();
                                     msg.put_string(1, "good");
                                     service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.unwrap();
