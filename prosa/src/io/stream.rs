@@ -30,8 +30,12 @@ pub enum Stream {
     Tcp(TcpStream),
     /// SSL socket
     Ssl(SslStream<TcpStream>),
+    #[cfg(feature = "http-proxy")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "http-proxy")))]
     /// TCP socket using Http proxy
     TcpHttpProxy(TcpStream),
+    #[cfg(feature = "http-proxy")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "http-proxy")))]
     /// SSL socket using Http proxy
     SslHttpProxy(SslStream<TcpStream>),
 }
@@ -61,7 +65,9 @@ impl Stream {
             Stream::Unix(s) => s.local_addr().map(|addr| addr.into()),
             Stream::Tcp(s) => s.local_addr().map(|addr| addr.into()),
             Stream::Ssl(s) => s.get_ref().local_addr().map(|addr| addr.into()),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.local_addr().map(|addr| addr.into()),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.get_ref().local_addr().map(|addr| addr.into()),
         }
     }
@@ -130,11 +136,14 @@ impl Stream {
     }
 
     /// Method to create an SSL stream from a TCP stream
-    async fn create_ssl(
-        tcp_stream: TcpStream,
+    async fn create_ssl<S>(
+        tcp_stream: S,
         ssl_connector: &ssl::SslConnector,
         domain: &str,
-    ) -> Result<SslStream<TcpStream>, io::Error> {
+    ) -> Result<SslStream<S>, io::Error>
+    where
+        S: AsyncRead + AsyncWrite + std::marker::Unpin,
+    {
         let ssl = ssl_connector.configure()?.into_ssl(domain)?;
         let mut stream = SslStream::new(ssl, tcp_stream).unwrap();
         if let Err(e) = Pin::new(&mut stream).connect().await {
@@ -196,6 +205,7 @@ impl Stream {
         ))
     }
 
+    #[cfg(feature = "http-proxy")]
     /// Method to connect a TCP stream through an HTTP proxy
     async fn connect_http_proxy(
         host: &str,
@@ -231,6 +241,7 @@ impl Stream {
         Ok(tcp_stream)
     }
 
+    #[cfg(feature = "http-proxy")]
     #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Connect a TCP socket to a distant through an HTTP proxy
     ///
@@ -268,6 +279,7 @@ impl Stream {
         ))
     }
 
+    #[cfg(feature = "http-proxy")]
     #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Connect an SSL socket to a distant through an HTTP proxy
     ///
@@ -323,7 +335,9 @@ impl Stream {
             Stream::Unix(_) => Ok(()),
             Stream::Tcp(s) => s.set_nodelay(nodelay),
             Stream::Ssl(s) => s.get_ref().set_nodelay(nodelay),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.set_nodelay(nodelay),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.get_ref().set_nodelay(nodelay),
         }
     }
@@ -335,7 +349,9 @@ impl Stream {
             Stream::Unix(_) => Ok(true),
             Stream::Tcp(s) => s.nodelay(),
             Stream::Ssl(s) => s.get_ref().nodelay(),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.nodelay(),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.get_ref().nodelay(),
         }
     }
@@ -347,7 +363,9 @@ impl Stream {
             Stream::Unix(_) => Ok(()),
             Stream::Tcp(s) => s.set_ttl(ttl),
             Stream::Ssl(s) => s.get_ref().set_ttl(ttl),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.set_ttl(ttl),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.get_ref().set_ttl(ttl),
         }
     }
@@ -359,8 +377,54 @@ impl Stream {
             Stream::Unix(_) => Ok(0),
             Stream::Tcp(s) => s.ttl(),
             Stream::Ssl(s) => s.get_ref().ttl(),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.ttl(),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.get_ref().ttl(),
+        }
+    }
+
+    /// Method to know if the stream is SSL
+    pub fn is_ssl(&self) -> bool {
+        match self {
+            Stream::Ssl(_) => true,
+            #[cfg(feature = "http-proxy")]
+            Stream::SslHttpProxy(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Method to check the protocol selected via Application Layer Protocol Negotiation (ALPN)
+    ///
+    /// ```
+    /// use prosa::io::stream::Stream;
+    ///
+    /// async fn processing(stream: Stream) {
+    ///     let is_http2 = stream.selected_alpn_check(|alpn| alpn == b"h2");
+    ///     // is_http2 is true if the server sent the HTTP/2 ALPN value `h2`
+    /// }
+    /// ```
+    pub fn selected_alpn_check<F>(&self, f: F) -> bool
+    where
+        F: Fn(&[u8]) -> bool,
+    {
+        match self {
+            Stream::Ssl(s) => {
+                if let Some(alpn) = s.ssl().selected_alpn_protocol() {
+                    f(alpn)
+                } else {
+                    false
+                }
+            }
+            #[cfg(feature = "http-proxy")]
+            Stream::SslHttpProxy(s) => {
+                if let Some(alpn) = s.ssl().selected_alpn_protocol() {
+                    f(alpn)
+                } else {
+                    false
+                }
+            }
+            _ => false,
         }
     }
 }
@@ -372,7 +436,9 @@ impl AsFd for Stream {
             Stream::Unix(s) => s.as_fd(),
             Stream::Tcp(s) => s.as_fd(),
             Stream::Ssl(s) => s.get_ref().as_fd(),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.as_fd(),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.get_ref().as_fd(),
         }
     }
@@ -385,7 +451,9 @@ impl AsRawFd for Stream {
             Stream::Unix(s) => s.as_raw_fd(),
             Stream::Tcp(s) => s.as_raw_fd(),
             Stream::Ssl(s) => s.get_ref().as_raw_fd(),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.as_raw_fd(),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.get_ref().as_raw_fd(),
         }
     }
@@ -411,10 +479,12 @@ impl AsyncRead for Stream {
                 let stream = Pin::new(s);
                 stream.poll_read(cx, buf)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_read(cx, buf)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_read(cx, buf)
@@ -443,10 +513,12 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_write(cx, buf)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write(cx, buf)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write(cx, buf)
@@ -473,10 +545,12 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_write_vectored(cx, bufs)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write_vectored(cx, bufs)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write_vectored(cx, bufs)
@@ -490,7 +564,9 @@ impl AsyncWrite for Stream {
             Stream::Unix(s) => s.is_write_vectored(),
             Stream::Tcp(s) => s.is_write_vectored(),
             Stream::Ssl(s) => s.is_write_vectored(),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.is_write_vectored(),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => s.is_write_vectored(),
         }
     }
@@ -511,10 +587,12 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_flush(cx)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_flush(cx)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_flush(cx)
@@ -537,10 +615,12 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_shutdown(cx)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_shutdown(cx)
             }
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_shutdown(cx)
@@ -562,7 +642,9 @@ impl fmt::Display for Stream {
             Stream::Unix(_) => write!(f, "unix://{}", addr),
             Stream::Tcp(_) => write!(f, "tcp://{}", addr),
             Stream::Ssl(_) => write!(f, "ssl://{}", addr),
+            #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(_) => write!(f, "tcp+http_proxy://{}", addr),
+            #[cfg(feature = "http-proxy")]
             Stream::SslHttpProxy(_) => write!(f, "ssl+http_proxy://{}", addr),
         }
     }
@@ -670,23 +752,39 @@ impl TargetSetting {
         };
 
         if let Some(proxy_url) = &self.proxy {
-            if let Some(ssl_cx) = ssl_context {
-                Stream::connect_ssl_with_http_proxy(
-                    self.url.host_str().unwrap_or_default(),
-                    self.url.port_or_known_default().unwrap_or_default(),
-                    &ssl_cx,
-                    proxy_url,
-                )
-                .await
+            if proxy_url.scheme() == "http" {
+                #[cfg(feature = "http-proxy")]
+                if let Some(ssl_cx) = ssl_context {
+                    return Stream::connect_ssl_with_http_proxy(
+                        self.url.host_str().unwrap_or_default(),
+                        self.url.port_or_known_default().unwrap_or_default(),
+                        &ssl_cx,
+                        proxy_url,
+                    )
+                    .await;
+                } else {
+                    return Stream::connect_tcp_with_http_proxy(
+                        self.url.host_str().unwrap_or_default(),
+                        self.url.port_or_known_default().unwrap_or_default(),
+                        proxy_url,
+                    )
+                    .await;
+                }
+
+                #[cfg(not(feature = "http-proxy"))]
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "http-proxy feature is disable in ProSA",
+                ));
             } else {
-                Stream::connect_tcp_with_http_proxy(
-                    self.url.host_str().unwrap_or_default(),
-                    self.url.port_or_known_default().unwrap_or_default(),
-                    proxy_url,
-                )
-                .await
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    format!("proxy type {}", proxy_url.scheme()),
+                ));
             }
-        } else if let Some(ssl_cx) = ssl_context {
+        }
+
+        if let Some(ssl_cx) = ssl_context {
             Stream::connect_ssl(&self.url, &ssl_cx).await
         } else {
             let addrs = self.url.socket_addrs(|| self.url.port_or_known_default())?;
@@ -709,11 +807,15 @@ impl From<Url> for TargetSetting {
 
 impl fmt::Debug for TargetSetting {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TargetSetting")
+        let mut binding = f.debug_struct("TargetSetting");
+        binding
             .field("url", &self.url)
             .field("ssl", &self.ssl)
-            .field("connect_timeout", &self.connect_timeout)
-            .finish()
+            .field("connect_timeout", &self.connect_timeout);
+        if let Some(proxy_url) = &self.proxy {
+            binding.field("proxy", proxy_url);
+        }
+        binding.finish()
     }
 }
 
