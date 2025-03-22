@@ -169,10 +169,11 @@ pub use prosa_macros::proc_settings;
 /// Trait to define ProSA processor settings
 ///
 /// ```
+/// use serde::Deserialize;
 /// use prosa::core::proc::proc_settings;
 ///
 /// #[proc_settings]
-/// #[derive(Debug)]
+/// #[derive(Debug, Deserialize)]
 /// pub struct MySettings {
 ///     my_param: String,
 /// }
@@ -432,7 +433,7 @@ pub trait Proc<A>: ProcEpilogue
 where
     A: Adaptor,
 {
-    /// Main loop of the processor
+    /// Main loop of the processor to implement
     fn internal_run(
         &mut self,
         name: String,

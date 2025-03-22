@@ -35,8 +35,8 @@ where
 
     /// Method to know if the service is available from a processor
     ///
-    /// Call be the processor to know if a service is available (service test)
-    pub fn exist_proc_service(&self, name: &String) -> bool {
+    /// Call by the processor to know if a service is available (service test)
+    pub fn exist_proc_service(&self, name: &str) -> bool {
         if let Some(services) = self.table.get(name) {
             !services.is_empty()
         } else {
@@ -47,7 +47,7 @@ where
     /// Method to get a processor that respond to the service
     ///
     /// Call by the processor to send a transaction to a processor that give the corresponding service
-    pub fn get_proc_service(&self, name: &String, msg_id: u64) -> Option<&ProcService<M>> {
+    pub fn get_proc_service(&self, name: &str, msg_id: u64) -> Option<&ProcService<M>> {
         if let Some(services) = self.table.get(name) {
             match services.len() {
                 2.. => services.get(msg_id as usize % services.len()),
@@ -62,20 +62,20 @@ where
     /// Method to add a service to the table
     ///
     /// Can be call only by the main task to modify the service table
-    pub fn add_service(&mut self, name: &String, proc_service: ProcService<M>) {
+    pub fn add_service(&mut self, name: &str, proc_service: ProcService<M>) {
         if let Some(services) = self.table.get_mut(name) {
             if !services.iter().any(|s| s.proc_id == proc_service.proc_id) {
                 services.push(proc_service);
             }
         } else {
-            self.table.insert(name.clone(), vec![proc_service]);
+            self.table.insert(name.to_string(), vec![proc_service]);
         }
     }
 
     /// Method to remove whole processor service from the table
     ///
     /// Can be call only by the main task to modify the service table
-    pub fn remove_service_proc(&mut self, name: &String, proc_id: u32) {
+    pub fn remove_service_proc(&mut self, name: &str, proc_id: u32) {
         if let Some(services) = self.table.get_mut(name) {
             services.retain(|s| s.proc_id != proc_id);
         }
@@ -84,7 +84,7 @@ where
     /// Method to remove a service from the table
     ///
     /// Can be call only by the main task to modify the service table
-    pub fn remove_service(&mut self, name: &String, proc_id: u32, queue_id: u32) {
+    pub fn remove_service(&mut self, name: &str, proc_id: u32, queue_id: u32) {
         if let Some(services) = self.table.get_mut(name) {
             services.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);
         }
