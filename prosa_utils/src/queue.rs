@@ -11,7 +11,7 @@ pub mod mpsc;
 
 /// Error define for Queues
 /// Use by utilitary queues an their implementation in ProSA.
-#[derive(Debug, Eq, thiserror::Error, PartialOrd, PartialEq)]
+#[derive(Eq, thiserror::Error, PartialOrd, PartialEq)]
 pub enum QueueError<T> {
     /// Error indicating that the queue is empty
     #[error("The queue is empty")]
@@ -22,6 +22,16 @@ pub enum QueueError<T> {
     /// Can't retrieve the element
     #[error("Can't retrieve the element {0}")]
     Retrieve(usize),
+}
+
+impl<T> std::fmt::Debug for QueueError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QueueError::Empty => write!(f, "QueueError::Empty"),
+            QueueError::Full(_, size) => write!(f, "QueueError::Full(_, {})", size),
+            QueueError::Retrieve(pos) => write!(f, "QueueError::Retrieve({})", pos),
+        }
+    }
 }
 
 /// Trait to define all information getter from the queue

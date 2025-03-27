@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use super::msg::InternalMsg;
-use prosa_utils::msg::tvf::{Tvf, TvfError};
+use prosa_utils::{
+    msg::tvf::{Tvf, TvfError},
+    queue::QueueError,
+};
 use tokio::sync::mpsc;
 
 /// Processor error
@@ -30,6 +33,12 @@ impl<M> ProcError for tokio::sync::mpsc::error::SendError<InternalMsg<M>>
 where
     M: Sized + Clone + Tvf,
 {
+    fn recoverable(&self) -> bool {
+        true
+    }
+}
+
+impl<T> ProcError for QueueError<T> {
     fn recoverable(&self) -> bool {
         true
     }
