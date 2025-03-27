@@ -8,7 +8,7 @@ use tokio::sync::{Notify, Semaphore};
 macro_rules! mpsc {
     ($channel:ident, $queue:ident, $p:ty, $sender:ident, $receiver:ident) => {
         /// Sends values to the associated `Receiver`.
-        #[derive(Debug, Clone)]
+        #[derive(Debug)]
         pub struct $sender<T, const N: usize> {
             queue: Arc<$queue<T, N>>,
             recv_notify: Arc<Notify>,
@@ -56,6 +56,16 @@ macro_rules! mpsc {
 
         impl<T, const N: usize> QueueChecker<$p> for $sender<T, N> {
             crate::event::queue::impl_queue_checker! {queue, $p}
+        }
+
+        impl<T, const N: usize> Clone for $sender<T, N> {
+            fn clone(&self) -> Self {
+                $sender::<T, N> {
+                    queue: self.queue.clone(),
+                    recv_notify: self.recv_notify.clone(),
+                    send_sem: self.send_sem.clone(),
+                }
+            }
         }
 
         /// Receives values from the associated `Sender`.
@@ -183,7 +193,7 @@ mpsc!(channel_u32, LockFreeQueueU32, u32, SenderU32, ReceiverU32);
 mod tests {
     use super::*;
 
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, PartialEq)]
     struct Data {
         val: String,
     }
@@ -205,6 +215,7 @@ mod tests {
             assert_eq!(0, receiver.len());
             assert_eq!(Ok(()), sender.send(Data::new("test".into())).await);
             assert_eq!(1, sender.len());
+            assert_eq!(1, sender.clone().len());
             assert_eq!(1, receiver.len());
             assert_eq!(Data::new("test".into()), receiver.recv().await);
             assert!(sender.is_empty());

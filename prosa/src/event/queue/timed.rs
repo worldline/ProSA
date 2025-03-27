@@ -122,7 +122,7 @@ macro_rules! spmc {
         }
 
         /// Receives values from the associated `Sender`.
-        #[derive(Debug, Clone)]
+        #[derive(Debug)]
         pub struct $receiver<T, const N: usize> {
             queue: Arc<$queue<T, N>>,
             recv_notify: Arc<Notify>,
@@ -196,6 +196,16 @@ macro_rules! spmc {
             crate::event::queue::impl_queue_checker! {queue, $p}
         }
 
+        impl<T, const N: usize> Clone for $receiver<T, N> {
+            fn clone(&self) -> Self {
+                $receiver::<T, N> {
+                    queue: self.queue.clone(),
+                    recv_notify: self.recv_notify.clone(),
+                    send_sem: self.send_sem.clone(),
+                }
+            }
+        }
+
         /// Creates a bounded timed channel for communicating between asynchronous tasks.
         ///
         /// ```
@@ -265,7 +275,7 @@ mod tests {
     use std::ops::Add;
     use tokio::time::{Duration, timeout};
 
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, PartialEq)]
     struct Data {
         val: String,
     }
@@ -297,6 +307,7 @@ mod tests {
             );
             assert_eq!(1, sender.len());
             assert_eq!(1, receiver.len());
+            assert_eq!(1, receiver.clone().len());
             assert_eq!(Data::new("test".into()), receiver.recv().await);
             assert!(sender.is_empty());
             assert!(receiver.is_empty());
