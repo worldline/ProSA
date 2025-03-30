@@ -36,7 +36,7 @@ where
     /// Method to create and run the main task (must be called before processor creation)
     fn create<S: Settings>(settings: &S) -> (Main<M>, Self);
 
-    /// Method call to run the main task (must be called before processor creation)
+    /// Method call to run the main task (should be called before processor creation)
     fn run(self) -> std::thread::JoinHandle<()>;
 }
 
@@ -365,7 +365,7 @@ where
         is_stopped
     }
 
-    async fn internal_run(&mut self) -> Result<(), BusError> {
+    async fn internal_run(mut self) {
         // Monitor RAM usage
         let prosa_name = self.name.clone();
         self.meter
@@ -563,7 +563,7 @@ where
                             self.stop().await;
 
                             // The shutdown mecanism will be implemented later
-                            return Ok(())
+                            return;
                         },
                     }
                 },
@@ -572,7 +572,7 @@ where
                     self.stop().await;
 
                     // The shutdown mecanism will be implemented later
-                    return Ok(())
+                    return;
                 },
             }
         }
@@ -618,7 +618,7 @@ where
         inner(Main::new(internal_tx_queue, settings), internal_rx_queue)
     }
 
-    fn run(mut self) -> std::thread::JoinHandle<()> {
+    fn run(self) -> std::thread::JoinHandle<()> {
         std::thread::Builder::new()
             .name(MAIN_TASK_NAME.into())
             .spawn(move || {
@@ -627,7 +627,7 @@ where
                     .thread_name(MAIN_TASK_NAME)
                     .build()
                     .unwrap();
-                rt.block_on(self.internal_run()).unwrap();
+                rt.block_on(self.internal_run());
             })
             .unwrap()
     }

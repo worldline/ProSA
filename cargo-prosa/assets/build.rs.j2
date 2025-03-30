@@ -114,15 +114,15 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
     if let Some(processors) = &desc.proc {{ '{' }}
         for processor in processors {{ '{' }}
             proc_id += 1;
-            writeln!(f, "debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
+            writeln!(f, "    debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
             let proc_metadata = metadata.get(processor.proc_name.as_str()).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
             if proc_metadata.settings.is_some() {{ '{' }}
-                writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name().replace('-', "_"))?;
+                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name().replace('-', "_"))?;
             {{ '}' }} else {{ '{' }}
-                writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, bus.clone());", processor.proc, desc.prosa.tvf, proc_id)?;
+                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, bus.clone());", processor.proc, desc.prosa.tvf, proc_id)?;
             {{ '}' }}
 
-            writeln!(f, "prosa::core::proc::Proc::<{{ '{}' }}>::run(proc, settings.get_prosa_name());", processor.adaptor)?;
+            writeln!(f, "    prosa::core::proc::Proc::<{{ '{}' }}>::run(proc, settings.get_prosa_name());", processor.adaptor)?;
         {{ '}' }}
     {{ '}' }}
 

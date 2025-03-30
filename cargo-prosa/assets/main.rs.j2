@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
     prosa_main(matches)
 {{ '}' }}
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
     // Look if we have to launch the ProSA or just dry run
     if matches.get_flag("dry_run") {{ '{' }}
@@ -63,7 +63,6 @@ async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
         let (bus, main) = new_main(&prosa_settings);
 
         // Launch the main task
-        debug!("Launch the main task");
         let main_task = main.run();
 
         // Run all processors
