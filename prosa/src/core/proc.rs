@@ -245,6 +245,10 @@ pub trait ProcEpilogue {
         &self,
         err: Option<Box<dyn ProcError + Send + Sync>>,
     ) -> impl std::future::Future<Output = Result<(), BusError>> + Send;
+
+    /// Indicates whether ProSA is stopping
+    /// Prevents the rebooting of processors
+    fn is_stopping(&self) -> bool;
 }
 
 #[derive(Debug, Clone)]
@@ -362,6 +366,11 @@ where
         Ok(())
     }
 
+    /// Indicates whether ProSA is stopping
+    pub fn is_stopping(&self) -> bool {
+        self.main.is_stopping()
+    }
+
     /// Provide the opentelemetry Meter based on ProSA settings
     pub fn meter(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry::metrics::Meter {
         self.main.meter(name)
@@ -440,9 +449,9 @@ where
     ) -> impl std::future::Future<Output = Result<(), Box<dyn ProcError + Send + Sync>>> + Send;
 
     /// Get the number of processor threads the Processors's `Runtime` will use.
-    /// Must be implemented by the processor if more than one thread want to be use
+    /// Must be implemented by the processor if more than one thread is to be used
     ///
-    /// By default, the processor will run on one thread.
+    /// By default, the processor will run on a single thread.
     fn get_proc_threads(&self) -> usize {
         1
     }
@@ -492,6 +501,13 @@ where
                     let mut wait_time = proc_restart_delay.0;
                     loop {
                         if let Err(proc_err) = self.internal_run(proc_name.clone()).await {
+                            // Stop the processor immediately if ProSA is shutting down
+                            if self.is_stopping() {
+                                // Remove the proc from main
+                                let _ = self.remove_proc(None).await;
+                                return;
+                            }
+
                             let recovery_duration = proc_err.recovery_duration();
 
                             // Log and restart if needed

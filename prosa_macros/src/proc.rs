@@ -241,8 +241,12 @@ fn generate_struct_impl_epilogue(
                 #restart_settings_quote
             }
 
-            async fn remove_proc(&self, err: std::option::Option<Box<dyn prosa::core::error::ProcError + Send + Sync>>) -> Result<(), prosa::core::error::BusError> {
+            async fn remove_proc(&self, err: std::option::Option<Box<dyn prosa::core::error::ProcError + std::marker::Send + std::marker::Sync>>) -> std::result::Result<(), prosa::core::error::BusError> {
                 self.proc.remove_proc(err).await
+            }
+
+            fn is_stopping(&self) -> bool {
+                self.proc.is_stopping()
             }
         }
     })

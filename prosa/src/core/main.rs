@@ -20,6 +20,7 @@ use opentelemetry_appender_log::OpenTelemetryLogBridge;
 use prosa_utils::msg::tvf::Tvf;
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::HashMap, fmt::Debug};
 use tokio::sync::mpsc;
 use tokio::{
@@ -78,6 +79,7 @@ where
     meter_provider: opentelemetry_sdk::metrics::SdkMeterProvider,
     logger_provider: opentelemetry_sdk::logs::LoggerProvider,
     tracer_provider: opentelemetry_sdk::trace::TracerProvider,
+    stop: Arc<AtomicBool>,
 }
 
 impl<M> ProcBusParam for Main<M>
@@ -114,6 +116,7 @@ where
             meter_provider: settings.get_observability().build_meter_provider(),
             logger_provider,
             tracer_provider: settings.get_observability().build_tracer_provider(),
+            stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -210,8 +213,14 @@ where
             })
     }
 
+    /// Indicates whether ProSA is stopping
+    pub fn is_stopping(&self) -> bool {
+        self.stop.load(Ordering::Relaxed)
+    }
+
     /// Method to stop all processors
     pub async fn stop(&self, reason: String) -> Result<(), BusError> {
+        self.stop.store(true, Ordering::Relaxed);
         self.internal_tx_queue
             .send(InternalMainMsg::Shutdown(reason))
             .await
@@ -253,6 +262,7 @@ where
     services: Arc<ServiceTable<M>>,
     internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
     meter: Meter,
+    stop: Arc<AtomicBool>,
 }
 
 impl<M> ProcBusParam for MainProc<M>
@@ -351,6 +361,7 @@ where
 
     /// Method to shutdown all processors (return `true` if all processor are off, `false` otherwise)
     async fn stop(&mut self) -> bool {
+        self.stop.store(true, Ordering::Relaxed);
         let mut is_stopped = true;
         for proc in self.processors.values() {
             for proc_service in proc.values() {
@@ -603,6 +614,7 @@ where
         {
             let name = main.name().clone();
             let meter = main.meter("prosa_main_task_meter");
+            let stop = main.stop.clone();
             (
                 main,
                 MainProc {
@@ -611,6 +623,7 @@ where
                     services: Arc::new(ServiceTable::default()),
                     internal_rx_queue,
                     meter,
+                    stop,
                 },
             )
         }
