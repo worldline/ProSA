@@ -86,12 +86,12 @@ fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetada
     writeln!(f, "{{ '}}' }}\n")?;
 
     writeln!(f, "fn prosa_config(matches: &::clap::ArgMatches) -> Result<::config::Config, ::config::ConfigError> {{ '{{' }}")?;
-    writeln!(f, "    ::config::Config::builder()")?;
-    writeln!(f, "        .add_source(config::File::with_name(")?;
+    writeln!(f, "    prosa::core::settings::get_config_builder(")?;
     writeln!(f, "            matches.get_one::<String>(\"config\").unwrap().as_str(),")?;
-    writeln!(f, "        ))")?;
+    writeln!(f, "        )")?;
+    writeln!(f, "        .map_err(|e| ::config::ConfigError::Foreign(Box::new(e)))?")?;
     writeln!(f, "        .add_source(")?;
-    writeln!(f, "            config::Environment::with_prefix(\"PROSA\")")?;
+    writeln!(f, "            ::config::Environment::with_prefix(\"PROSA\")")?;
     writeln!(f, "                .try_parsing(true)")?;
     writeln!(f, "                .separator(\"_\")")?;
     writeln!(f, "                .list_separator(\" \"),")?;
