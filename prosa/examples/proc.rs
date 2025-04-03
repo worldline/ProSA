@@ -157,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Proc::<MyAdaptor>::run(proc2, String::from("proc_2"));
 
     // Wait on main task
-    main_task.join().unwrap();
+    main_task.await;
     opentelemetry::global::shutdown_tracer_provider();
     Ok(())
 }

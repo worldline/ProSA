@@ -22,11 +22,8 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{collections::HashMap, fmt::Debug};
+use tokio::signal;
 use tokio::sync::mpsc;
-use tokio::{
-    runtime::{Builder, Runtime},
-    signal,
-};
 use tracing::{debug, info, warn};
 
 /// Trait to define a ProSA main processor that is runnable
@@ -38,7 +35,7 @@ where
     fn create<S: Settings>(settings: &S) -> (Main<M>, Self);
 
     /// Method call to run the main task (should be called before processor creation)
-    fn run(self) -> std::thread::JoinHandle<()>;
+    fn run(self) -> impl std::future::Future<Output = ()> + Send;
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -375,8 +372,47 @@ where
 
         is_stopped
     }
+}
 
-    async fn internal_run(mut self) {
+impl<M> MainRunnable<M> for MainProc<M>
+where
+    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
+{
+    fn create<S: Settings>(settings: &S) -> (Main<M>, MainProc<M>) {
+        fn inner<M>(
+            main: Main<M>,
+            internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
+        ) -> (Main<M>, MainProc<M>)
+        where
+            M: Sized
+                + Clone
+                + Debug
+                + Tvf
+                + Default
+                + 'static
+                + std::marker::Send
+                + std::marker::Sync,
+        {
+            let name = main.name().clone();
+            let meter = main.meter("prosa_main_task_meter");
+            let stop = main.stop.clone();
+            (
+                main,
+                MainProc {
+                    name,
+                    processors: Default::default(),
+                    services: Arc::new(ServiceTable::default()),
+                    internal_rx_queue,
+                    meter,
+                    stop,
+                },
+            )
+        }
+        let (internal_tx_queue, internal_rx_queue) = mpsc::channel(2048);
+        inner(Main::new(internal_tx_queue, settings), internal_rx_queue)
+    }
+
+    async fn run(mut self) {
         // Monitor RAM usage
         let prosa_name = self.name.clone();
         self.meter
@@ -587,61 +623,5 @@ where
                 },
             }
         }
-    }
-}
-
-/// Name given to the main task of ProSA
-pub(crate) const MAIN_TASK_NAME: &str = "main";
-
-impl<M> MainRunnable<M> for MainProc<M>
-where
-    M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
-{
-    fn create<S: Settings>(settings: &S) -> (Main<M>, MainProc<M>) {
-        fn inner<M>(
-            main: Main<M>,
-            internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
-        ) -> (Main<M>, MainProc<M>)
-        where
-            M: Sized
-                + Clone
-                + Debug
-                + Tvf
-                + Default
-                + 'static
-                + std::marker::Send
-                + std::marker::Sync,
-        {
-            let name = main.name().clone();
-            let meter = main.meter("prosa_main_task_meter");
-            let stop = main.stop.clone();
-            (
-                main,
-                MainProc {
-                    name,
-                    processors: Default::default(),
-                    services: Arc::new(ServiceTable::default()),
-                    internal_rx_queue,
-                    meter,
-                    stop,
-                },
-            )
-        }
-        let (internal_tx_queue, internal_rx_queue) = mpsc::channel(2048);
-        inner(Main::new(internal_tx_queue, settings), internal_rx_queue)
-    }
-
-    fn run(self) -> std::thread::JoinHandle<()> {
-        std::thread::Builder::new()
-            .name(MAIN_TASK_NAME.into())
-            .spawn(move || {
-                let rt: Runtime = Builder::new_current_thread()
-                    .enable_all()
-                    .thread_name(MAIN_TASK_NAME)
-                    .build()
-                    .unwrap();
-                rt.block_on(self.internal_run());
-            })
-            .unwrap()
     }
 }

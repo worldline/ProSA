@@ -156,9 +156,9 @@ use prosa_utils::msg::tvf::Tvf;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::time::Duration;
-use tokio::runtime;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
+use tokio::{runtime, spawn};
 
 // Export proc macro
 pub use prosa_macros::proc;
@@ -420,6 +420,68 @@ where
     fn get_proc_param(&self) -> &ProcParam<M>;
 }
 
+macro_rules! proc_run {
+    ( $self:ident, $proc_name:ident ) => {
+        info!(
+            "Run processor {} on {} threads",
+            $proc_name,
+            $self.get_proc_threads()
+        );
+
+        let proc_restart_delay = $self.get_proc_restart_delay();
+        let mut wait_time = proc_restart_delay.0;
+        loop {
+            if let Err(proc_err) = $self.internal_run($proc_name.clone()).await {
+                // Stop the processor immediately if ProSA is shutting down
+                if $self.is_stopping() {
+                    // Remove the proc from main
+                    let _ = $self.remove_proc(None).await;
+                    return;
+                }
+
+                let recovery_duration = proc_err.recovery_duration();
+
+                // Log and restart if needed
+                if proc_err.recoverable() {
+                    warn!(
+                        "Processor {} encounter an error `{}`. Will restart after {}ms",
+                        $proc_name,
+                        proc_err,
+                        (wait_time + recovery_duration).as_millis()
+                    );
+
+                    // Notify the main task of the error
+                    if $self.remove_proc(Some(proc_err)).await.is_err() {
+                        return;
+                    }
+                } else {
+                    error!(
+                        "Processor {} encounter a fatal error `{}`",
+                        $proc_name, proc_err
+                    );
+
+                    // Notify the main task of the error
+                    let _ = $self.remove_proc(Some(proc_err)).await;
+                    return;
+                }
+
+                // Wait a graceful time before restarting the processor
+                sleep(wait_time + recovery_duration).await;
+            } else {
+                // Remove the proc from main
+                let _ = $self.remove_proc(None).await;
+                return;
+            }
+
+            // Don't wait more than the restart delay parameter
+            if wait_time.as_secs() < proc_restart_delay.1 as u64 {
+                wait_time += proc_restart_delay.0;
+                wait_time *= 2;
+            }
+        }
+    };
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// Generic trait to define ProSA processor
 ///
@@ -451,6 +513,11 @@ where
     /// Get the number of processor threads the Processors's `Runtime` will use.
     /// Must be implemented by the processor if more than one thread is to be used
     ///
+    /// You can specify values:
+    /// - `0` to spawn your processor on the main runtime
+    /// - `1` to run your processor on a single thread
+    /// - \> `1` to run your processor on a multiple thread Tokio runtime
+    ///
     /// By default, the processor will run on a single thread.
     fn get_proc_threads(&self) -> usize {
         1
@@ -474,83 +541,47 @@ where
     where
         Self: Sized + 'static + std::marker::Send,
     {
-        std::thread::Builder::new()
-            .name(proc_name.clone())
-            .spawn(move || {
-                // build runtime
-                let rt = match self.get_proc_threads() {
-                    1 => runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .thread_name(proc_name.clone())
-                        .build(),
-                    n => runtime::Builder::new_multi_thread()
-                        .worker_threads(n)
-                        .enable_all()
-                        .thread_name(proc_name.clone())
-                        .build(),
-                }
-                .unwrap();
-                rt.block_on(async move {
-                    info!(
-                        "Start processor {} on {} threads",
-                        proc_name,
-                        self.get_proc_threads()
-                    );
-
-                    let proc_restart_delay = self.get_proc_restart_delay();
-                    let mut wait_time = proc_restart_delay.0;
-                    loop {
-                        if let Err(proc_err) = self.internal_run(proc_name.clone()).await {
-                            // Stop the processor immediately if ProSA is shutting down
-                            if self.is_stopping() {
-                                // Remove the proc from main
-                                let _ = self.remove_proc(None).await;
-                                return;
-                            }
-
-                            let recovery_duration = proc_err.recovery_duration();
-
-                            // Log and restart if needed
-                            if proc_err.recoverable() {
-                                warn!(
-                                    "Processor {} encounter an error `{}`. Will restart after {}ms",
-                                    proc_name,
-                                    proc_err,
-                                    (wait_time + recovery_duration).as_millis()
-                                );
-
-                                // Notify the main task of the error
-                                if self.remove_proc(Some(proc_err)).await.is_err() {
-                                    return;
-                                }
-                            } else {
-                                error!(
-                                    "Processor {} encounter a fatal error `{}`",
-                                    proc_name, proc_err
-                                );
-
-                                // Notify the main task of the error
-                                let _ = self.remove_proc(Some(proc_err)).await;
-                                return;
-                            }
-
-                            // Wait a graceful time before restarting the processor
-                            sleep(wait_time + recovery_duration).await;
-                        } else {
-                            // Remove the proc from main
-                            let _ = self.remove_proc(None).await;
-                            return;
-                        }
-
-                        // Don't wait more than the restart delay parameter
-                        if wait_time.as_secs() < proc_restart_delay.1 as u64 {
-                            wait_time += proc_restart_delay.0;
-                            wait_time *= 2;
-                        }
-                    }
+        match self.get_proc_threads() {
+            // Spawn the processor on the current Tokio runtime
+            0 => {
+                spawn(async move {
+                    proc_run!(self, proc_name);
                 });
-            })
-            .unwrap();
+            }
+            // Start a Tokio runtime on a single thread [default]
+            1 => {
+                std::thread::Builder::new()
+                    .name(proc_name.clone())
+                    .spawn(move || {
+                        runtime::Builder::new_current_thread()
+                            .enable_all()
+                            .thread_name(proc_name.clone())
+                            .build()
+                            .unwrap()
+                            .block_on(async {
+                                proc_run!(self, proc_name);
+                            })
+                    })
+                    .unwrap();
+            }
+            // Start a Tokio runtime on multiple threads
+            n => {
+                std::thread::Builder::new()
+                    .name(proc_name.clone())
+                    .spawn(move || {
+                        runtime::Builder::new_multi_thread()
+                            .worker_threads(n)
+                            .enable_all()
+                            .thread_name(proc_name.clone())
+                            .build()
+                            .unwrap()
+                            .block_on(async {
+                                proc_run!(self, proc_name);
+                            })
+                    })
+                    .unwrap();
+            }
+        }
     }
 }
 

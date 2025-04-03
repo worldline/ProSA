@@ -4,6 +4,8 @@ use serde::{{ '{' }}Deserialize, Serialize{{ '}' }};
 
 use tracing::{{ '{' }}debug, info{{ '}' }};
 
+use tokio::runtime;
+
 use prosa_utils::config::tracing::TelemetryFilter;
 use prosa::core::main::MainRunnable;
 use prosa::core::settings::Settings;
@@ -26,10 +28,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
         daemonize(&matches);
     {{ '}' }}
 
-    prosa_main(matches)
+    // Main runtime
+    match matches.get_one::<u32>("worker_threads") {
+        Some(1) | None => runtime::Builder::new_current_thread()
+            .enable_all()
+            .thread_name("main")
+            .build(),
+        Some(n) => runtime::Builder::new_multi_thread()
+            .worker_threads(*n as usize)
+            .enable_all()
+            .thread_name("main")
+            .build(),
+    }
+    .unwrap()
+    .block_on(prosa_main(matches))
 {{ '}' }}
 
-#[tokio::main(flavor = "current_thread")]
 async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
     // Look if we have to launch the ProSA or just dry run
     if matches.get_flag("dry_run") {{ '{' }}
@@ -69,7 +83,7 @@ async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
         run_processors(bus, &prosa_settings);
 
         // Wait on main task
-        main_task.join().unwrap();
+        main_task.await;
     {{ '}' }}
 
     Ok(())

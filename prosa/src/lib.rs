@@ -121,7 +121,7 @@ mod tests {
         bus.stop("ProSA unit test end".into()).await.unwrap();
 
         // Wait on main task to end
-        main_task.join().unwrap();
+        main_task.await;
 
         // Check exchanges messages
         let nb_trans = COUNTER.load(Ordering::Relaxed) as u64;
