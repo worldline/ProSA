@@ -54,16 +54,13 @@ impl StubSettings {
 /// let settings = Settings::default();
 /// let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings);
 ///
-/// // Launch the main task
-/// let main_task = main.run();
-///
 /// // Launch a stub processor
 /// let stub_settings = StubSettings::new(vec![String::from("STUB_TEST")]);
 /// let stub_proc = StubProc::<SimpleStringTvf>::create(1, bus.clone(), stub_settings);
 /// Proc::<StubParotAdaptor>::run(stub_proc, String::from("STUB_PROC"));
 ///
 /// // Wait on main task
-/// //main_task.join().unwrap();
+/// //main_task.await;
 /// ```
 #[proc(settings = prosa::stub::proc::StubSettings)]
 pub struct StubProc {}

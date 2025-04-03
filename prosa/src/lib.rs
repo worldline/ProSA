@@ -106,7 +106,7 @@ mod tests {
         let (bus, main) = MainProc::<SimpleStringTvf>::create(&test_settings);
 
         // Launch the main task
-        let main_task = main.run();
+        let main_task = tokio::spawn(main.run());
 
         // Launch a stub processor
         let stub_proc = StubProc::<SimpleStringTvf>::create(1, bus.clone(), test_settings.stub);
@@ -117,11 +117,11 @@ mod tests {
         Proc::<InjDummyAdaptor>::run(inj_proc, String::from("INJ_PROC"));
 
         // Wait before stopping prosa
-        std::thread::sleep(WAIT_TIME);
+        tokio::time::sleep(WAIT_TIME).await;
         bus.stop("ProSA unit test end".into()).await.unwrap();
 
-        // Wait on main task to end
-        main_task.await;
+        // Wait on main task to end (should be immediate with the previous stop)
+        main_task.await.unwrap();
 
         // Check exchanges messages
         let nb_trans = COUNTER.load(Ordering::Relaxed) as u64;
