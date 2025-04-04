@@ -137,9 +137,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create bus and main processor
     let (bus, main) = MainProc::<SimpleStringTvf>::create(&my_settings);
 
-    // Launch the main task
-    let main_task = main.run();
-
     // Launch a stub processor
     let stub_settings = StubSettings::new(vec![String::from("STUB_TEST")]);
     let stub_proc = StubProc::<SimpleStringTvf>::create(1, bus.clone(), stub_settings);
@@ -157,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Proc::<MyAdaptor>::run(proc2, String::from("proc_2"));
 
     // Wait on main task
-    main_task.join().unwrap();
+    main.run().await;
     opentelemetry::global::shutdown_tracer_provider();
     Ok(())
 }

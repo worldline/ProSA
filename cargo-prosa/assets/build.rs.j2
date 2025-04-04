@@ -83,6 +83,7 @@ fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetada
     writeln!(f, "        .arg(::clap::arg!(-n --name <NAME> \"Name of the ProSA\"))")?;
     writeln!(f, "        .arg(::clap::arg!(--user <USER> \"User:Group to run the daemon ProSA\"))")?;
     writeln!(f, "        .arg(::clap::arg!(-l --log_path <LOGPATH> \"Path of the output log\"))")?;
+    writeln!(f, "        .arg(::clap::arg!(-t --worker_threads <THREADS> \"Number of worker threads to use for the main\").value_parser(clap::value_parser!(u32).range(1..)).default_value(\"1\"))")?;
     writeln!(f, "{{ '}}' }}\n")?;
 
     writeln!(f, "fn prosa_config(matches: &::clap::ArgMatches) -> Result<::config::Config, ::config::ConfigError> {{ '{{' }}")?;
@@ -114,15 +115,15 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
     if let Some(processors) = &desc.proc {{ '{' }}
         for processor in processors {{ '{' }}
             proc_id += 1;
-            writeln!(f, "debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
+            writeln!(f, "    debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
             let proc_metadata = metadata.get(processor.proc_name.as_str()).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
             if proc_metadata.settings.is_some() {{ '{' }}
-                writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name().replace('-', "_"))?;
+                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name().replace('-', "_"))?;
             {{ '}' }} else {{ '{' }}
-                writeln!(f, "let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, bus.clone());", processor.proc, desc.prosa.tvf, proc_id)?;
+                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, bus.clone());", processor.proc, desc.prosa.tvf, proc_id)?;
             {{ '}' }}
 
-            writeln!(f, "prosa::core::proc::Proc::<{{ '{}' }}>::run(proc, settings.get_prosa_name());", processor.adaptor)?;
+            writeln!(f, "    prosa::core::proc::Proc::<{{ '{}' }}>::run(proc, String::from(\"{{ '{}' }}\"));", processor.adaptor, processor.get_name())?;
         {{ '}' }}
     {{ '}' }}
 

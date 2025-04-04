@@ -310,10 +310,7 @@ mod tests {
     use prosa_macros::{proc, settings};
     use prosa_utils::msg::{simple_string_tvf::SimpleStringTvf, tvf::Tvf};
     use serde::Serialize;
-    use tokio::{
-        runtime::{Builder, Runtime},
-        time::timeout,
-    };
+    use tokio::time::timeout;
 
     use crate::core::{
         error::BusError,
@@ -402,7 +399,7 @@ mod tests {
             }
         }
 
-        async fn timers_timeout_run(&mut self) -> Result<(), BusError> {
+        pub(crate) async fn timers_timeout_run(&mut self) -> Result<(), BusError> {
             if timeout(Duration::from_millis(200), self.timers_run())
                 .await
                 .is_err()
@@ -415,7 +412,7 @@ mod tests {
             }
         }
 
-        async fn pending_msgs_timeout_run(&mut self) -> Result<(), BusError> {
+        pub(crate) async fn pending_msgs_timeout_run(&mut self) -> Result<(), BusError> {
             if timeout(Duration::from_millis(200), self.pending_msgs_run())
                 .await
                 .is_err()
@@ -427,28 +424,10 @@ mod tests {
                 Ok(())
             }
         }
-
-        pub(crate) fn run_timers(mut self) -> Result<(), BusError> {
-            let rt: Runtime = Builder::new_current_thread()
-                .enable_all()
-                .thread_name("timer_thread")
-                .build()
-                .unwrap();
-            rt.block_on(self.timers_timeout_run())
-        }
-
-        pub(crate) fn run_pending_msgs(mut self) -> Result<(), BusError> {
-            let rt: Runtime = Builder::new_current_thread()
-                .enable_all()
-                .thread_name("pending_msg_thread")
-                .build()
-                .unwrap();
-            rt.block_on(self.pending_msgs_timeout_run())
-        }
     }
 
-    #[test]
-    fn test_pending() {
+    #[tokio::test]
+    async fn test_pending() {
         /// Dummy settings
         #[settings]
         #[derive(Default, Debug, Serialize)]
@@ -458,17 +437,24 @@ mod tests {
         let (bus, main) = MainProc::<SimpleStringTvf>::create(&DummySettings::default());
 
         // Launch the main task
-        let _main_task = main.run();
+        let main_task = tokio::spawn(main.run());
 
         // Launch the test processor
         assert_eq!(
             Ok(()),
-            TestProc::<SimpleStringTvf>::create_raw(1, bus.clone()).run_timers()
+            TestProc::<SimpleStringTvf>::create_raw(1, bus.clone())
+                .timers_timeout_run()
+                .await
         );
 
         assert_eq!(
             Ok(()),
-            TestProc::<SimpleStringTvf>::create_raw(2, bus).run_pending_msgs()
+            TestProc::<SimpleStringTvf>::create_raw(2, bus.clone())
+                .pending_msgs_timeout_run()
+                .await
         );
+
+        bus.stop("ProSA unit test end".into()).await.unwrap();
+        main_task.await.unwrap();
     }
 }

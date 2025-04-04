@@ -118,16 +118,13 @@ impl Default for InjSettings {
 /// let settings = Settings::default();
 /// let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings);
 ///
-/// // Launch the main task
-/// let main_task = main.run();
-///
 /// // Launch an injector processor
 /// let inj_settings = InjSettings::new("INJ_TEST".into());
 /// let inj_proc = InjProc::<SimpleStringTvf>::create(1, bus.clone(), inj_settings);
 /// Proc::<InjDummyAdaptor>::run(inj_proc, String::from("INJ_PROC"));
 ///
 /// // Wait on main task
-/// //main_task.join().unwrap();
+/// //main.run().await;
 /// ```
 #[proc(settings = prosa::inj::proc::InjSettings)]
 pub struct InjProc {}
