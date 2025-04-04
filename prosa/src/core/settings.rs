@@ -3,8 +3,13 @@
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/doc_assets/settings.svg"))]
 //! </svg>
 
-use std::io::{self, Write};
+use std::{
+    ffi::OsStr,
+    fs,
+    io::{self, Write},
+};
 
+use config::{Config, ConfigBuilder, builder::DefaultState};
 use prosa_utils::config::observability::Observability;
 use serde::Serialize;
 
@@ -109,6 +114,40 @@ pub trait Settings: Serialize {
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
             )
         }
+    }
+}
+
+/// Method to create a `ConfigBuilder` from a path. It can be
+/// - a folder with multiple configuration files in it
+/// - a file with the entire configuration in it
+pub fn get_config_builder(path: &str) -> io::Result<ConfigBuilder<DefaultState>> {
+    let mut builder = Config::builder();
+
+    let mut path_attr = std::fs::metadata(path)?;
+    if path_attr.is_symlink() {
+        path_attr = std::fs::metadata(fs::read_link(path)?)?;
+    }
+
+    if path_attr.is_file() {
+        Ok(builder.add_source(config::File::with_name(path)))
+    } else if path_attr.is_dir() {
+        for entry in fs::read_dir(path)? {
+            let path_subdir = entry?.path();
+            if path_subdir.is_file() {
+                if let Some(ext) = path_subdir.extension().and_then(OsStr::to_str) {
+                    if matches!(ext, "yml" | "yaml" | "toml") {
+                        builder = builder.add_source(config::File::from(path_subdir));
+                    }
+                }
+            }
+        }
+
+        Ok(builder)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("Unrecognize filetype for path `{}`", path),
+        ))
     }
 }
 
