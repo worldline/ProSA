@@ -6,7 +6,6 @@ use syn::{parse::Parser, punctuated::Punctuated};
 
 use crate::add_angle_bracketed;
 
-#[derive(Debug)]
 struct ProcParams {
     settings: Option<syn::Path>,
     queue_size: syn::LitInt,
