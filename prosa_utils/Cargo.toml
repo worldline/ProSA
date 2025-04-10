@@ -1,6 +1,6 @@
 [package]
 name = "prosa-utils"
-version = "0.2.0"
+version = "0.2.1"
 authors.workspace = true
 description = "ProSA utils"
 homepage.workspace = true
@@ -17,6 +17,10 @@ config-openssl = ["config", "dep:openssl"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp"]
 config-observability-prometheus = ["config-observability", "dep:prometheus", "dep:prometheus_exporter", "dep:opentelemetry-prometheus"]
 full = ["msg", "config", "config-openssl", "config-observability", "config-observability-prometheus"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.prosa]
 tvf = ["msg::simple_string_tvf::SimpleStringTvf"]

@@ -31,11 +31,9 @@ pub enum Stream {
     /// SSL socket
     Ssl(SslStream<TcpStream>),
     #[cfg(feature = "http-proxy")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "http-proxy")))]
     /// TCP socket using Http proxy
     TcpHttpProxy(TcpStream),
     #[cfg(feature = "http-proxy")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "http-proxy")))]
     /// SSL socket using Http proxy
     SslHttpProxy(SslStream<TcpStream>),
 }

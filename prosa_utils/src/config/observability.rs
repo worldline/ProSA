@@ -1,17 +1,11 @@
 //! Definition of Opentelemetry configuration
 
-use opentelemetry::{
-    logs::LogError, metrics::MetricsError, trace::TraceError, trace::TracerProvider as _,
-};
-use opentelemetry_otlp::{ExportConfig, Protocol, WithExportConfig};
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_otlp::{ExportConfig, ExporterBuildError, Protocol, WithExportConfig};
 use opentelemetry_sdk::{
-    logs::LoggerProvider,
-    metrics::{
-        PeriodicReader, SdkMeterProvider,
-        reader::{DefaultAggregationSelector, DefaultTemporalitySelector},
-    },
-    runtime,
-    trace::{Tracer, TracerProvider},
+    logs::SdkLoggerProvider,
+    metrics::SdkMeterProvider,
+    trace::{SdkTracerProvider, Tracer},
 };
 use serde::{Deserialize, Serialize};
 use std::{env, net::AddrParseError, time::Duration};
@@ -29,8 +23,7 @@ pub(crate) struct OTLPExporterCfg {
     name: String,
     endpoint: Url,
     #[serde(skip_serializing)]
-    #[serde(default = "OTLPExporterCfg::get_default_timeout_sec")]
-    timeout_sec: u32,
+    timeout_sec: Option<u32>,
 }
 
 impl OTLPExporterCfg {
@@ -40,21 +33,21 @@ impl OTLPExporterCfg {
         Self::DEFAULT_TRACER_NAME.into()
     }
 
-    fn get_default_timeout_sec() -> u32 {
-        10
+    fn get_protocol(&self) -> Protocol {
+        match self.endpoint.scheme().to_lowercase().as_str() {
+            "grpc" => Protocol::Grpc,
+            "http+json" => Protocol::HttpJson,
+            _ => Protocol::HttpBinary,
+        }
     }
 }
 
 impl From<OTLPExporterCfg> for ExportConfig {
     fn from(value: OTLPExporterCfg) -> Self {
-        let mut protoc = Protocol::HttpBinary; // by default
-        if value.endpoint.scheme().to_lowercase() == "grpc" {
-            protoc = Protocol::Grpc;
-        }
         ExportConfig {
-            endpoint: value.endpoint.to_string(),
-            timeout: Duration::from_secs(value.timeout_sec as u64),
-            protocol: protoc,
+            endpoint: Some(value.endpoint.to_string()),
+            timeout: value.timeout_sec.map(|t| Duration::from_secs(t as u64)),
+            protocol: value.get_protocol(),
         }
     }
 }
@@ -65,7 +58,7 @@ impl Default for OTLPExporterCfg {
             level: None,
             name: Self::get_default_name(),
             endpoint: Url::parse("grpc://localhost:4317").unwrap(),
-            timeout_sec: Self::get_default_timeout_sec(),
+            timeout_sec: None,
         }
     }
 }
@@ -80,11 +73,11 @@ pub struct PrometheusExporterCfg {
 #[cfg(feature = "config-observability-prometheus")]
 impl PrometheusExporterCfg {
     /// Instantiate a builder to build a prometheus exporter
-    pub fn builder(&self) -> Result<prometheus_exporter::Builder, MetricsError> {
+    pub fn builder(&self) -> Result<prometheus_exporter::Builder, ExporterBuildError> {
         Ok(prometheus_exporter::Builder::new(
-            self.endpoint
-                .parse()
-                .map_err(|e: AddrParseError| MetricsError::Config(e.to_string()))?,
+            self.endpoint.parse().map_err(|e: AddrParseError| {
+                ExporterBuildError::InvalidUri(self.endpoint.clone(), e.to_string())
+            })?,
         ))
     }
 }
@@ -133,19 +126,25 @@ impl TelemetryMetrics {
     }
 
     /// Build a meter provider based on the self configuration
-    fn build_provider(&self) -> Result<SdkMeterProvider, MetricsError> {
+    fn build_provider(&self) -> Result<SdkMeterProvider, ExporterBuildError> {
         let mut meter_provider = SdkMeterProvider::builder();
         if let Some(s) = &self.otlp {
-            let c = ExportConfig::from(s.clone());
-            let agregator = Box::new(DefaultAggregationSelector::new());
-            let temporality = Box::new(DefaultTemporalitySelector::new());
-            let exporter = opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_export_config(c)
-                .build_metrics_exporter(agregator, temporality)?;
-            let reader =
-                PeriodicReader::builder(exporter, opentelemetry_sdk::runtime::Tokio).build();
-            meter_provider = meter_provider.with_reader(reader);
+            meter_provider = match s.get_protocol() {
+                Protocol::Grpc => {
+                    let exporter = opentelemetry_otlp::MetricExporter::builder()
+                        .with_tonic()
+                        .with_export_config(ExportConfig::from(s.clone()))
+                        .build()?;
+                    meter_provider.with_periodic_exporter(exporter)
+                }
+                _ => {
+                    let exporter = opentelemetry_otlp::MetricExporter::builder()
+                        .with_http()
+                        .with_export_config(ExportConfig::from(s.clone()))
+                        .build()?;
+                    meter_provider.with_periodic_exporter(exporter)
+                }
+            };
         }
 
         #[cfg(feature = "config-observability-prometheus")]
@@ -167,13 +166,12 @@ impl TelemetryMetrics {
             prom_builder.with_registry(registry);
             prom_builder
                 .start()
-                .map_err(|e| MetricsError::Other(e.to_string()))?;
+                .map_err(|e| ExporterBuildError::InternalFailure(e.to_string()))?;
         }
 
         if self.stdout.is_some() {
-            let exporter = opentelemetry_stdout::MetricsExporter::default();
-            let reader = PeriodicReader::builder(exporter, runtime::Tokio).build();
-            meter_provider = meter_provider.with_reader(reader);
+            let exporter = opentelemetry_stdout::MetricExporter::default();
+            meter_provider = meter_provider.with_periodic_exporter(exporter);
         }
 
         Ok(meter_provider.build())
@@ -220,54 +218,53 @@ impl TelemetryData {
     }
 
     /// Build a logger provider based on the self configuration
-    fn build_logger_provider(&self) -> Result<LoggerProvider, LogError> {
-        let mut logs_provider = LoggerProvider::builder();
+    fn build_logger_provider(&self) -> Result<SdkLoggerProvider, ExporterBuildError> {
+        let mut logs_provider = SdkLoggerProvider::builder();
         if let Some(s) = &self.otlp {
-            let c = ExportConfig::from(s.clone());
-            let exporter = opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_export_config(c)
-                .build_log_exporter()?;
-            logs_provider =
-                logs_provider.with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio);
+            logs_provider = match s.get_protocol() {
+                Protocol::Grpc => {
+                    let exporter = opentelemetry_otlp::LogExporter::builder()
+                        .with_tonic()
+                        .with_export_config(ExportConfig::from(s.clone()))
+                        .build()?;
+                    logs_provider.with_batch_exporter(exporter)
+                }
+                _ => {
+                    let exporter = opentelemetry_otlp::LogExporter::builder()
+                        .with_http()
+                        .with_export_config(ExportConfig::from(s.clone()))
+                        .build()?;
+                    logs_provider.with_batch_exporter(exporter)
+                }
+            };
         }
 
         Ok(logs_provider.build())
     }
 
     /// Build a tracer provider based on the self configuration
-    fn build_tracer_provider(&self) -> Result<TracerProvider, TraceError> {
-        let mut trace_provider = TracerProvider::builder();
+    fn build_tracer_provider(&self) -> Result<SdkTracerProvider, ExporterBuildError> {
+        let mut tracer_provider = SdkTracerProvider::builder();
         if let Some(s) = &self.otlp {
-            let c = ExportConfig::from(s.clone());
-            let exporter = opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_export_config(c)
-                .build_span_exporter()?;
-            trace_provider =
-                trace_provider.with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio);
+            tracer_provider = match s.get_protocol() {
+                Protocol::Grpc => {
+                    let exporter = opentelemetry_otlp::SpanExporter::builder()
+                        .with_tonic()
+                        .with_export_config(ExportConfig::from(s.clone()))
+                        .build()?;
+                    tracer_provider.with_batch_exporter(exporter)
+                }
+                _ => {
+                    let exporter = opentelemetry_otlp::SpanExporter::builder()
+                        .with_http()
+                        .with_export_config(ExportConfig::from(s.clone()))
+                        .build()?;
+                    tracer_provider.with_batch_exporter(exporter)
+                }
+            };
         }
 
-        Ok(trace_provider.build())
-    }
-
-    /// Build a tracer provider based on the self configuration
-    fn build_tracer(&self) -> Result<Tracer, TraceError> {
-        let mut trace_provider = TracerProvider::builder();
-        if let Some(s) = &self.otlp {
-            let c = ExportConfig::from(s.clone());
-            let exporter = opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_export_config(c)
-                .build_span_exporter()?;
-            trace_provider =
-                trace_provider.with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio);
-            Ok(trace_provider.build().tracer(s.name.clone()))
-        } else {
-            Ok(trace_provider
-                .build()
-                .tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME))
-        }
+        Ok(tracer_provider.build())
     }
 }
 
@@ -346,14 +343,13 @@ impl Observability {
     }
 
     /// Logger provider builder
-    pub fn build_logger_provider(&self) -> LoggerProvider {
+    pub fn build_logger_provider(&self) -> SdkLoggerProvider {
         if let Some(settings) = &self.logs {
-            match settings.build_logger_provider() {
-                Ok(m) => m,
-                Err(_) => LoggerProvider::builder().build(),
-            }
+            settings
+                .build_logger_provider()
+                .unwrap_or(SdkLoggerProvider::builder().build())
         } else {
-            LoggerProvider::builder().build()
+            SdkLoggerProvider::builder().build()
         }
     }
 
@@ -368,11 +364,11 @@ impl Observability {
     ///     .build_tracer_provider()
     ///     .tracer("prosa_proc_example");
     /// ```
-    pub fn build_tracer_provider(&self) -> TracerProvider {
+    pub fn build_tracer_provider(&self) -> SdkTracerProvider {
         if let Some(settings) = &self.traces {
             settings.build_tracer_provider().unwrap_or_default()
         } else {
-            TracerProvider::default()
+            SdkTracerProvider::default()
         }
     }
 
@@ -388,12 +384,12 @@ impl Observability {
     /// ```
     pub fn build_tracer(&self) -> Tracer {
         if let Some(settings) = &self.traces {
-            match settings.build_tracer() {
-                Ok(m) => m,
-                Err(_) => TracerProvider::default().tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME),
+            match settings.build_tracer_provider() {
+                Ok(m) => m.tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME),
+                Err(_) => SdkTracerProvider::default().tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME),
             }
         } else {
-            TracerProvider::default().tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME)
+            SdkTracerProvider::default().tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME)
         }
     }
 
