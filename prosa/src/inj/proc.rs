@@ -196,12 +196,12 @@ where
         let mut adaptor = A::new(self)?;
 
         // meter
-        let meter = self.proc.meter("InjProc");
+        let meter = self.proc.meter(name.clone());
         let meter_trans_duration = meter
             .f64_histogram("prosa_inj_request_duration")
             .with_description("inj transaction processing duration")
             .with_unit("seconds")
-            .build();
+            .init();
 
         // Declare the processor
         self.proc.add_proc().await?;

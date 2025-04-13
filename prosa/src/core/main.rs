@@ -12,10 +12,10 @@ use super::msg::{InternalMainMsg, InternalMsg};
 use super::proc::ProcBusParam;
 use super::service::{ProcService, ServiceTable};
 use super::settings::Settings;
+use opentelemetry::KeyValue;
 use opentelemetry::logs::LoggerProvider as _;
 use opentelemetry::metrics::{Meter, MeterProvider};
 use opentelemetry::trace::TracerProvider as _;
-use opentelemetry::{InstrumentationScope, KeyValue};
 use opentelemetry_appender_log::OpenTelemetryLogBridge;
 use prosa_utils::msg::tvf::Tvf;
 use std::borrow::Cow;
@@ -74,8 +74,8 @@ where
     internal_tx_queue: mpsc::Sender<InternalMainMsg<M>>,
     name: String,
     meter_provider: opentelemetry_sdk::metrics::SdkMeterProvider,
-    logger_provider: opentelemetry_sdk::logs::SdkLoggerProvider,
-    tracer_provider: opentelemetry_sdk::trace::SdkTracerProvider,
+    logger_provider: opentelemetry_sdk::logs::LoggerProvider,
+    tracer_provider: opentelemetry_sdk::trace::TracerProvider,
     stop: Arc<AtomicBool>,
 }
 
@@ -230,22 +230,22 @@ where
     }
 
     /// Provide the opentelemetry Meter based on ProSA settings
-    pub fn meter(&self, name: &'static str) -> opentelemetry::metrics::Meter {
+    pub fn meter(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry::metrics::Meter {
         self.meter_provider.meter(name)
     }
 
     /// Provide the opentelemetry Logger based on ProSA settings
-    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::SdkLogger {
+    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::Logger {
         self.logger_provider.logger(name)
     }
 
     /// Provide the opentelemetry Tracer based on ProSA settings
     pub fn tracer(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::trace::Tracer {
-        let scope = InstrumentationScope::builder(name)
+        self.tracer_provider
+            .tracer_builder(name)
             .with_version(env!("CARGO_PKG_VERSION"))
             .with_attributes([KeyValue::new("prosa_name", self.name.clone())])
-            .build();
-        self.tracer_provider.tracer_with_scope(scope)
+            .build()
     }
 }
 
@@ -437,14 +437,14 @@ where
                     );
                 }
             })
-            .build();
+            .init();
 
         // Monitor services
         let services_meter = self
             .meter
             .u64_gauge("prosa_main_services")
             .with_description("Services declared to the main task")
-            .build();
+            .init();
         // Monitor processors objects
         let mut crashed_proc = 0;
         let mut restarted_proc = 0;
@@ -452,7 +452,7 @@ where
             .meter
             .u64_gauge("prosa_processors")
             .with_description("Processors declared to the main task")
-            .build();
+            .init();
 
         let prosa_name = self.name.clone();
 

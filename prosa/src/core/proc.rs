@@ -372,12 +372,12 @@ where
     }
 
     /// Provide the opentelemetry Meter based on ProSA settings
-    pub fn meter(&self, name: &'static str) -> opentelemetry::metrics::Meter {
+    pub fn meter(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry::metrics::Meter {
         self.main.meter(name)
     }
 
     /// Provide the opentelemetry Logger based on ProSA settings
-    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::SdkLogger {
+    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::Logger {
         self.main.logger(name)
     }
 
