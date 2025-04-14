@@ -1,6 +1,6 @@
 [package]
 name = "prosa"
-version = "0.2.0"
+version = "0.2.1"
 authors.workspace = true
 description = "ProSA core"
 homepage.workspace = true
@@ -16,6 +16,10 @@ http-proxy = ["dep:async-http-proxy"]
 [[example]]
 name = "proc"
 path = "examples/proc.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.prosa]
 main = ["core::main::MainProc"]

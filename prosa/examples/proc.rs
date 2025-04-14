@@ -155,6 +155,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Wait on main task
     main.run().await;
-    opentelemetry::global::shutdown_tracer_provider();
+
     Ok(())
 }

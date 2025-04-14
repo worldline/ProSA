@@ -5,8 +5,10 @@
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/doc_assets/header_badges.md"))]
 //!
 //! Utils for ProSA
-
 #![warn(missing_docs)]
+#![deny(unreachable_pub)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+
 pub mod msg;
 
 #[cfg(feature = "config")]
