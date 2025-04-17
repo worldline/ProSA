@@ -2,7 +2,7 @@
 
 use super::{Dictionary, Entry};
 use crate::msg::tvf::TvfError;
-use std::{fmt, rc::Rc, sync::Arc};
+use std::{fmt, sync::Arc};
 
 impl<P> Dictionary<P> {
     /// Add a new entry to the dictionary
@@ -40,8 +40,8 @@ impl<P> Dictionary<P> {
     /// Add a new field definition to the dictionary
     #[inline]
     fn add_definition(&mut self, id: usize, label: &str, definition: Entry<P>) {
-        let label: Rc<str> = label.into();
-        let def = Rc::new(definition);
+        let label: Arc<str> = label.into();
+        let def = Arc::new(definition);
         self.id_to_label.insert(id, (label.clone(), def.clone()));
         self.label_to_id.insert(label, (id, def));
     }
