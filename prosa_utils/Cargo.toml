@@ -12,6 +12,7 @@ include.workspace = true
 [features]
 default = ["full"]
 msg = []
+dict = []
 config = ["dep:glob","dep:serde","dep:serde_yaml"]
 config-openssl = ["config", "dep:openssl"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:prometheus"]

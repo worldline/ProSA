@@ -13,3 +13,6 @@ pub mod msg;
 
 #[cfg(feature = "config")]
 pub mod config;
+
+#[cfg(feature = "dict")]
+pub mod dict;
