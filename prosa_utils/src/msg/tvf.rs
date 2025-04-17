@@ -7,6 +7,7 @@
 //!
 //! [^tvfnote]: **T**ag **V**alue **F**ormat
 
+use super::value::TvfValue;
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
 use std::borrow::Cow;
@@ -15,7 +16,7 @@ use thiserror::Error;
 
 /// Error define for TVF object
 /// Use by several method (serialize/unserialize/getter/setter)
-#[derive(Debug, Eq, Error, PartialOrd, PartialEq)]
+#[derive(Debug, Eq, Error, PartialOrd, PartialEq, Clone)]
 pub enum TvfError {
     /// Error that indicate the field is not found in the TVF. Missing key
     #[error("The key `{0}` is not present in the Tvf")]
@@ -65,6 +66,11 @@ pub trait Tvf {
     /// Get all the keys for this TVF
     fn keys(&self) -> Vec<usize>;
 
+    /// Get the field for the given id
+    fn get(&self, id: usize) -> Result<TvfValue<'_, Self>, TvfError>
+    where
+        Self: Sized + Clone;
+
     /// Get a sub buffer from a TVF
     fn get_buffer(&self, id: usize) -> Result<Cow<'_, Self>, TvfError>
     where
@@ -86,6 +92,24 @@ pub trait Tvf {
     /// Get a datetime field from  a TVF.  
     /// The timestamp is considered to be UTC.
     fn get_datetime(&self, id: usize) -> Result<NaiveDateTime, TvfError>;
+
+    /// Put a field into a TVF
+    fn put(&mut self, id: usize, value: TvfValue<'_, Self>)
+    where
+        Self: Sized + Clone + Default + Debug,
+    {
+        match value {
+            TvfValue::Byte(byte) => self.put_byte(id, byte),
+            TvfValue::Unsigned(unsigned) => self.put_unsigned(id, unsigned),
+            TvfValue::Signed(signed) => self.put_signed(id, signed),
+            TvfValue::Float(float) => self.put_float(id, float),
+            TvfValue::String(string) => self.put_string(id, string.into_owned()),
+            TvfValue::Bytes(buffer) => self.put_bytes(id, buffer.into_owned()),
+            TvfValue::Date(date) => self.put_date(id, date),
+            TvfValue::DateTime(datetime) => self.put_datetime(id, datetime),
+            TvfValue::Buffer(buffer) => self.put_buffer(id, buffer.into_owned()),
+        }
+    }
 
     /// Put a buffer as sub field into a TVF
     fn put_buffer(&mut self, id: usize, buffer: Self)

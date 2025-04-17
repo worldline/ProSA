@@ -2,3 +2,4 @@
 
 pub mod simple_string_tvf;
 pub mod tvf;
+pub mod value;
