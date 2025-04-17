@@ -12,6 +12,7 @@ include.workspace = true
 [features]
 default = ["full"]
 msg = []
+dict = []
 config = ["dep:glob","dep:serde","dep:serde_yaml"]
 config-openssl = ["config", "dep:openssl", "dep:openssl-sys"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored", "openssl-sys/vendored"]
