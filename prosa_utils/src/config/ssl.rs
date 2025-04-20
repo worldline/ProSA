@@ -293,11 +293,11 @@ pub struct SslConfig {
     #[serde(skip_serializing)]
     #[serde(default = "SslConfig::default_modern_security")]
     /// Security level. If `true`, it'll use the [modern version 5 of Mozilla's](https://wiki.mozilla.org/Security/Server_Side_TLS) TLS recommendations.
-    modern_security: bool,
+    pub modern_security: bool,
     #[serde(skip_serializing)]
     #[serde(default = "SslConfig::default_ssl_timeout")]
-    /// SSL operation timeout
-    ssl_timeout: u64,
+    /// SSL operation timeout in milliseconds
+    pub ssl_timeout: u64,
 }
 
 impl SslConfig {
