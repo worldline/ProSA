@@ -270,7 +270,7 @@ mod tests {
 
         let ssl_config = SslConfig::default();
         let ssl_acceptor = ssl_config
-            .init_tls_server_context(addr_url.domain())
+            .init_tls_server_context(addr_url.host_str())
             .unwrap()
             .build();
         let listener = StreamListener::bind(addr)
@@ -332,7 +332,7 @@ mod tests {
 
         let ssl_config = SslConfig::default();
         let ssl_acceptor = ssl_config
-            .init_tls_server_context(addr_url.domain())
+            .init_tls_server_context(addr_url.host_str())
             .unwrap()
             .build();
         let listener = StreamListener::bind(addr)
@@ -447,7 +447,9 @@ mod tests {
 
         let mut client_ssl_config = SslConfig::default();
         client_ssl_config.set_alpn(vec!["http/1.1".into(), "prosa/1".into()]);
-        let ssl_store = Store::new(temp_cert_dir.to_str().unwrap().to_string() + "/");
+        let ssl_store = Store::File {
+            path: temp_cert_dir.to_str().unwrap().to_string(),
+        };
         client_ssl_config.set_store(ssl_store);
         let target_settings = TargetSetting::new(addr, Some(client_ssl_config), None);
         assert_eq!(addr_str, target_settings.to_string());

@@ -17,6 +17,7 @@ use std::{
     collections::HashMap,
     ffi::OsStr,
     fmt, fs,
+    net::IpAddr,
     ops::DerefMut,
     time::{self, Duration},
 };
@@ -25,42 +26,59 @@ use super::{ConfigError, os_country};
 
 /// SSL configuration object for store certificates
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct Store {
-    path: String,
+#[serde(untagged)]
+pub enum Store {
+    /// Store path that contain certificate(s)
+    File {
+        /// Path of the store (can be directory, file, glob pattern)
+        path: String,
+    },
+    /// Store certs that contain PEMs
+    Cert {
+        /// List of string PEMs for certificates
+        certs: Vec<String>,
+    },
 }
 
 impl Store {
-    /// Method to read a certificate from its path
-    fn get_certificate(
+    /// Method to read certificates from its path. Get all certificates in subfolders
+    fn get_file_certificates(
         path: &std::path::PathBuf,
-    ) -> Result<Option<openssl::x509::X509>, ConfigError> {
+    ) -> Result<Vec<openssl::x509::X509>, ConfigError> {
         if path.is_file() {
             match &path.extension().and_then(OsStr::to_str) {
                 Some("pem") => match fs::read(path) {
-                    Ok(pem_file) => Ok(Some(openssl::x509::X509::from_pem(&pem_file)?)),
+                    Ok(pem_file) => Ok(vec![openssl::x509::X509::from_pem(&pem_file)?]),
                     Err(io) => Err(ConfigError::IoFile(
                         path.to_str().unwrap_or_default().into(),
                         io,
                     )),
                 },
                 Some("der") => match fs::read(path) {
-                    Ok(der_file) => Ok(Some(openssl::x509::X509::from_der(&der_file)?)),
+                    Ok(der_file) => Ok(vec![openssl::x509::X509::from_der(&der_file)?]),
                     Err(io) => Err(ConfigError::IoFile(
                         path.to_str().unwrap_or_default().into(),
                         io,
                     )),
                 },
-                _ => Ok(None),
+                _ => Ok(Vec::new()),
             }
-        } else {
-            Ok(None)
-        }
-    }
+        } else if path.is_symlink() {
+            if let Ok(link) = path.read_link() {
+                Self::get_file_certificates(&link)
+            } else {
+                Ok(Vec::new())
+            }
+        } else if let Ok(path_dir) = path.read_dir() {
+            let mut cert_list = Vec::new();
+            for dir_entry in path_dir.flatten() {
+                cert_list.append(&mut Self::get_file_certificates(&dir_entry.path())?);
+            }
 
-    /// Method to create an SSL Store configuration manually
-    /// Should be use with config instead of building it manually
-    pub fn new(path: String) -> Store {
-        Store { path }
+            Ok(cert_list)
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     /// Method to get an OpenSSL cert store
@@ -72,18 +90,27 @@ impl Store {
     /// let openssl_store: openssl::x509::store::X509Store = store.get_store().unwrap();
     /// ```
     pub fn get_store(&self) -> Result<openssl::x509::store::X509Store, ConfigError> {
-        match glob(&(self.path.clone() + "*")) {
-            Ok(certs) => {
-                let mut store = openssl::x509::store::X509StoreBuilder::new()?;
-                for cert_path in certs.flatten() {
-                    if let Some(cert) = Self::get_certificate(&cert_path)? {
-                        store.add_cert(cert)?;
+        let mut store = openssl::x509::store::X509StoreBuilder::new()?;
+        match self {
+            Store::File { path } => match glob(path) {
+                Ok(certs) => {
+                    for cert_path in certs.flatten() {
+                        for cert in Self::get_file_certificates(&cert_path)? {
+                            store.add_cert(cert)?;
+                        }
                     }
+
+                    Ok(store.build())
+                }
+                Err(e) => Err(ConfigError::WrongPath(path.clone(), e)),
+            },
+            Store::Cert { certs } => {
+                for cert in certs {
+                    store.add_cert(openssl::x509::X509::from_pem(cert.as_bytes())?)?;
                 }
 
                 Ok(store.build())
             }
-            Err(e) => Err(ConfigError::WrongPath(self.path.clone(), e)),
         }
     }
 
@@ -99,26 +126,50 @@ impl Store {
     /// assert!(certs_map.is_empty());
     /// ```
     pub fn get_certs(&self) -> Result<HashMap<String, openssl::x509::X509>, ConfigError> {
-        match glob(&(self.path.clone() + "*")) {
-            Ok(certs) => {
-                let mut certs_map = HashMap::new();
-                for cert_path in certs.flatten() {
-                    if let Some(cert_path_name) = cert_path.to_str() {
-                        if let Some(cert_name) = cert_path_name.strip_suffix(".pem") {
-                            if let Some(cert) = Self::get_certificate(&cert_path)? {
-                                certs_map.insert(cert_name.into(), cert);
-                            }
-                        } else if let Some(cert_name) = cert_path_name.strip_suffix(".der") {
-                            if let Some(cert) = Self::get_certificate(&cert_path)? {
-                                certs_map.insert(cert_name.into(), cert);
+        match self {
+            Store::File { path } => match glob(path) {
+                Ok(certs) => {
+                    let mut certs_map = HashMap::new();
+                    for cert_path in certs.flatten() {
+                        for cert in Self::get_file_certificates(&cert_path)? {
+                            if let Some(name) = cert
+                                .subject_name()
+                                .entries_by_nid(Nid::COMMONNAME)
+                                .last()
+                                .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
+                            {
+                                certs_map.insert(name, cert);
+                            } else if let Some(cert_path_name) = cert_path.to_str() {
+                                if let Some(cert_name) = cert_path_name
+                                    .strip_suffix(".pem")
+                                    .or(cert_path_name.strip_suffix(".der"))
+                                {
+                                    certs_map.insert(cert_name.into(), cert);
+                                }
                             }
                         }
+                    }
+
+                    Ok(certs_map)
+                }
+                Err(e) => Err(ConfigError::WrongPath(path.clone(), e)),
+            },
+            Store::Cert { certs } => {
+                let mut certs_map = HashMap::new();
+                for cert_pem in certs {
+                    let cert = openssl::x509::X509::from_pem(cert_pem.as_bytes())?;
+                    if let Some(name) = cert
+                        .subject_name()
+                        .entries_by_nid(Nid::COMMONNAME)
+                        .last()
+                        .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
+                    {
+                        certs_map.insert(name, cert);
                     }
                 }
 
                 Ok(certs_map)
             }
-            Err(e) => Err(ConfigError::WrongPath(self.path.clone(), e)),
         }
     }
 }
@@ -126,21 +177,27 @@ impl Store {
 #[cfg(target_family = "unix")]
 impl Default for Store {
     fn default() -> Self {
-        Store::new("/etc/ssl/certs/".into())
+        Store::File {
+            path: "/etc/ssl/certs/".into(),
+        }
     }
 }
 
 #[cfg(target_family = "windows")]
 impl Default for Store {
     fn default() -> Self {
-        Store::new("HKLM:/Software/Microsoft/SystemCertificates/".into())
+        Store::File {
+            path: "HKLM:/Software/Microsoft/SystemCertificates/".into(),
+        }
     }
 }
 
 impl fmt::Display for Store {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let certs = self.get_certs().unwrap_or_default();
-        writeln!(f, "Store cert path [{}]:", self.path)?;
+        if let Self::File { path } = &self {
+            writeln!(f, "Store cert path [{}]:", path)?;
+        }
         for (name, cert) in certs {
             if f.alternate() {
                 writeln!(f, "{name}:\n{cert:#?}")?;
@@ -306,7 +363,7 @@ impl SslConfig {
         &self,
         mut context_builder: B,
         is_server: bool,
-        domain: Option<&str>,
+        host: Option<&str>,
     ) -> Result<B, ConfigError>
     where
         B: DerefMut<Target = SslContextBuilder>,
@@ -383,13 +440,23 @@ impl SslConfig {
             cert.set_subject_name(&x509_name)?;
             cert.set_issuer_name(&x509_name)?;
 
-            // Add DNS subject alternative name if needed to check the certificate
-            if let Some(dns) = domain {
-                let mut subject_alternative_name = SubjectAlternativeName::new();
-                let x509_extension = subject_alternative_name
-                    .dns(dns)
-                    .build(&cert.x509v3_context(None, None))?;
-                cert.append_extension2(&x509_extension)?;
+            // Add DNS or IP subject alternative name if needed to check the certificate
+            if let Some(host) = host {
+                if let Ok(ip) = host.parse::<IpAddr>() {
+                    if !ip.is_unspecified() && !ip.is_loopback() {
+                        let mut subject_alternative_name = SubjectAlternativeName::new();
+                        let x509_extension = subject_alternative_name
+                            .ip(host)
+                            .build(&cert.x509v3_context(None, None))?;
+                        cert.append_extension2(&x509_extension)?;
+                    }
+                } else {
+                    let mut subject_alternative_name = SubjectAlternativeName::new();
+                    let x509_extension = subject_alternative_name
+                        .dns(host)
+                        .build(&cert.x509v3_context(None, None))?;
+                    cert.append_extension2(&x509_extension)?;
+                }
             }
 
             cert.sign(&pkey, MessageDigest::sha256())?;
@@ -481,14 +548,14 @@ impl SslConfig {
     /// ```
     pub fn init_tls_server_context(
         &self,
-        domain: Option<&str>,
+        host: Option<&str>,
     ) -> Result<openssl::ssl::SslAcceptorBuilder, ConfigError> {
         let ssl_acceptor = if self.modern_security {
             openssl::ssl::SslAcceptor::mozilla_modern_v5(SslMethod::tls_server())
         } else {
             openssl::ssl::SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server())
         }?;
-        self.init_tls_context(ssl_acceptor, true, domain)
+        self.init_tls_context(ssl_acceptor, true, host)
     }
 }
 
@@ -510,6 +577,123 @@ impl Default for SslConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_store() {
+        let inline_store_le_x1_x2 = Store::Cert {
+            certs: vec![
+                "-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----"
+                    .to_string(),
+                "-----BEGIN CERTIFICATE-----
+MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
+CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
+R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
+MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
+ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
+EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
++1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
+ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
+AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
+zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
+tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
+/q4AaOeMSQ+2b1tbFfLn
+-----END CERTIFICATE-----"
+                    .to_string(),
+            ],
+        };
+        assert!(format!("{inline_store_le_x1_x2}").contains("ISRG Root X"));
+
+        let config_store_le_x1_x2: Store = serde_yaml::from_str(
+            "certs:
+  - |
+    -----BEGIN CERTIFICATE-----
+    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
+    -----END CERTIFICATE-----
+  - |
+    -----BEGIN CERTIFICATE-----
+    MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
+    CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
+    R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
+    MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
+    ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
+    EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
+    +1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
+    ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
+    AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
+    zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
+    tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
+    /q4AaOeMSQ+2b1tbFfLn
+    -----END CERTIFICATE-----",
+        )
+        .unwrap();
+        assert!(format!("{config_store_le_x1_x2}").contains("ISRG Root X"));
+
+        let config_store_file: Store = serde_yaml::from_str("path: \"/opt\"").unwrap();
+        assert_eq!(
+            Store::File {
+                path: "/opt".to_string()
+            },
+            config_store_file
+        );
+    }
 
     #[test]
     fn test_tls_server_context() {
