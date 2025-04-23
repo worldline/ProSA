@@ -18,7 +18,7 @@ use cargo_prosa::{
     CONFIGURATION_FILENAME,
     builder::Desc,
     cargo::CargoMetadata,
-    package::{container::ContainerFile, deb::DebPkg},
+    package::{container::ContainerFile, deb::DebPkg, rpm::RpmPkg},
 };
 use clap::{Command, arg};
 use tera::Tera;
@@ -150,41 +150,73 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
         }
 
         // Add optional parameters for deb package build
-        if let Some(tera::Value::Bool(true)) = context.get("deb_pkg") {
-            let cargo_toml = fs::read_to_string(prosa_path.join("Cargo.toml"))?;
-            let mut cargo_doc = cargo_toml
-                .parse::<DocumentMut>()
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            if let Some(toml_edit::Item::Table(package_table)) = cargo_doc.get_mut("package") {
-                if let Some(name) = context.get("name").and_then(|v| v.as_str()) {
-                    if let Some(toml_edit::Item::Table(metadata_table)) =
-                        package_table.get_mut("metadata")
-                    {
-                        if let Some(toml_edit::Item::Table(deb_table)) =
-                            metadata_table.get_mut("deb")
+        if let (tera::Value::Bool(deb_pkg), tera::Value::Bool(rpm_pkg)) = (
+            context.get("deb_pkg").unwrap_or(&tera::Value::Bool(false)),
+            context.get("rpm_pkg").unwrap_or(&tera::Value::Bool(false)),
+        ) {
+            if *deb_pkg || *rpm_pkg {
+                let cargo_toml = fs::read_to_string(prosa_path.join("Cargo.toml"))?;
+                let mut cargo_doc = cargo_toml
+                    .parse::<DocumentMut>()
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                if let Some(toml_edit::Item::Table(package_table)) = cargo_doc.get_mut("package") {
+                    if let Some(name) = context.get("name").and_then(|v| v.as_str()) {
+                        if let Some(toml_edit::Item::Table(metadata_table)) =
+                            package_table.get_mut("metadata")
                         {
-                            DebPkg::add_deb_pkg_metadata(deb_table, name);
+                            if let Some(toml_edit::Item::Table(deb_table)) =
+                                metadata_table.get_mut("deb")
+                            {
+                                DebPkg::add_deb_pkg_metadata(deb_table, name);
+                            } else {
+                                let mut deb_table = toml_edit::Table::new();
+                                DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+
+                                metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+                            }
+
+                            if let Some(toml_edit::Item::Table(rpm_table)) =
+                                metadata_table.get_mut("generate-rpm")
+                            {
+                                RpmPkg::add_rpm_pkg_metadata(rpm_table, name);
+                            } else {
+                                let mut rpm_table = toml_edit::Table::new();
+                                RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
+
+                                metadata_table
+                                    .insert("generate-rpm", toml_edit::Item::Table(rpm_table));
+                            }
                         } else {
-                            let mut deb_table = toml_edit::Table::new();
-                            DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+                            if *deb_pkg {
+                                let mut deb_table = toml_edit::Table::new();
+                                DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
 
-                            metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+                                let mut metadata_table = toml_edit::Table::new();
+                                metadata_table.set_implicit(true);
+                                metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+
+                                package_table
+                                    .insert("metadata", toml_edit::Item::Table(metadata_table));
+                            }
+                            if *rpm_pkg {
+                                let mut rpm_table = toml_edit::Table::new();
+                                RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
+
+                                let mut metadata_table = toml_edit::Table::new();
+                                metadata_table.set_implicit(true);
+                                metadata_table
+                                    .insert("generate-rpm", toml_edit::Item::Table(rpm_table));
+
+                                package_table
+                                    .insert("metadata", toml_edit::Item::Table(metadata_table));
+                            }
                         }
-                    } else {
-                        let mut deb_table = toml_edit::Table::new();
-                        DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
-
-                        let mut metadata_table = toml_edit::Table::new();
-                        metadata_table.set_implicit(true);
-                        metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
-
-                        package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
                     }
                 }
-            }
 
-            let mut cargo_toml_file = fs::File::create(prosa_path.join("Cargo.toml"))?;
-            cargo_toml_file.write_all(cargo_doc.to_string().as_bytes())?;
+                let mut cargo_toml_file = fs::File::create(prosa_path.join("Cargo.toml"))?;
+                cargo_toml_file.write_all(cargo_doc.to_string().as_bytes())?;
+            }
         }
     }
 
@@ -205,6 +237,7 @@ fn cli() -> Command {
                     .about("Create a new ProSA package")
                     .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
                     .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
+                    .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
                     .arg(arg!(<PATH> "Name of the new ProSA"))
                     .arg_required_else_help(true),
             )
@@ -212,12 +245,14 @@ fn cli() -> Command {
                 Command::new("init")
                     .about("Create a new ProSA package in an existing directory")
                     .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
+                    .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
                     .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
             )
             .subcommand(
                 Command::new("update")
                     .about("Update ProSA files to the latest skeleton")
                     .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
+                    .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
             )
             .subcommand(
                 Command::new("add")
@@ -291,6 +326,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 args.push(path);
                 j2_context.insert("path", path);
                 j2_context.insert("deb_pkg", &matches.get_flag("deb"));
+                j2_context.insert("rpm_pkg", &matches.get_flag("rpm"));
 
                 // Create the new Rust project
                 let cargo_new = std::process::Command::new("cargo").args(args).output()?;
@@ -316,6 +352,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 j2_context.insert("deb_pkg", &matches.get_flag("deb"));
+                j2_context.insert("rpm_pkg", &matches.get_flag("rpm"));
 
                 if let Some(path_name) = path.to_str() {
                     j2_context.insert("path", path_name);
@@ -342,6 +379,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 package_metadata.j2_context(&mut j2_context);
                 if !j2_context.contains_key("deb_pkg") {
                     j2_context.insert("deb_pkg", &matches.get_flag("deb"));
+                }
+                if !j2_context.contains_key("rpm_pkg") {
+                    j2_context.insert("rpm_pkg", &matches.get_flag("rpm"));
                 }
 
                 if let Some(path_name) = env::current_dir()?.as_path().to_str() {

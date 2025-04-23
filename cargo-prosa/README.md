@@ -99,3 +99,12 @@ To enable this feature, _create_, _init_ or _update_ your ProSA with the option 
 It'll add every needed properties to generate a deb package.
 
 The deb package will include the released binary, a default configuration file, and a systemd service file.
+
+### RPM package
+
+RPM (Red Hat Package Manager) package can be created with the [cargo-generate-rpm](https://crates.io/crates/cargo-generate-rpm) crate.
+
+To enable this feature, _create_, _init_ or _update_ your ProSA with the option `--rpm`.
+It'll add every needed properties to generate an rpm package.
+
+The rpm package will include the released binary, a default configuration file, and a systemd service file.

@@ -5,9 +5,9 @@ After=network-online.target
 ConditionFileNotEmpty={{ config }}
 
 [Service]
+Type=simple
 ExecStart={{ bin }} -c {{ config }}
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-Alias={{ name }}.service

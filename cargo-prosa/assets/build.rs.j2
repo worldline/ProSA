@@ -9,7 +9,10 @@ use cargo_prosa::cargo::{{ '{' }}CargoMetadata, Metadata{{ '}' }};
 use cargo_prosa::CONFIGURATION_FILENAME;
 {%- if deb_pkg %}
 use cargo_prosa::package::deb::DebPkg;
-{% endif %}
+{% endif -%}
+{%- if rpm_pkg %}
+use cargo_prosa::package::rpm::RpmPkg;
+{% endif -%}
 
 fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metadata>) -> io::Result<()> {{ '{' }}
     let mut f = fs::File::create(Path::new(&out_dir).join("settings.rs"))?;
@@ -256,7 +259,7 @@ fn main() {{ '{' }}
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=ProSA.toml");
-{%- if deb_pkg %}
+{%- if deb_pkg or rpm_pkg %}
     println!("cargo:rerun-if-changed=Cargo.toml");
 
     // Generate files for ProSA packages
@@ -264,5 +267,9 @@ fn main() {{ '{' }}
 {%- if deb_pkg %}
     let deb_pkg = DebPkg::new(target_path.to_path_buf()).unwrap();
     deb_pkg.write_package_data().unwrap();
+{% endif -%}
+{%- if rpm_pkg %}
+    let rpm_pkg = RpmPkg::new(target_path.to_path_buf()).unwrap();
+    rpm_pkg.write_package_data().unwrap();
 {% endif -%}
 {{ '}' }}
