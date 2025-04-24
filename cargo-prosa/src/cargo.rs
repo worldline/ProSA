@@ -81,7 +81,7 @@ impl Metadata {
     /// Method to add the crate name, and description to the metadata
     fn specify(&mut self, crate_name: &str, description: Option<String>) {
         self.description = description;
-        let crate_prefix = format!("{}::", crate_name);
+        let crate_prefix = format!("{crate_name}::");
 
         if let Some(proc) = &mut self.proc {
             proc.insert_str(0, crate_prefix.as_str());
@@ -122,7 +122,7 @@ impl Metadata {
         if let Some(proc) = &self.proc {
             let proc_name = proc.replace('-', "_");
             if let Some(crate_name) = crate_name {
-                let proc_name = format!("{}::{}", crate_name, proc_name);
+                let proc_name = format!("{crate_name}::{proc_name}");
                 if proc_name.contains(name) {
                     return Some(proc);
                 }
@@ -140,7 +140,7 @@ impl Metadata {
             for adaptor in adaptors {
                 let adaptor_name = adaptor.replace('-', "_");
                 if let Some(crate_name) = crate_name {
-                    let adaptor_name = format!("{}::{}", crate_name, adaptor_name);
+                    let adaptor_name = format!("{crate_name}::{adaptor_name}");
                     if adaptor_name.contains(name) {
                         return Some(adaptor);
                     }
@@ -177,7 +177,7 @@ impl Metadata {
         } else {
             None
         }
-        .ok_or(format!("Can't find a ProSA `adaptor` for {}", name))?;
+        .ok_or(format!("Can't find a ProSA `adaptor` for {name}"))?;
 
         Ok(ProcDesc {
             name: None,
@@ -186,7 +186,7 @@ impl Metadata {
                 .proc
                 .clone()
                 .map(|p| p.replace('-', "_"))
-                .ok_or(format!("Missing ProSA `proc` metadata for {}", name))?,
+                .ok_or(format!("Missing ProSA `proc` metadata for {name}"))?,
             adaptor: adaptor.replace('-', "_"),
         })
     }
@@ -195,17 +195,17 @@ impl Metadata {
 impl fmt::Display for Metadata {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(proc) = &self.proc {
-            writeln!(f, "    Processor {}", proc)?;
+            writeln!(f, "    Processor {proc}")?;
         }
 
         if let Some(settings) = &self.settings {
-            writeln!(f, "    Settings {}", settings)?;
+            writeln!(f, "    Settings {settings}")?;
         }
 
         if let Some(adaptor) = &self.adaptor {
             writeln!(f, "    Adaptor:")?;
             for adaptor in adaptor {
-                writeln!(f, "     - {}", adaptor)?;
+                writeln!(f, "     - {adaptor}")?;
             }
         }
 
@@ -421,16 +421,16 @@ impl fmt::Display for PackageMetadata {
             .and_then(|m| m.get("prosa").and_then(|w| w.as_object()))
         {
             for (name, data) in metadata {
-                writeln!(f, "  - {}", name)?;
+                writeln!(f, "  - {name}")?;
                 if name != "main" && name != "tvf" {
                     if let Ok(prosa_metadata) = serde_json::from_value::<Metadata>(data.clone()) {
-                        write!(f, "{}", prosa_metadata)?;
+                        write!(f, "{prosa_metadata}")?;
                     }
                 } else if let Ok(prosa_metadata) =
                     serde_json::from_value::<Vec<String>>(data.clone())
                 {
                     for prosa_meta in prosa_metadata {
-                        writeln!(f, "    - {}", prosa_meta)?;
+                        writeln!(f, "    - {prosa_meta}")?;
                     }
                 }
             }
@@ -586,7 +586,7 @@ impl fmt::Display for CargoMetadata {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for package in &self.packages {
             if package.is_prosa() {
-                write!(f, "{}", package)?;
+                write!(f, "{package}")?;
             }
         }
 

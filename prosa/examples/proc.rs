@@ -126,7 +126,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap();
 
     let my_settings = config.try_deserialize::<MySettings>()?;
-    println!("My ProSA settings: {:?}", my_settings);
+    println!("My ProSA settings: {my_settings:?}");
 
     // traces
     let telemetry_filter = TelemetryFilter::new(LevelFilter::DEBUG);

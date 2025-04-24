@@ -146,7 +146,7 @@ pub fn get_config_builder(path: &str) -> io::Result<ConfigBuilder<DefaultState>>
     } else {
         Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            format!("Unrecognize filetype for path `{}`", path),
+            format!("Unrecognize filetype for path `{path}`"),
         ))
     }
 }

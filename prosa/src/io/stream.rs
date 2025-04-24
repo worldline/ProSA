@@ -148,7 +148,7 @@ impl Stream {
             if e.code() != ssl::ErrorCode::ZERO_RETURN {
                 return Err(io::Error::new(
                     io::ErrorKind::Interrupted,
-                    format!("Can't connect the SSL socket `{}`", e),
+                    format!("Can't connect the SSL socket `{e}`"),
                 ));
             }
         }
@@ -196,7 +196,7 @@ impl Stream {
                 ssl_context,
                 url.domain().ok_or(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("Can't retrieve domain name from url `{}`", url),
+                    format!("Can't retrieve domain name from url `{url}`"),
                 ))?,
             )
             .await?,
@@ -224,7 +224,7 @@ impl Stream {
             {
                 return Err(io::Error::new(
                     io::ErrorKind::ConnectionAborted,
-                    format!("Can't connect to the http proxy with basic_auth `{}`", e),
+                    format!("Can't connect to the http proxy with basic_auth `{e}`"),
                 ));
             }
         } else if let Err(e) =
@@ -232,7 +232,7 @@ impl Stream {
         {
             return Err(io::Error::new(
                 io::ErrorKind::ConnectionAborted,
-                format!("Can't connect to the http proxy `{}`", e),
+                format!("Can't connect to the http proxy `{e}`"),
             ));
         }
 
@@ -637,13 +637,13 @@ impl fmt::Display for Stream {
             )));
         match self {
             #[cfg(target_family = "unix")]
-            Stream::Unix(_) => write!(f, "unix://{}", addr),
-            Stream::Tcp(_) => write!(f, "tcp://{}", addr),
-            Stream::Ssl(_) => write!(f, "ssl://{}", addr),
+            Stream::Unix(_) => write!(f, "unix://{addr}"),
+            Stream::Tcp(_) => write!(f, "tcp://{addr}"),
+            Stream::Ssl(_) => write!(f, "ssl://{addr}"),
             #[cfg(feature = "http-proxy")]
-            Stream::TcpHttpProxy(_) => write!(f, "tcp+http_proxy://{}", addr),
+            Stream::TcpHttpProxy(_) => write!(f, "tcp+http_proxy://{addr}"),
             #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(_) => write!(f, "ssl+http_proxy://{}", addr),
+            Stream::SslHttpProxy(_) => write!(f, "ssl+http_proxy://{addr}"),
         }
     }
 }
@@ -829,14 +829,14 @@ impl fmt::Display for TargetSetting {
                 && !url_scheme.ends_with("https")
                 && !url_scheme.ends_with("wss")
             {
-                let _ = url.set_scheme(format!("{}+ssl", url_scheme).as_str());
+                let _ = url.set_scheme(format!("{url_scheme}+ssl").as_str());
             }
         }
 
         if let Some(proxy_url) = &self.proxy {
-            write!(f, "{} -proxy {}", url, proxy_url)
+            write!(f, "{url} -proxy {proxy_url}")
         } else {
-            write!(f, "{}", url)
+            write!(f, "{url}")
         }
     }
 }
