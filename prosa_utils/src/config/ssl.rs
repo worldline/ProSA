@@ -143,9 +143,9 @@ impl fmt::Display for Store {
         writeln!(f, "Store cert path [{}]:", self.path)?;
         for (name, cert) in certs {
             if f.alternate() {
-                writeln!(f, "{}:\n{:#?}", name, cert)?;
+                writeln!(f, "{name}:\n{cert:#?}")?;
             } else {
-                writeln!(f, "{}", name)?;
+                writeln!(f, "{name}")?;
             }
         }
 

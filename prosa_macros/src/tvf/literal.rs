@@ -78,7 +78,7 @@ pub(crate) fn convert_literal(
                         Err(e) => {
                             return Err(Error::new_spanned(
                                 literal,
-                                format!("Cannot convert number to bytes: {}", e),
+                                format!("Cannot convert number to bytes: {e}"),
                             ));
                         }
                     }

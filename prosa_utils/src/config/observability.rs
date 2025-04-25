@@ -99,7 +99,7 @@ impl Default for PrometheusExporterCfg {
         };
 
         PrometheusExporterCfg {
-            endpoint: format!("0.0.0.0:{}", port),
+            endpoint: format!("0.0.0.0:{port}"),
         }
     }
 }

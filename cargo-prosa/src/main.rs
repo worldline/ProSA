@@ -391,7 +391,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
                             prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
                         } else {
-                            println!("Will add {}", proc_desc);
+                            println!("Will add {proc_desc}");
                         }
                     }
                 }
@@ -453,7 +453,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
                                 break;
                             } else {
-                                println!("Will replace main proc with {}", main);
+                                println!("Will replace main proc with {main}");
                                 break;
                             }
                         }
@@ -483,7 +483,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
                                 break;
                             } else {
-                                println!("Will replace TVF format with {}", tvf);
+                                println!("Will replace TVF format with {tvf}");
                                 break;
                             }
                         }
@@ -492,14 +492,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(("list", _matches)) => {
                 let cargo_metadata = CargoMetadata::load_metadata()?;
-                print!("{}", cargo_metadata);
+                print!("{cargo_metadata}");
             }
             Some(("container", matches)) => {
                 let container = ContainerFile::new(matches)?;
                 container.create_container_file()?;
 
                 // Help on use
-                print!("{}", container);
+                print!("{container}");
             }
             Some(("completion", matches)) => {
                 let shell = clap_complete::Shell::from_str(

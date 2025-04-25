@@ -97,7 +97,7 @@ impl fmt::Display for ContainerFile {
             if self.path.is_some() {
                 write!(f, " -f {}", self.get_path().display())?;
             }
-            writeln!(f, " -t {} .`", img_name)?;
+            writeln!(f, " -t {img_name} .`")?;
 
             if self.ctx.contains_key("builder_image") {
                 writeln!(
@@ -109,7 +109,7 @@ impl fmt::Display for ContainerFile {
                 if self.path.is_some() {
                     write!(f, " -f {}", self.get_path().display())?;
                 }
-                writeln!(f, " --ssh default=$SSH_AUTH_SOCK -t {} .`", img_name)
+                writeln!(f, " --ssh default=$SSH_AUTH_SOCK -t {img_name} .`")
             } else {
                 Ok(())
             }
@@ -121,7 +121,7 @@ impl fmt::Display for ContainerFile {
                 img_name
             )
         } else {
-            writeln!(f, "  `podman build -t {} .`", img_name)
+            writeln!(f, "  `podman build -t {img_name} .`")
         }
     }
 }

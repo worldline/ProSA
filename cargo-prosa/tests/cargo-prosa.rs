@@ -61,8 +61,7 @@ fn project() -> Result<(), Box<dyn std::error::Error>> {
     cmd.assert()
         .success()
         .stderr(predicate::str::contains(format!(
-            "binary (application) `{}` package",
-            PROSA_NAME
+            "binary (application) `{PROSA_NAME}` package"
         )));
     replace_prosa_dependencies(&prosa_path);
 

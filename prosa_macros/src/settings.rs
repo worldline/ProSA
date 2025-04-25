@@ -60,7 +60,7 @@ where
         } else if let Some(ident) = trait_path.get_ident() {
             Err(syn::Error::new(
                 ident.span(),
-                format!("expected Default impl expression instead of {}", ident),
+                format!("expected Default impl expression instead of {ident}"),
             ))
         } else {
             Err(syn::Error::new(

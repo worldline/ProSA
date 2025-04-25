@@ -34,7 +34,7 @@ impl DebPkg {
 
     fn get_binary_assets(name: &str) -> toml_edit::Array {
         let mut binary_assets = toml_edit::Array::new();
-        binary_assets.push(format!("target/release/{}", name));
+        binary_assets.push(format!("target/release/{name}"));
         binary_assets.push("usr/bin/");
         binary_assets.push("755");
         binary_assets
@@ -51,7 +51,7 @@ impl DebPkg {
     fn get_readme_assets(name: &str) -> toml_edit::Array {
         let mut readme_assets = toml_edit::Array::new();
         readme_assets.push("README.md");
-        readme_assets.push(format!("usr/share/doc/{}/README", name));
+        readme_assets.push(format!("usr/share/doc/{name}/README"));
         readme_assets.push("644");
         readme_assets
     }
@@ -128,7 +128,7 @@ impl DebPkg {
         // Copy configuration file
         fs::copy(
             self.path.join("config.yml"),
-            pkg_data_path.join(format!("{}.yml", name)),
+            pkg_data_path.join(format!("{name}.yml")),
         )?;
 
         // Write systemd file

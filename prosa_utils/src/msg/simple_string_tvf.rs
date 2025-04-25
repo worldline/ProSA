@@ -216,7 +216,7 @@ impl SimpleStringTvf {
 
         for (k, v) in self.fields.iter() {
             let len = v.len();
-            out_str.push_str(&format!("{};{};{};", k, len, v));
+            out_str.push_str(&format!("{k};{len};{v};"));
         }
 
         out_str
@@ -344,7 +344,7 @@ mod tests {
     fn test_simple_tvf() {
         let mut simple_tvf: SimpleStringTvf = Default::default();
         test_tvf(&mut simple_tvf);
-        assert!(!format!("{:?}", simple_tvf).is_empty());
+        assert!(!format!("{simple_tvf:?}").is_empty());
         let keys = simple_tvf.keys();
         let into_keys = simple_tvf.clone().into_keys();
         assert_eq!(keys, into_keys);

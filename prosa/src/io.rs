@@ -117,8 +117,8 @@ impl fmt::Display for SocketAddr {
                     .unwrap_or(Path::new("undefined"))
                     .display()
             ),
-            SocketAddr::V4(ipv4) => write!(f, "{}", ipv4),
-            SocketAddr::V6(ipv6) => write!(f, "{}", ipv6),
+            SocketAddr::V4(ipv4) => write!(f, "{ipv4}"),
+            SocketAddr::V6(ipv6) => write!(f, "{ipv6}"),
         }
     }
 }
@@ -161,15 +161,12 @@ mod tests {
         let listener = StreamListener::Unix(tokio::net::UnixListener::bind(addr).unwrap());
         assert!(listener.as_raw_fd() > 0);
         assert!(
-            format!("{:?}", listener).contains("UnixListener"),
-            "listener `{:?}` don't contain UnixListener",
-            listener
+            format!("{listener:?}").contains("UnixListener"),
+            "listener `{listener:?}` don't contain UnixListener"
         );
         assert!(
-            format!("{:?}", listener).contains(addr),
-            "listener `{:?}` don't contain {}",
-            listener,
-            addr
+            format!("{listener:?}").contains(addr),
+            "listener `{listener:?}` don't contain {addr}"
         );
         assert_eq!(
             "unix:///tmp/prosa_unix_client_server_test.sock",
@@ -191,15 +188,12 @@ mod tests {
             let mut stream = Stream::connect_unix(addr).await.unwrap();
             assert!(stream.as_raw_fd() > 0);
             assert!(
-                format!("{:?}", stream).contains("UnixStream"),
-                "stream `{:?}` don't contain UnixStream",
-                stream
+                format!("{stream:?}").contains("UnixStream"),
+                "stream `{stream:?}` don't contain UnixStream"
             );
             assert!(
-                format!("{:?}", stream).contains(addr),
-                "stream `{:?}` don't contain {}",
-                stream,
-                addr
+                format!("{stream:?}").contains(addr),
+                "stream `{stream:?}` don't contain {addr}"
             );
 
             stream.write_all(b"ProSA").await.unwrap();
@@ -221,14 +215,12 @@ mod tests {
         let listener = StreamListener::bind(addr).await.unwrap();
         assert!(listener.as_raw_fd() > 0);
         assert!(
-            format!("{:?}", listener).contains("Tcp"),
-            "listener `{:?}` don't contain Tcp",
-            listener
+            format!("{listener:?}").contains("Tcp"),
+            "listener `{listener:?}` don't contain Tcp"
         );
         assert!(
-            format!("{:?}", listener).contains("TcpListener"),
-            "listener `{:?}` don't contain TcpListener",
-            listener
+            format!("{listener:?}").contains("TcpListener"),
+            "listener `{listener:?}` don't contain TcpListener"
         );
         assert!(listener.to_string().starts_with("tcp://"));
 
@@ -250,14 +242,12 @@ mod tests {
             let mut stream = Stream::connect_tcp(addr).await.unwrap();
             assert!(stream.as_raw_fd() > 0);
             assert!(
-                format!("{:?}", stream).contains("Tcp"),
-                "stream `{:?}` don't contain Tcp",
-                stream
+                format!("{stream:?}").contains("Tcp"),
+                "stream `{stream:?}` don't contain Tcp"
             );
             assert!(
-                format!("{:?}", stream).contains("TcpStream"),
-                "stream `{:?}` don't contain TcpStream",
-                stream
+                format!("{stream:?}").contains("TcpStream"),
+                "stream `{stream:?}` don't contain TcpStream"
             );
             assert!(stream.to_string().starts_with("tcp://"));
 
@@ -276,7 +266,7 @@ mod tests {
     #[tokio::test]
     async fn ssl_client_server() {
         let addr = "localhost:41443";
-        let addr_url = Url::parse(format!("tls://{}", addr).as_str()).unwrap();
+        let addr_url = Url::parse(format!("tls://{addr}").as_str()).unwrap();
 
         let ssl_config = SslConfig::default();
         let ssl_acceptor = ssl_config
@@ -289,14 +279,12 @@ mod tests {
             .ssl_acceptor(ssl_acceptor, Some(ssl_config.get_ssl_timeout()));
         assert!(listener.as_raw_fd() > 0);
         assert!(
-            format!("{:?}", listener).contains("Ssl"),
-            "listener `{:?}` don't contain Ssl",
-            listener
+            format!("{listener:?}").contains("Ssl"),
+            "listener `{listener:?}` don't contain Ssl"
         );
         assert!(
-            format!("{:?}", listener).contains("TcpListener"),
-            "listener `{:?}` don't contain TcpListener",
-            listener
+            format!("{listener:?}").contains("TcpListener"),
+            "listener `{listener:?}` don't contain TcpListener"
         );
         assert!(listener.to_string().starts_with("ssl://"));
 
@@ -320,9 +308,8 @@ mod tests {
                 .unwrap();
             assert!(stream.as_raw_fd() > 0);
             assert!(
-                format!("{:?}", stream).contains("Ssl"),
-                "stream `{:?}` don't contain Ssl",
-                stream
+                format!("{stream:?}").contains("Ssl"),
+                "stream `{stream:?}` don't contain Ssl"
             );
             assert!(stream.to_string().starts_with("ssl://"));
 
@@ -341,7 +328,7 @@ mod tests {
     #[tokio::test]
     async fn ssl_client_server_raw() {
         let addr = "localhost:41453";
-        let addr_url = Url::parse(format!("tls://{}", addr).as_str()).unwrap();
+        let addr_url = Url::parse(format!("tls://{addr}").as_str()).unwrap();
 
         let ssl_config = SslConfig::default();
         let ssl_acceptor = ssl_config
@@ -354,14 +341,12 @@ mod tests {
             .ssl_acceptor(ssl_acceptor, Some(ssl_config.get_ssl_timeout()));
         assert!(listener.as_raw_fd() > 0);
         assert!(
-            format!("{:?}", listener).contains("Ssl"),
-            "listener `{:?}` don't contain Ssl",
-            listener
+            format!("{listener:?}").contains("Ssl"),
+            "listener `{listener:?}` don't contain Ssl"
         );
         assert!(
-            format!("{:?}", listener).contains("TcpListener"),
-            "listener `{:?}` don't contain TcpListener",
-            listener
+            format!("{listener:?}").contains("TcpListener"),
+            "listener `{listener:?}` don't contain TcpListener"
         );
         assert!(listener.to_string().starts_with("ssl://"));
 
@@ -386,9 +371,8 @@ mod tests {
                 .unwrap();
             assert!(stream.as_raw_fd() > 0);
             assert!(
-                format!("{:?}", stream).contains("Ssl"),
-                "stream `{:?}` don't contain Ssl",
-                stream
+                format!("{stream:?}").contains("Ssl"),
+                "stream `{stream:?}` don't contain Ssl"
             );
             assert!(stream.to_string().starts_with("ssl://"));
 
@@ -415,18 +399,14 @@ mod tests {
 
         let listener_settings = ListenerSetting::new(addr.clone(), Some(server_ssl_config));
         assert!(
-            format!("{:?}", listener_settings).contains("tls")
-                && format!("{:?}", listener_settings).contains("localhost")
-                && format!("{:?}", listener_settings).contains("41463"),
-            "`{:?}` Not contain the address {}",
-            listener_settings,
-            addr_str
+            format!("{listener_settings:?}").contains("tls")
+                && format!("{listener_settings:?}").contains("localhost")
+                && format!("{listener_settings:?}").contains("41463"),
+            "`{listener_settings:?}` Not contain the address {addr_str}"
         );
         assert!(
             listener_settings.to_string().starts_with(addr_str),
-            "`{}` Not start with the address {}",
-            listener_settings,
-            addr_str
+            "`{listener_settings}` Not start with the address {addr_str}"
         );
         assert!(listener_settings.to_string().starts_with(addr_str));
 
@@ -443,14 +423,12 @@ mod tests {
         }
         assert!(listener.as_raw_fd() > 0);
         assert!(
-            format!("{:?}", listener).contains("Ssl"),
-            "listener `{:?}` don't contain Ssl",
-            listener
+            format!("{listener:?}").contains("Ssl"),
+            "listener `{listener:?}` don't contain Ssl"
         );
         assert!(
-            format!("{:?}", listener).contains("TcpListener"),
-            "listener `{:?}` don't contain TcpListener",
-            listener
+            format!("{listener:?}").contains("TcpListener"),
+            "listener `{listener:?}` don't contain TcpListener"
         );
 
         let server = async move {
@@ -478,9 +456,8 @@ mod tests {
             let mut stream = target_settings.connect().await.unwrap();
             assert!(stream.as_raw_fd() > 0);
             assert!(
-                format!("{:?}", stream).contains("Ssl"),
-                "stream `{:?}` don't contain Ssl",
-                stream
+                format!("{stream:?}").contains("Ssl"),
+                "stream `{stream:?}` don't contain Ssl"
             );
             if let Stream::Ssl(s) = &stream {
                 assert_eq!(

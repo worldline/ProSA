@@ -211,7 +211,7 @@ impl StreamListener {
                     })?
                 {
                     if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                        return Err(io::Error::other(format!("Can't accept the client: {}", e)));
+                        return Err(io::Error::other(format!("Can't accept the client: {e}")));
                     }
                 }
 
@@ -277,10 +277,7 @@ impl StreamListener {
                         })?
                     {
                         if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                            return Err(io::Error::other(format!(
-                                "Can't accept the client: {}",
-                                e
-                            )));
+                            return Err(io::Error::other(format!("Can't accept the client: {e}")));
                         }
                     }
 
@@ -326,9 +323,9 @@ impl fmt::Display for StreamListener {
             )));
         match self {
             #[cfg(target_family = "unix")]
-            StreamListener::Unix(_) => write!(f, "unix://{}", addr),
-            StreamListener::Tcp(_) => write!(f, "tcp://{}", addr),
-            StreamListener::Ssl(_, _, _) => write!(f, "ssl://{}", addr),
+            StreamListener::Unix(_) => write!(f, "unix://{addr}"),
+            StreamListener::Tcp(_) => write!(f, "tcp://{addr}"),
+            StreamListener::Ssl(_, _, _) => write!(f, "ssl://{addr}"),
         }
     }
 }
@@ -491,7 +488,7 @@ impl fmt::Display for ListenerSetting {
                 && !url_scheme.ends_with("https")
                 && !url_scheme.ends_with("wss")
             {
-                let _ = url.set_scheme(format!("{}+ssl", url_scheme).as_str());
+                let _ = url.set_scheme(format!("{url_scheme}+ssl").as_str());
             }
         }
 

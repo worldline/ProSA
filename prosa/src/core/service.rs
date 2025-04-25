@@ -129,7 +129,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (name, services) in self.table.iter() {
-            writeln!(f, "Service name: {}", name)?;
+            writeln!(f, "Service name: {name}")?;
             for service in services {
                 writeln!(f, "\tProcessor ID: {}", service.proc_id)?;
             }
@@ -235,14 +235,14 @@ impl From<TvfError> for ServiceError {
     fn from(err: TvfError) -> Self {
         match err {
             TvfError::FieldNotFound(id) => {
-                ServiceError::ProtocolError(format!("on TVF field {}", id))
+                ServiceError::ProtocolError(format!("on TVF field {id}"))
             }
             TvfError::TypeMismatch => ServiceError::ProtocolError(String::from("on TVF type")),
             TvfError::ConvertionError(str) => {
-                ServiceError::ProtocolError(format!("on TVF convertion {}", str))
+                ServiceError::ProtocolError(format!("on TVF convertion {str}"))
             }
             TvfError::SerializationError(str) => {
-                ServiceError::ProtocolError(format!("on TVF serialization {}", str))
+                ServiceError::ProtocolError(format!("on TVF serialization {str}"))
             }
         }
     }

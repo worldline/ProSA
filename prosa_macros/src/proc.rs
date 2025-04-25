@@ -45,7 +45,7 @@ impl ProcParams {
                     } else {
                         return Err(syn::Error::new(
                             name.span(),
-                            format!("unknown proc args value {}", name),
+                            format!("unknown proc args value {name}"),
                         ));
                     }
                 } else {

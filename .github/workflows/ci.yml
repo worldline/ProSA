@@ -29,8 +29,8 @@ jobs:
         with:
           components: clippy,rustc-dev
       - run: >
-          cargo clippy --color always
-          --verbose --all-targets
+          cargo clippy --color always --verbose
+          --workspace --all-targets
           --all-features --tests
 
   fmt:
@@ -87,5 +87,5 @@ jobs:
           components: llvm-tools, rustc-dev
       - run: >
           cargo test --all-features --release
-          --tests  --verbose --color always
+          --tests --verbose --color always
           --workspace --no-fail-fast
