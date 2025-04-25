@@ -36,14 +36,11 @@ impl RpmPkg {
         let mut binary_assets = toml_edit::InlineTable::new();
         binary_assets.insert(
             "source",
-            toml_edit::Value::String(toml_edit::Formatted::new(format!(
-                "target/release/{}",
-                name
-            ))),
+            toml_edit::Value::String(toml_edit::Formatted::new(format!("target/release/{name}"))),
         );
         binary_assets.insert(
             "dest",
-            toml_edit::Value::String(toml_edit::Formatted::new(format!("/usr/bin/{}", name))),
+            toml_edit::Value::String(toml_edit::Formatted::new(format!("/usr/bin/{name}"))),
         );
         binary_assets.insert(
             "mode",
@@ -85,8 +82,7 @@ impl RpmPkg {
         systemd_assets.insert(
             "dest",
             toml_edit::Value::String(toml_edit::Formatted::new(format!(
-                "/etc/systemd/system/{}.service",
-                name
+                "/etc/systemd/system/{name}.service"
             ))),
         );
         systemd_assets.insert(
@@ -105,8 +101,7 @@ impl RpmPkg {
         readme_assets.insert(
             "dest",
             toml_edit::Value::String(toml_edit::Formatted::new(format!(
-                "/usr/share/doc/{}/README",
-                name
+                "/usr/share/doc/{name}/README"
             ))),
         );
         readme_assets.insert(
@@ -150,7 +145,7 @@ impl RpmPkg {
         // Copy configuration file
         fs::copy(
             self.path.join("config.yml"),
-            pkg_data_path.join(format!("{}.yml", name)),
+            pkg_data_path.join(format!("{name}.yml")),
         )?;
 
         // Write systemd file
