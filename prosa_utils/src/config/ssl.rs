@@ -196,7 +196,7 @@ impl fmt::Display for Store {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let certs = self.get_certs().unwrap_or_default();
         if let Self::File { path } = &self {
-            writeln!(f, "Store cert path [{}]:", path)?;
+            writeln!(f, "Store cert path [{path}]:")?;
         }
         for (name, cert) in certs {
             if f.alternate() {
