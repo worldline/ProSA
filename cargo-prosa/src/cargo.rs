@@ -399,6 +399,7 @@ impl PackageMetadata {
 
         if let Some(metadata) = &self.metadata {
             ctx.insert("deb_pkg", &metadata.contains_key("deb"));
+            ctx.insert("rpm_pkg", &metadata.contains_key("generate-rpm"));
         }
     }
 }
