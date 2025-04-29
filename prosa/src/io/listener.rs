@@ -403,7 +403,7 @@ impl ListenerSetting {
             max_socket: Self::default_max_socket(),
         };
 
-        target.init_ssl_context(url.domain());
+        target.init_ssl_context(url.host_str());
         target
     }
 
@@ -433,7 +433,8 @@ impl ListenerSetting {
                 self.ssl.as_ref().map(|c| c.get_ssl_timeout()),
             );
         } else if let Some(ssl_config) = &self.ssl {
-            if let Ok(ssl_acceptor_builder) = ssl_config.init_tls_server_context(self.url.domain())
+            if let Ok(ssl_acceptor_builder) =
+                ssl_config.init_tls_server_context(self.url.host_str())
             {
                 stream_listener = stream_listener.ssl_acceptor(
                     ssl_acceptor_builder.build(),
@@ -442,7 +443,8 @@ impl ListenerSetting {
             }
         } else if url_is_ssl(&self.url) {
             let ssl_config = SslConfig::default();
-            if let Ok(ssl_acceptor_builder) = ssl_config.init_tls_server_context(self.url.domain())
+            if let Ok(ssl_acceptor_builder) =
+                ssl_config.init_tls_server_context(self.url.host_str())
             {
                 stream_listener = stream_listener.ssl_acceptor(
                     ssl_acceptor_builder.build(),

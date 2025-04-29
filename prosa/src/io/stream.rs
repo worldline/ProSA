@@ -194,9 +194,9 @@ impl Stream {
             Self::create_ssl(
                 TcpStream::connect(&*addrs).await?,
                 ssl_context,
-                url.domain().ok_or(io::Error::new(
+                url.host_str().ok_or(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("Can't retrieve domain name from url `{url}`"),
+                    format!("Can't retrieve host from url `{url}` for ssl"),
                 ))?,
             )
             .await?,
