@@ -1,18 +1,20 @@
 use super::{Dictionary, Entry, LabeledTvf};
-use crate::msg::{serialize::SerialTvf, tvf::Tvf, value::TvfValue};
+use crate::msg::{tvf::Tvf, value::TvfValue};
 use serde::{
     Serialize,
     ser::{SerializeMap, SerializeSeq},
 };
-use std::borrow::Borrow;
 
 /// Bind a field definition with a TVF sub buffer to proceed with serialization
-struct SerializeDef<'d, 't, P, T> {
+struct SerializeDef<'def, 't, P, T>
+where
+    T: Tvf + Clone,
+{
     /// The definition to use
-    definition: &'d Entry<P>,
+    definition: &'def Entry<P>,
 
     /// The message to serialize
-    message: &'t T,
+    value: TvfValue<'t, T>,
 }
 
 impl<P, T> Serialize for LabeledTvf<'_, '_, P, T>
@@ -36,37 +38,41 @@ where
     where
         S: serde::Serializer,
     {
-        match self.definition {
-            Entry::Leaf(_) => SerialTvf(self.message).serialize(serializer),
-            Entry::SubDict(dict) => serialize_message(dict, self.message, serializer),
-            Entry::Repeatable(sub_def) => {
-                let mut seq = serializer.serialize_seq(Some(self.message.len()))?;
+        if let TvfValue::Buffer(buffer) = &self.value {
+            match self.definition {
+                Entry::Node(dict) => serialize_message(dict, buffer.as_ref(), serializer),
+                Entry::List(sub_def) => {
+                    let mut seq = serializer.serialize_seq(Some(buffer.len()))?;
 
-                // iterate the message in the order of the ids
-                let ids = {
-                    let mut ids = self.message.keys();
-                    ids.sort();
-                    ids
-                };
-                for id in ids {
-                    let value = self.message.get(id).map_err(|err| {
-                        serde::ser::Error::custom(format!(
-                            "Error while serializing field {}: {}",
-                            id, err
-                        ))
-                    })?;
-                    // if the field is a sub-message, we may serialize it with a corresponding sub-dictionary
-                    if let TvfValue::Buffer(sub_message) = value {
-                        seq.serialize_element(&SerializeDef {
-                            definition: sub_def,
-                            message: <T as Borrow<T>>::borrow(&sub_message),
+                    // iterate the message in the order of the ids
+                    let ids = {
+                        let mut ids = buffer.keys();
+                        ids.sort();
+                        ids
+                    };
+                    for id in ids {
+                        let value = buffer.get(id).map_err(|err| {
+                            serde::ser::Error::custom(format!(
+                                "Error while serializing field {}: {}",
+                                id, err
+                            ))
                         })?;
-                    } else {
-                        seq.serialize_element(&value)?;
+                        // if the field is a sub-message, we may serialize it with a corresponding sub-dictionary
+                        if let TvfValue::Buffer(_) = value {
+                            seq.serialize_element(&SerializeDef {
+                                definition: sub_def,
+                                value,
+                            })?;
+                        } else {
+                            seq.serialize_element(&value)?;
+                        }
                     }
+                    seq.end()
                 }
-                seq.end()
+                _ => self.value.serialize(serializer),
             }
+        } else {
+            self.value.serialize(serializer)
         }
     }
 }
@@ -98,13 +104,13 @@ where
 
         if let Some((label, def)) = dictionary.id_to_label.get(&id) {
             // a label has been found for the given field id
-            if let TvfValue::Buffer(sub_message) = value {
+            if let TvfValue::Buffer(_) = value {
                 // if the field is a sub-message, we may serialize it with a corresponding sub-dictionary
                 map.serialize_entry(
                     label.as_ref(),
                     &SerializeDef {
                         definition: def.as_ref(),
-                        message: sub_message.as_ref(),
+                        value: value.clone(),
                     },
                 )?;
             } else {
@@ -121,23 +127,33 @@ where
 #[cfg(test)]
 mod tests {
     use super::{Dictionary, LabeledTvf};
-    use crate::msg::simple_string_tvf::SimpleStringTvf;
+    use crate::{dict::Entry, msg::simple_string_tvf::SimpleStringTvf};
     use prosa_macros::tvf;
-    use std::{borrow::Cow, sync::OnceLock};
+    use std::{
+        borrow::Cow,
+        sync::{Arc, OnceLock},
+    };
     extern crate self as prosa_utils;
 
     fn create_dictionnary() -> &'static Dictionary<()> {
         static DICT: OnceLock<Dictionary<()>> = OnceLock::new();
         DICT.get_or_init(|| {
+            let leaf = Entry::Leaf(());
+
             let mut sub_dict = Dictionary::default();
-            sub_dict.add_entry(10, "first", ());
-            sub_dict.add_entry(20, "second", ());
-            sub_dict.add_entry(30, "third", ());
+            sub_dict.add_entry(10, "first", leaf.clone());
+            sub_dict.add_entry(20, "second", leaf.clone());
+            sub_dict.add_entry(30, "third", leaf.clone());
+            let sub_dict = Arc::new(sub_dict);
 
             let mut dict = Dictionary::default();
-            dict.add_entry(2, "label2", ());
-            dict.add_sub_dictionary(4, "label4", sub_dict.clone());
-            dict.add_repeatable_sub_dictionary(5, "label5", sub_dict.clone());
+            dict.add_entry(2, "label2", leaf.clone());
+            dict.add_entry(4, "label4", Entry::new_dictionary(sub_dict.clone()));
+            dict.add_entry(
+                5,
+                "label5",
+                Entry::new_repeatable_dictionary(sub_dict.clone()),
+            );
 
             dict
         })
@@ -177,6 +193,7 @@ mod tests {
         let labeled = LabeledTvf::new(Cow::Borrowed(dict), Cow::Borrowed(&message));
 
         let serialized = serde_json::to_value(&labeled).unwrap();
+
         assert_eq!(
             serde_json::json!({
                 "label2": 7,

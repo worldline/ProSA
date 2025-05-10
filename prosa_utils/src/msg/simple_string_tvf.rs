@@ -7,7 +7,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use std::{borrow::Cow, collections::hash_map::HashMap};
 
 /// Struct that define a simple string TVF
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SimpleStringTvf {
     fields: HashMap<usize, String>,
 }

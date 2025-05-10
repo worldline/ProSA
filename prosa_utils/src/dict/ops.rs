@@ -2,50 +2,7 @@
 
 use super::{Dictionary, Entry};
 use crate::msg::tvf::TvfError;
-use std::{fmt, sync::Arc};
-
-impl<P> Dictionary<P> {
-    /// Add a new entry to the dictionary
-    #[inline]
-    pub fn add_entry(&mut self, id: usize, label: &str, payload: P) {
-        self.add_definition(id, label, Entry::Leaf(Arc::new(payload)))
-    }
-
-    /// Add a new sub-dictionary to the dictionary
-    #[inline]
-    pub fn add_sub_dictionary(&mut self, id: usize, label: &str, sub_dictionary: Self) {
-        self.add_definition(id, label, Entry::SubDict(sub_dictionary))
-    }
-
-    /// Add a new repeatable field to the dictionary
-    #[inline]
-    pub fn add_repeatable_entry(&mut self, id: usize, label: &str, payload: P) {
-        self.add_definition(
-            id,
-            label,
-            Entry::Repeatable(Box::new(Entry::Leaf(Arc::new(payload)))),
-        )
-    }
-
-    /// Add a new repeatable sub-dictionary to the dictionary
-    #[inline]
-    pub fn add_repeatable_sub_dictionary(&mut self, id: usize, label: &str, sub_dictionary: Self) {
-        self.add_definition(
-            id,
-            label,
-            Entry::Repeatable(Box::new(Entry::SubDict(sub_dictionary))),
-        )
-    }
-
-    /// Add a new field definition to the dictionary
-    #[inline]
-    fn add_definition(&mut self, id: usize, label: &str, definition: Entry<P>) {
-        let label: Arc<str> = label.into();
-        let def = Arc::new(definition);
-        self.id_to_label.insert(id, (label.clone(), def.clone()));
-        self.label_to_id.insert(label, (id, def));
-    }
-}
+use std::fmt;
 
 /// Error that can be encountered when resolving a path
 #[derive(Debug, thiserror::Error)]
@@ -129,7 +86,7 @@ impl<P> Entry<P> {
     fn aggregate_path(&self, path: &[&str], output: &mut Vec<usize>) -> Result<(), PathError> {
         match self {
             Entry::Leaf(_) => aggregate_path_of_numbers(path, output),
-            Entry::SubDict(sub_dict) => {
+            Entry::Node(sub_dict) => {
                 if let Some(&label) = path.first() {
                     if let Some((id, node)) = sub_dict.label_to_id.get(label) {
                         output.push(*id);
@@ -148,7 +105,7 @@ impl<P> Entry<P> {
                     Err(PathError::EndOfPath)
                 }
             }
-            Entry::Repeatable(sub_def) => {
+            Entry::List(sub_def) => {
                 if let Some(&number) = path.first() {
                     if let Ok(id) = number.parse::<usize>() {
                         output.push(id);
