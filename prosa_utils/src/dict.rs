@@ -3,8 +3,8 @@ pub mod ops;
 #[cfg(all(feature = "dict", feature = "serde"))]
 pub mod serialize;
 
-//#[cfg(all(feature = "dict", feature = "serde"))]
-//pub mod deserialize;
+#[cfg(all(feature = "dict", feature = "serde"))]
+pub mod deserialize;
 
 use crate::msg::{tvf::Tvf, value::TvfValue};
 use ops::PathError;
@@ -19,24 +19,24 @@ pub struct Dictionary<P> {
 
 /// Definition associated with a field
 #[derive(Clone)]
-enum Entry<P> {
+pub enum Entry<P> {
     /// Field is a leaf of the dictionary
-    Leaf(Arc<P>),
+    Leaf(P),
 
     /// Field contains a sub buffer with the corresponding dictionary
-    SubDict(Dictionary<P>),
+    Node(Arc<Dictionary<P>>),
 
     /// Field contains a list of sub fields matching with the definition rule
-    Repeatable(Box<Entry<P>>),
+    List(Box<Entry<P>>),
 }
 
 /// Provide labels to a message
-pub struct LabeledTvf<'d, 't, P, T>
+pub struct LabeledTvf<'dict, 't, P, T>
 where
     P: Clone,
     T: Clone,
 {
-    dictionary: Cow<'d, Dictionary<P>>,
+    dictionary: Cow<'dict, Dictionary<P>>,
     message: Cow<'t, T>,
 }
 
@@ -70,15 +70,49 @@ impl<P> Dictionary<P> {
     pub fn get_id(&self, label: &str) -> Option<usize> {
         self.label_to_id.get(label).map(|(id, _)| *id)
     }
+
+    /// Add a new field definition to the dictionary
+    pub fn add_entry(&mut self, id: usize, label: &str, entry: Entry<P>) {
+        let label: Arc<str> = label.into();
+        let def = Arc::new(entry);
+        self.id_to_label.insert(id, (label.clone(), def.clone()));
+        self.label_to_id.insert(label, (id, def));
+    }
 }
 
-impl<'d, 't, P, T> LabeledTvf<'d, 't, P, T>
+impl<P> Entry<P> {
+    /// Create a new entry
+    #[inline]
+    pub fn new(payload: P) -> Self {
+        Self::Leaf(payload)
+    }
+
+    /// Create a new sub dictionary
+    #[inline]
+    pub fn new_dictionary(dictionary: Arc<Dictionary<P>>) -> Self {
+        Self::Node(dictionary)
+    }
+
+    /// Create a new repeatable entry
+    #[inline]
+    pub fn new_repeatable(payload: P) -> Self {
+        Self::List(Box::new(Self::Leaf(payload)))
+    }
+
+    /// Create a list of repeatable entries with common dictionary
+    #[inline]
+    pub fn new_repeatable_dictionary(dictionary: Arc<Dictionary<P>>) -> Self {
+        Self::List(Box::new(Self::Node(dictionary)))
+    }
+}
+
+impl<'dict, 't, P, T> LabeledTvf<'dict, 't, P, T>
 where
     P: Clone,
     T: Clone,
 {
     /// Create a new labeled message
-    pub fn new(dictionary: Cow<'d, Dictionary<P>>, message: Cow<'t, T>) -> Self {
+    pub fn new(dictionary: Cow<'dict, Dictionary<P>>, message: Cow<'t, T>) -> Self {
         Self {
             dictionary,
             message,
