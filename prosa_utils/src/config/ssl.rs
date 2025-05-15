@@ -86,7 +86,7 @@ impl Store {
     /// ```
     /// use prosa_utils::config::ssl::Store;
     ///
-    /// let store = Store::new("./target".into());
+    /// let store = Store::File { path: "./target".into() };
     /// let openssl_store: openssl::x509::store::X509Store = store.get_store().unwrap();
     /// ```
     pub fn get_store(&self) -> Result<openssl::x509::store::X509Store, ConfigError> {
@@ -119,7 +119,7 @@ impl Store {
     /// ```
     /// use prosa_utils::config::ssl::Store;
     ///
-    /// let store = Store::new("./target".into());
+    /// let store = Store::File { path: "./target".into() };
     /// let certs_map = store.get_certs().unwrap();
     ///
     /// // No cert in target
@@ -521,7 +521,7 @@ impl SslConfig {
     /// use prosa_utils::config::ssl::{Store, SslConfig};
     ///
     /// let mut client_config = SslConfig::default();
-    /// client_config.set_store(Store::new("./target".into()));
+    /// client_config.set_store(Store::File { path: "./target".into() });
     /// if let Ok(mut ssl_context_builder) = client_config.init_tls_client_context() {
     ///     let ssl_context = ssl_context_builder.build();
     /// }
