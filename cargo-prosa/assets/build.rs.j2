@@ -27,7 +27,7 @@ fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, M
             let proc_metadata = metadata.get(processor.proc_name.as_str()).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
             if let Some(settings) = &proc_metadata.settings {{ '{' }}
                 if let Some(description) = &proc_metadata.description {{ '{' }}
-                    writeln!(f, "    /// {{ '{}' }}", description)?;
+                    writeln!(f, "    /// {{ '{description}' }}")?;
                 {{ '}' }}
 
                 writeln!(f, "    pub {{ '{}: {}' }},", processor.get_name().replace('-', "_"), settings.replace('-', "_"))?;
@@ -49,8 +49,8 @@ fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetada
             for proc in procs {{ '{' }}
                 write!(f, "\n  {{ '{}' }}", proc.get_name())?;
                 if let (Some(proc_version), Some(adaptor_version)) = cargo_metadata.get_versions(proc.proc.as_str(), proc.adaptor.as_str()) {{ '{' }}
-                    write!(f, "\n    Processor: {{ '{}' }}", proc_version)?;
-                    write!(f, "\n    Adaptor  : {{ '{}' }}", adaptor_version)?;
+                    write!(f, "\n    Processor: {{ '{proc_version}' }}")?;
+                    write!(f, "\n    Adaptor  : {{ '{adaptor_version}' }}")?;
                 {{ '}' }}
             {{ '}' }};
         {{ '}' }}
@@ -66,12 +66,12 @@ fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetada
 
     let authors = env!("CARGO_PKG_AUTHORS");
     if !authors.is_empty() {{ '{' }}
-        writeln!(f, "        .author(\"{{ '{}' }}\")", authors)?;
+        writeln!(f, "        .author(\"{{ '{authors}' }}\")")?;
     {{ '}' }}
 
     let description = env!("CARGO_PKG_DESCRIPTION");
     if !description.is_empty() {{ '{' }}
-        writeln!(f, "        .about(\"{{ '{}' }}\")", description)?;
+        writeln!(f, "        .about(\"{{ '{description}' }}\")")?;
     {{ '}' }}
 
     writeln!(f, "        .arg(")?;
@@ -133,7 +133,7 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
     writeln!(f, "{{ '}}' }}")?;
     writeln!(f, "\n/// Number of configured processor")?;
     writeln!(f, "#[allow(dead_code)]")?;
-    writeln!(f, "const NUMBER_OF_PROCESSORS: u32 = {{ '{}' }};", proc_id)?;
+    writeln!(f, "const NUMBER_OF_PROCESSORS: u32 = {{ '{proc_id}' }};")?;
 
     writeln!(f, "\n/// Method to run the current program as an UNIX daemon")?;
     writeln!(f, "pub fn daemonize(matches: &::clap::ArgMatches) {{ '{{' }}")?;
@@ -177,7 +177,7 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
 
     writeln!(f, "    match daemonize.start() {{ '{{' }}")?;
     writeln!(f, "        Ok(_) => println!(\"Success, daemonized\"),")?;
-    writeln!(f, "        Err(e) => eprintln!(\"Error, {{ '{{}}' }}\", e),")?;
+    writeln!(f, "        Err(e) => eprintln!(\"Error, {{ '{{e}}' }}\"),")?;
     writeln!(f, "    {{ '}}' }}")?;
     writeln!(f, "{{ '}}' }}")
 {{ '}' }}
@@ -267,9 +267,9 @@ fn main() {{ '{' }}
 {%- if deb_pkg %}
     let deb_pkg = DebPkg::new(target_path.to_path_buf()).unwrap();
     deb_pkg.write_package_data().unwrap();
-{% endif -%}
+{% endif %}
 {%- if rpm_pkg %}
     let rpm_pkg = RpmPkg::new(target_path.to_path_buf()).unwrap();
     rpm_pkg.write_package_data().unwrap();
-{% endif -%}
+{% endif %}
 {{ '}' }}
