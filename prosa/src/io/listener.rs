@@ -410,10 +410,12 @@ impl ListenerSetting {
     /// Method to init the ssl context out of the ssl target configuration.
     /// Must be call when the configuration is retrieved
     pub fn init_ssl_context(&mut self, domain: Option<&str>) {
-        if let Some(ssl_config) = &self.ssl {
-            if let Ok(ssl_context_builder) = ssl_config.init_tls_server_context(domain) {
-                self.ssl_context = Some(ssl_context_builder.build());
-            }
+        if let Some(ssl_context_builder) = self
+            .ssl
+            .as_ref()
+            .and_then(|c| c.init_tls_server_context(domain).ok())
+        {
+            self.ssl_context = Some(ssl_context_builder.build());
         }
     }
 
