@@ -139,13 +139,11 @@ impl Store {
                                 .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
                             {
                                 certs_map.insert(name, cert);
-                            } else if let Some(cert_path_name) = cert_path.to_str() {
-                                if let Some(cert_name) = cert_path_name
-                                    .strip_suffix(".pem")
-                                    .or(cert_path_name.strip_suffix(".der"))
-                                {
-                                    certs_map.insert(cert_name.into(), cert);
-                                }
+                            } else if let Some(cert_name) = cert_path
+                                .to_str()
+                                .and_then(|p| p.strip_suffix(".pem").or(p.strip_suffix(".der")))
+                            {
+                                certs_map.insert(cert_name.into(), cert);
                             }
                         }
                     }
