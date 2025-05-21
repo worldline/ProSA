@@ -341,17 +341,20 @@ impl PackageMetadata {
                         }
                     }
                 } else if meta_name == ty {
-                    if let Ok(prosa_metadata) = serde_json::from_value::<Vec<String>>(data.clone())
+                    if let Some(component_name) =
+                        serde_json::from_value::<Vec<String>>(data.clone())
+                            .ok()
+                            .and_then(|m| {
+                                m.into_iter().find(|w| {
+                                    format!("{}::{}", self.name.replace('-', "_"), w).contains(name)
+                                })
+                            })
                     {
-                        if let Some(component_name) = prosa_metadata.into_iter().find(|w| {
-                            format!("{}::{}", self.name.replace('-', "_"), w).contains(name)
-                        }) {
-                            return Some(ComponentVersion {
-                                name: component_name,
-                                crate_name: &self.name,
-                                version: &self.version,
-                            });
-                        }
+                        return Some(ComponentVersion {
+                            name: component_name,
+                            crate_name: &self.name,
+                            version: &self.version,
+                        });
                     }
                 }
             }

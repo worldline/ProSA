@@ -133,19 +133,15 @@ pub(crate) fn generate_value(
             match group.delimiter() {
                 Delimiter::Brace => {
                     // if a `as` cast was used, verify that it is valid
-                    if let Some(output_type) = output_type {
-                        if output_type != ValueType::Buffer {
-                            return Err(Error::new_spanned(group, "Invalid type for `{}` value."));
-                        }
+                    if output_type.is_some_and(|t| t != ValueType::Buffer) {
+                        return Err(Error::new_spanned(group, "Invalid type for `{}` value."));
                     }
                     Ok((generate_map(buffer_type, &group)?, ValueType::Buffer))
                 }
                 Delimiter::Bracket => {
                     // if a `as` cast was used, verify that it is valid
-                    if let Some(output_type) = output_type {
-                        if output_type != ValueType::Buffer {
-                            return Err(Error::new_spanned(group, "Invalid type for `[]` value."));
-                        }
+                    if output_type.is_some_and(|t| t != ValueType::Buffer) {
+                        return Err(Error::new_spanned(group, "Invalid type for `[]` value."));
                     }
                     Ok((generate_list(buffer_type, &group)?, ValueType::Buffer))
                 }

@@ -572,16 +572,14 @@ where
                             }
                         },
                         InternalMainMsg::NewService(names, proc_id, queue_id) => {
-                            if let Some(proc) = self.processors.get(&proc_id) {
-                                if let Some(proc_queue) = proc.get(&queue_id) {
-                                    let mut new_services = (*self.services).clone();
-                                    for name in names {
-                                        new_services.add_service(&name, proc_queue.clone());
-                                    }
-                                    self.services = Arc::new(new_services);
-                                    prosa_main_record_services!();
-                                    prosa_main_update_srv!();
+                            if let Some(proc_queue) = self.processors.get(&proc_id).and_then(|p| p.get(&queue_id)) {
+                                let mut new_services = (*self.services).clone();
+                                for name in names {
+                                    new_services.add_service(&name, proc_queue.clone());
                                 }
+                                self.services = Arc::new(new_services);
+                                prosa_main_record_services!();
+                                prosa_main_update_srv!();
                             }
                         },
                         InternalMainMsg::DeleteProcService(names, proc_id) => {
