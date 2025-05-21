@@ -150,73 +150,69 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
         }
 
         // Add optional parameters for deb package build
-        if let (tera::Value::Bool(deb_pkg), tera::Value::Bool(rpm_pkg)) = (
-            context.get("deb_pkg").unwrap_or(&tera::Value::Bool(false)),
-            context.get("rpm_pkg").unwrap_or(&tera::Value::Bool(false)),
-        ) {
-            if *deb_pkg || *rpm_pkg {
-                let cargo_toml = fs::read_to_string(prosa_path.join("Cargo.toml"))?;
-                let mut cargo_doc = cargo_toml
-                    .parse::<DocumentMut>()
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-                if let Some(toml_edit::Item::Table(package_table)) = cargo_doc.get_mut("package") {
-                    if let Some(name) = context.get("name").and_then(|v| v.as_str()) {
-                        if let Some(toml_edit::Item::Table(metadata_table)) =
-                            package_table.get_mut("metadata")
-                        {
-                            if let Some(toml_edit::Item::Table(deb_table)) =
-                                metadata_table.get_mut("deb")
-                            {
-                                DebPkg::add_deb_pkg_metadata(deb_table, name);
-                            } else {
-                                let mut deb_table = toml_edit::Table::new();
-                                DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+        let deb_pkg = context
+            .get("deb_pkg")
+            .is_some_and(|v| v.as_bool().unwrap_or(false));
+        let rpm_pkg = context
+            .get("rpm_pkg")
+            .is_some_and(|v| v.as_bool().unwrap_or(false));
+        if deb_pkg || rpm_pkg {
+            let cargo_toml = fs::read_to_string(prosa_path.join("Cargo.toml"))?;
+            let mut cargo_doc = cargo_toml
+                .parse::<DocumentMut>()
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            if let (Some(toml_edit::Item::Table(package_table)), Some(name)) = (
+                cargo_doc.get_mut("package"),
+                context.get("name").and_then(|v| v.as_str()),
+            ) {
+                if let Some(toml_edit::Item::Table(metadata_table)) =
+                    package_table.get_mut("metadata")
+                {
+                    if let Some(toml_edit::Item::Table(deb_table)) = metadata_table.get_mut("deb") {
+                        DebPkg::add_deb_pkg_metadata(deb_table, name);
+                    } else if deb_pkg {
+                        let mut deb_table = toml_edit::Table::new();
+                        DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
 
-                                metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
-                            }
+                        metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+                    }
 
-                            if let Some(toml_edit::Item::Table(rpm_table)) =
-                                metadata_table.get_mut("generate-rpm")
-                            {
-                                RpmPkg::add_rpm_pkg_metadata(rpm_table, name);
-                            } else {
-                                let mut rpm_table = toml_edit::Table::new();
-                                RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
+                    if let Some(toml_edit::Item::Table(rpm_table)) =
+                        metadata_table.get_mut("generate-rpm")
+                    {
+                        RpmPkg::add_rpm_pkg_metadata(rpm_table, name);
+                    } else if rpm_pkg {
+                        let mut rpm_table = toml_edit::Table::new();
+                        RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
 
-                                metadata_table
-                                    .insert("generate-rpm", toml_edit::Item::Table(rpm_table));
-                            }
-                        } else {
-                            if *deb_pkg {
-                                let mut deb_table = toml_edit::Table::new();
-                                DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+                        metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
+                    }
+                } else {
+                    if deb_pkg {
+                        let mut deb_table = toml_edit::Table::new();
+                        DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
 
-                                let mut metadata_table = toml_edit::Table::new();
-                                metadata_table.set_implicit(true);
-                                metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+                        let mut metadata_table = toml_edit::Table::new();
+                        metadata_table.set_implicit(true);
+                        metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
 
-                                package_table
-                                    .insert("metadata", toml_edit::Item::Table(metadata_table));
-                            }
-                            if *rpm_pkg {
-                                let mut rpm_table = toml_edit::Table::new();
-                                RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
+                        package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
+                    }
+                    if rpm_pkg {
+                        let mut rpm_table = toml_edit::Table::new();
+                        RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
 
-                                let mut metadata_table = toml_edit::Table::new();
-                                metadata_table.set_implicit(true);
-                                metadata_table
-                                    .insert("generate-rpm", toml_edit::Item::Table(rpm_table));
+                        let mut metadata_table = toml_edit::Table::new();
+                        metadata_table.set_implicit(true);
+                        metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
 
-                                package_table
-                                    .insert("metadata", toml_edit::Item::Table(metadata_table));
-                            }
-                        }
+                        package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
                     }
                 }
-
-                let mut cargo_toml_file = fs::File::create(prosa_path.join("Cargo.toml"))?;
-                cargo_toml_file.write_all(cargo_doc.to_string().as_bytes())?;
             }
+
+            let mut cargo_toml_file = fs::File::create(prosa_path.join("Cargo.toml"))?;
+            cargo_toml_file.write_all(cargo_doc.to_string().as_bytes())?;
         }
     }
 

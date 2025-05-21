@@ -50,12 +50,12 @@ async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
         if let Some(config_path) = matches.get_one::<String>("config") {{ '{' }}
             if let Ok(config) = prosa_config(&matches) {{ '{' }}
                 let prosa_settings = config.try_deserialize::<RunSettings>()?;
-                println!("{{ name }} settings: {{ '{:?}' }}", prosa_settings);
+                println!("{{ name }} settings: {{ '{prosa_settings:?}' }}");
             {{ '}' }} else {{ '{' }}
                 // Write default config
                 let default_config = RunSettings::default();
                 default_config.write_config(config_path)?;
-                println!("Write {{ name }} settings {{ '{}' }}: {{ '{:?}' }}", config_path, default_config);
+                println!("Write {{ name }} settings {{ '{config_path}' }}: {{ '{default_config:?}' }}");
             {{ '}' }}
         {{ '}' }}
     {{ '}' }} else {{ '{' }}
