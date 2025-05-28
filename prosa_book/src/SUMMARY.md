@@ -1,0 +1,33 @@
+# Summary
+
+[ProSA - Protocol Service Adaptor](ch00-00-prosa.md)
+[Foreword](ch00-01-foreword.md)
+[Introduction](ch00-02-introduction.md)
+
+- [OPS](ch01-00-ops.md)
+  - [Cargo-ProSA](ch01-01-cargo-prosa.md)
+  - [Configuration](ch01-02-config.md)
+    - [Observability](ch01-02-01-observability.md)
+    - [SSL](ch01-02-02-ssl.md)
+    - [Stream](ch01-02-03-stream.md)
+    - [Run ProSA](ch01-02-04-run.md)
+  - [Puppet](ch01-03-puppet.md)
+  - [Cloud](ch01-04-cloud.md)
+    - [GCP - Cloud Run](ch01-04-01-gcp-cloud_run.md)
+    - [Clever Cloud](ch01-04-02-clever_cloud.md)
+
+- [Adaptor](ch02-00-adaptor.md)
+  - [TVF](ch02-01-tvf.md)
+  - [Creation](ch02-02-creation.md)
+  - [Declaration](ch02-03-declaration.md)
+  - [Observability](ch02-04-observability.md)
+
+- [Processor](ch03-00-proc.md)
+  - [Settings](ch03-01-settings.md)
+  - [Creation](ch03-02-creation.md)
+  - [Declaration](ch03-03-declaration.md)
+  - [Error](ch03-04-error.md)
+  - [Service](ch03-05-service.md)
+  - [Events](ch03-06-events.md)
+  - [I/O](ch03-07-io.md)
+  - [Threads](ch03-08-threads.md)

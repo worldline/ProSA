@@ -5,3 +5,8 @@
 .idea
 .vscode
 .DS_Store
+
+# For book
+prosa_book/book
+prosa_book/src/ch01-03-puppet.md
+*.html
