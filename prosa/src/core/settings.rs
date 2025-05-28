@@ -133,14 +133,13 @@ pub fn get_config_builder(path: &str) -> io::Result<ConfigBuilder<DefaultState>>
     } else if path_attr.is_dir() {
         for entry in fs::read_dir(path)? {
             let path_subdir = entry?.path();
-            if path_subdir.is_file() {
-                if path_subdir
+            if path_subdir.is_file()
+                && path_subdir
                     .extension()
                     .and_then(OsStr::to_str)
                     .is_some_and(|ext| matches!(ext, "yml" | "yaml" | "toml"))
-                {
-                    builder = builder.add_source(config::File::from(path_subdir));
-                }
+            {
+                builder = builder.add_source(config::File::from(path_subdir));
             }
         }
 
