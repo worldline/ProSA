@@ -1,0 +1,15 @@
+[book]
+authors = ["Jeremy HERGAULT <jeremy.hergault@worldline.com>", "Anthony THOMAS <anthony.thomas@worldline.com>", "Olivier SCHYNS <olivier.schyns@worldline.com>", "Rene-Louis EYMARD <rene-louis.eymard@worldline.com>"]
+language = "en"
+multilingual = false
+src = "src"
+title = "ProSA - Protocol Service Adaptor"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+additional-css = ["src/worldline.css"]
+git-repository-url = "https://github.com/worldline/prosa"
+git-repository-icon = "fa-github"
+additional-js = ["mermaid.min.js", "mermaid-init.js"]

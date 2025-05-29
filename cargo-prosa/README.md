@@ -3,19 +3,27 @@
 ProSA is a framework that handles processors organized around a service bus.
 As such, ProSA needs to be built from internal or external Processors/Adaptor/Main.
 
-_cargo-prosa_ is a utility to package and deliver a builded ProSA.
+[cargo-prosa](https://github.com/worldline/ProSA/tree/main/cargo-prosa) is a utility to package and deliver a builded ProSA.
 This builder is packaged within cargo as a custom command to be well integrated with the Rust ecosystem.
 
 ## Install
 
-To use it, you need to install it within Cargo.
+As you can tell by its name, cargo-prosa, is tool embeded in [Cargo](https://doc.rust-lang.org/book/ch14-05-extending-cargo.html).
+
+Therefore, you can install it via the Cargo command:
 ```bash
 cargo install cargo-prosa
 ```
 
+You should have the command installed with its bounch of functions:
+```bash
+cargo prosa --help
+```
+
 ## Use
 
-Create your own ProSA (work like cargo):
+Let's create a ProSA. You'll see cargo-prosa commands are quite similar to cargo regarding project management.
+
 ```bash
 cargo prosa new my-prosa
 # or from an existing folder, init it
@@ -25,6 +33,16 @@ cargo prosa init
 _cargo-prosa_ is meant to evolve in the future.
 So maybe new things will be introduced.
 To update your model, you can update the generated file with `cargo prosa update`.
+
+At this point you'll want to add componennts to your ProSA.
+To do so, you need to [add](https://doc.rust-lang.org/cargo/commands/cargo-add.html) crates that declare them into your `Cargo.toml`.
+
+Once it's done, you can list all component avaible to build your ProSA with `cargo prosa list`.
+This will list all available component:
+- Main - Main task (`core::main::MainProc` by default).
+- TVF - Internal message format to use inside your ProSA (`msg::simple_string_tvf::SimpleStringTvf` by default).
+- Processor/Settings - Processor and its associate settings.
+- Adaptor - Adaptor related to the processor you want.
 
 If you have different main/tvf, select them:
 ```bash

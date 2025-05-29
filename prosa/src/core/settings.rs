@@ -21,11 +21,11 @@ pub use prosa_macros::settings;
 ///
 /// ```
 /// use prosa::core::settings::{settings, Settings};
-/// use serde::Serialize;
+/// use serde::{Deserialize, Serialize};
 ///
 /// // My ProSA setting structure
 /// #[settings]
-/// #[derive(Debug, Serialize)]
+/// #[derive(Debug, Deserialize, Serialize)]
 /// struct MySettings {
 ///     test_val: String
 /// }
@@ -49,7 +49,7 @@ pub use prosa_macros::settings;
 /// use prosa_utils::config::observability::Observability;
 /// use serde::Serialize;
 ///
-/// #[derive(Debug, Serialize)]
+/// #[derive(Debug, Deserialize, Serialize)]
 /// struct MySameSettings {
 ///     test_val: String,
 ///     name: Option<String>,

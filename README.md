@@ -5,6 +5,7 @@ ProSA is a merge of multiple [Worldline](https://worldline.com/) internal produc
 The library aimed at providing a simple and lightweight protocol service adaptor for service oriented architectures.
 The goal of this project is to provide a flexible and scalable platform for developing and deploying microservices, allowing developers to focus on writing business logic while ProSA takes care of the underlying infrastructure concers.
 
+A [ProSA mdBook](https://worldline.github.io/prosa) is available if you want to learn everything about ProSA.
 
 ## Legend
 
@@ -83,8 +84,14 @@ To build one, please refer to [cargo-prosa](./cargo-prosa/README.md).
 
 ## Processor list
 
-// Coming opensource ProSA processor list
+### Worldline
 
+- [Hyper](https://github.com/worldline/ProSA-Hyper): HTTP processor
+
+### Third parties
+
+- [Fetcher](https://github.com/reneca/ProSA-Fetcher): Fetch information from remote systems
+- [Ollama](https://github.com/reneca/ProSA-Ollama): Ollama processor
 
 ## Authors
 

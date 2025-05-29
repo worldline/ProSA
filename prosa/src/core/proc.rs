@@ -8,7 +8,7 @@
 //! To create a ProSA processor:
 //! ```
 //! use std::error::Error;
-//! use serde::Serialize;
+//! use serde::{Deserialize, Serialize};
 //! use prosa_utils::msg::tvf::Tvf;
 //! use prosa::core::proc::{proc_settings, proc, Proc, ProcBusParam};
 //! use prosa::core::adaptor::Adaptor;
@@ -29,8 +29,6 @@
 //!     /// Method called when the processor spawns
 //!     /// This method is called only once so the processing will be thread safe
 //!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> where Self: Sized;
-//!     /// Method to process incomming requests
-//!     fn process_request(&self, service_name: &str, request: &M) -> M;
 //! }
 //!
 //! #[derive(Adaptor)]
@@ -53,15 +51,10 @@
 //!         // Init your adaptor from processor parameters
 //!         Ok(Self {})
 //!     }
-//!
-//!     fn process_request(&self, service_name: &str, request: &M) -> M {
-//!         // Do your processing
-//!         request.clone()
-//!     }
 //! }
 //!
 //! #[proc_settings]
-//! #[derive(Default, Debug, Serialize)]
+//! #[derive(Default, Debug, Deserialize, Serialize)]
 //! pub struct MyProcSettings {
 //!     param: String,
 //!     // ...
@@ -102,35 +95,27 @@
 //!     A: Adaptor + MyAdaptorTrait<M> + std::marker::Send + std::marker::Sync,
 //! {
 //!     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
-//!         // Initiate an adaptor for the stub processor
+//!         // Initiate an adaptor
 //!         let mut adaptor = A::new(self)?;
 //!
 //!         // Declare the processor
 //!         self.proc.add_proc().await?;
 //!
-//!         // Add all service to listen
-//!         self.proc
-//!             .add_service_proc(vec![String::from("DUMMY")])
-//!             .await?;
+//!         // Retrieve param from the processor settings `MyProcSettings`
+//!         let _param = self.proc.settings.param;
 //!
 //!         loop {
 //!             if let Some(msg) = self.internal_rx_queue.recv().await {
 //!                 match msg {
 //!                     InternalMsg::Request(msg) => {
-//!                         // Send the request to your adaptor and get a TVF object in return to respond to the sender
-//!                         let tvf = adaptor.process_request(msg.get_service(), msg.get_data());
-//!                         msg.return_to_sender(tvf).await.unwrap()
+//!                         // TODO process the request
 //!                     }
-//!                     InternalMsg::Response(msg) => panic!(
-//!                         "The stub processor {} receive a response {:?}",
-//!                         self.get_proc_id(),
-//!                         msg
-//!                     ),
-//!                     InternalMsg::Error(err) => panic!(
-//!                         "The stub processor {} receive an error {:?}",
-//!                         self.get_proc_id(),
-//!                         err
-//!                     ),
+//!                     InternalMsg::Response(msg) => {
+//!                        // TODO process the response
+//!                     },
+//!                     InternalMsg::Error(err) => {
+//!                        // TODO process the error
+//!                     },
 //!                     InternalMsg::Command(_) => todo!(),
 //!                     InternalMsg::Config => todo!(),
 //!                     InternalMsg::Service(table) => self.service = table,
