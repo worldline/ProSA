@@ -81,24 +81,23 @@ fn generate_struct_impl(
 ) -> syn::parse::Result<proc_macro2::TokenStream> {
     let item_ident = &item_struct.ident;
     let item_generics = &item_struct.generics;
-    let item_other_fields = if let syn::Fields::Named(syn::FieldsNamed { named, .. }) =
-        &item_struct.fields
-    {
-        let token_other_fields = named.iter().filter_map(|f| {
-            if let Some(ident) = &f.ident {
-                if ident != "stream" && ident != "addr" && ident != "buffer" && ident != "socket_id"
-                {
-                    return Some(quote! { #ident: std::default::Default::default() });
-                }
-            }
+    let item_other_fields =
+        if let syn::Fields::Named(syn::FieldsNamed { named, .. }) = &item_struct.fields {
+            let token_other_fields =
+                named.iter().filter_map(|f| {
+                    if let Some(ident) = f.ident.as_ref().filter(|&i| {
+                        i != "stream" && i != "addr" && i != "buffer" && i != "socket_id"
+                    }) {
+                        return Some(quote! { #ident: std::default::Default::default() });
+                    }
 
-            None
-        });
+                    None
+                });
 
-        quote! { #(#token_other_fields,)* }
-    } else {
-        proc_macro2::TokenStream::new()
-    };
+            quote! { #(#token_other_fields,)* }
+        } else {
+            proc_macro2::TokenStream::new()
+        };
 
     Ok(quote! {
         impl #item_generics std::convert::From<IO> for #item_ident #item_generics
