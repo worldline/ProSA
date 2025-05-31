@@ -53,7 +53,7 @@ where
             Self::Unsigned(value) => serializer.serialize_u64(*value),
             Self::Signed(value) => serializer.serialize_i64(*value),
             Self::Float(value) => serializer.serialize_f64(*value),
-            Self::String(string) => serializer.serialize_str(string.as_ref()),
+            Self::String(string) => serializer.serialize_str(string.as_ref().as_str()),
             Self::Bytes(bytes) => serializer.serialize_bytes(bytes.as_ref()),
             Self::Date(date) => date.serialize(serializer),
             Self::DateTime(datetime) => datetime.serialize(serializer),

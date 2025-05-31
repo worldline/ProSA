@@ -14,23 +14,23 @@ use std::{
 
 /// Bind a dictionary to this deserializer to convert a serde compatible payload
 /// into a TVF buffer.
-pub struct DictDeserializer<P, T>
+pub struct DictDeserializer<'dict, P, T>
 where
     P: Clone,
 {
     /// The dictionary to use
-    dictionary: Arc<Dictionary<P>>,
+    dictionary: Cow<'dict, Dictionary<P>>,
 
     /// The type of the message to output
     marker: PhantomData<T>,
 }
 
-impl<P, T> DictDeserializer<P, T>
+impl<'dict, P, T> DictDeserializer<'dict, P, T>
 where
     P: Clone,
 {
     /// Create a labeled deserializer for TVF buffers
-    pub fn new(dictionary: Arc<Dictionary<P>>) -> Self {
+    pub fn new(dictionary: Cow<'dict, Dictionary<P>>) -> Self {
         Self {
             dictionary,
             marker: PhantomData,
@@ -38,7 +38,7 @@ where
     }
 }
 
-impl<'de, P, T> DeserializeSeed<'de> for DictDeserializer<P, T>
+impl<'de, P, T> DeserializeSeed<'de> for DictDeserializer<'_, P, T>
 where
     P: Clone + 'de,
     T: Default + Tvf + Clone + Debug + Deserialize<'de>,
@@ -51,16 +51,16 @@ where
     ) -> Result<Self::Value, D::Error> {
         // visitor over the sequence or map
         #[doc(hidden)]
-        struct __Visitor<'de, P, T>
+        struct __Visitor<'de, 'dict, P, T>
         where
             P: Clone,
         {
-            dictionary: Arc<Dictionary<P>>,
+            dictionary: &'dict Dictionary<P>,
             marker: PhantomData<T>,
             lifetime: PhantomData<&'de ()>,
         }
 
-        impl<'de, P, T> Visitor<'de> for __Visitor<'de, P, T>
+        impl<'de, P, T> Visitor<'de> for __Visitor<'de, '_, P, T>
         where
             P: Clone + 'de,
             T: Default + Tvf + Clone + Debug + Deserialize<'de>,
@@ -75,9 +75,9 @@ where
                 let mut buffer = T::default();
                 // iterate over the whole map,
                 // keys can be either integers or strings
-                while let Some(pair) = map.next_key_seed(IdSeed::from(self.dictionary.clone()))? {
+                while let Some(pair) = map.next_key_seed(IdSeed::new(self.dictionary))? {
                     if let Some(def) = pair.entry_def {
-                        buffer.put(pair.id, map.next_value_seed(EntrySeed::new(def.as_ref()))?);
+                        buffer.put(pair.id, map.next_value_seed(EntrySeed::new(def))?);
                     } else {
                         buffer.put(pair.id, map.next_value()?);
                     }
@@ -87,7 +87,7 @@ where
         }
 
         deserializer.deserialize_any(__Visitor {
-            dictionary: self.dictionary.clone(),
+            dictionary: &self.dictionary,
             marker: PhantomData,
             lifetime: PhantomData,
         })
@@ -96,18 +96,13 @@ where
 
 /// seeded deserialize for keys
 #[derive(Clone, Default)]
-struct IdSeed<P>
-where
-    P: Clone,
-{
-    dictionary: Option<Arc<Dictionary<P>>>,
+struct IdSeed<'dict, P> {
+    dictionary: Option<&'dict Dictionary<P>>,
 }
 
-impl<P> From<Arc<Dictionary<P>>> for IdSeed<P>
-where
-    P: Clone,
-{
-    fn from(dictionary: Arc<Dictionary<P>>) -> Self {
+impl<'dict, P> IdSeed<'dict, P> {
+    /// Create a new id seed
+    fn new(dictionary: &'dict Dictionary<P>) -> Self {
         Self {
             dictionary: Some(dictionary),
         }
@@ -116,15 +111,15 @@ where
 
 /// Pair of identifier and entry definition
 #[derive(Clone, Default)]
-struct IdEntryPair<P> {
+struct IdEntryPair<'entry, P> {
     /// The identifier of the field
     id: usize,
 
     /// The entry definition (if any)
-    entry_def: Option<Arc<Entry<P>>>,
+    entry_def: Option<&'entry Entry<P>>,
 }
 
-impl<P> IdEntryPair<P> {
+impl<'entry, P> IdEntryPair<'entry, P> {
     /// Return an orphan id
     fn new(id: usize) -> Self {
         Self {
@@ -134,7 +129,7 @@ impl<P> IdEntryPair<P> {
     }
 
     /// Return an id with an entry definition
-    fn with_def(id: usize, entry_def: Arc<Entry<P>>) -> Self {
+    fn with_def(id: usize, entry_def: &'entry Entry<P>) -> Self {
         Self {
             id,
             entry_def: Some(entry_def),
@@ -142,20 +137,20 @@ impl<P> IdEntryPair<P> {
     }
 }
 
-impl<'de, P> DeserializeSeed<'de> for IdSeed<P>
+impl<'de, 'dict, P> DeserializeSeed<'de> for IdSeed<'dict, P>
 where
     P: Clone,
 {
-    type Value = IdEntryPair<P>;
+    type Value = IdEntryPair<'dict, P>;
 
     fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<Self::Value, D::Error> {
         // custom visitor over an integer or a string
         #[doc(hidden)]
-        struct __Visitor<'de, P>
+        struct __Visitor<'de, 'dict, P>
         where
             P: Clone,
         {
-            dictionary: Arc<Dictionary<P>>,
+            dictionary: &'dict Dictionary<P>,
             marker: PhantomData<usize>,
             lifetime: PhantomData<&'de ()>,
         }
@@ -165,7 +160,7 @@ where
             ($method:ident $type:ty) => {
                 fn $method<E: de::Error>(self, v: $type) -> Result<Self::Value, E> {
                     if let Some((_, def)) = self.dictionary.id_to_label.get(&(v as usize)) {
-                        Ok(IdEntryPair::with_def(v as usize, def.clone()))
+                        Ok(IdEntryPair::with_def(v as usize, &def))
                     } else {
                         Ok(IdEntryPair::new(v as usize))
                     }
@@ -173,12 +168,12 @@ where
             };
         }
 
-        impl<'de, P> Visitor<'de> for __Visitor<'de, P>
+        impl<'de, 'dict, P> Visitor<'de> for __Visitor<'de, 'dict, P>
         where
             P: Clone,
             Dictionary<P>: ToOwned,
         {
-            type Value = IdEntryPair<P>;
+            type Value = IdEntryPair<'dict, P>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write![formatter, "TVF identifier"]
@@ -190,13 +185,13 @@ where
             visit_integer![ visit_u64 u64 ];
 
             fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                let dict = self.dictionary.as_ref();
+                let dict = self.dictionary;
 
                 if let Some((id, def)) = dict.label_to_id.get(v) {
-                    Ok(IdEntryPair::with_def(*id, def.clone()))
+                    Ok(IdEntryPair::with_def(*id, def))
                 } else if let Ok(id) = v.parse::<usize>() {
                     if let Some((_, def)) = dict.id_to_label.get(&id) {
-                        Ok(IdEntryPair::with_def(id, def.clone()))
+                        Ok(IdEntryPair::with_def(id, def))
                     } else {
                         Ok(IdEntryPair::new(id))
                     }
@@ -223,9 +218,9 @@ where
 
 /// seeded deserialize for labeled buffer
 #[derive(Clone)]
-struct EntrySeed<'t, 'e, P, T> {
+struct EntrySeed<'t, 'entry, P, T> {
     /// The definition to use
-    entry: &'e Entry<P>,
+    entry: &'entry Entry<P>,
 
     /// The type of the message to output
     phantom: PhantomData<T>,
@@ -235,12 +230,12 @@ struct EntrySeed<'t, 'e, P, T> {
 }
 
 /// Create a new entry seed from an entry definition
-impl<'e, P, T> EntrySeed<'_, 'e, P, T>
+impl<'entry, P, T> EntrySeed<'_, 'entry, P, T>
 where
     P: Clone,
 {
     /// Create a new entry seed
-    fn new(entry: &'e Entry<P>) -> Self {
+    fn new(entry: &'entry Entry<P>) -> Self {
         Self {
             entry,
             phantom: PhantomData,
@@ -346,12 +341,9 @@ where
                     }
                     Entry::Node(dict) => {
                         let mut buffer = T::default();
-                        while let Some(pair) = map.next_key_seed(IdSeed::from(dict.clone()))? {
+                        while let Some(pair) = map.next_key_seed(IdSeed::new(dict))? {
                             if let Some(def) = pair.entry_def {
-                                buffer.put(
-                                    pair.id,
-                                    map.next_value_seed(EntrySeed::new(def.as_ref()))?,
-                                );
+                                buffer.put(pair.id, map.next_value_seed(EntrySeed::new(def))?);
                             } else {
                                 buffer.put(pair.id, map.next_value()?);
                             }
@@ -414,7 +406,10 @@ mod tests {
         msg::{simple_string_tvf::SimpleStringTvf, tvf::Tvf},
     };
     use serde::de::DeserializeSeed;
-    use std::sync::{Arc, OnceLock};
+    use std::{
+        borrow::Cow,
+        sync::{Arc, OnceLock},
+    };
 
     fn create_dictionnary() -> &'static Dictionary<()> {
         static DICT: OnceLock<Dictionary<()>> = OnceLock::new();
@@ -425,7 +420,6 @@ mod tests {
             sub_dict.add_entry(10, "first", leaf.clone());
             sub_dict.add_entry(20, "second", leaf.clone());
             sub_dict.add_entry(30, "third", leaf.clone());
-            let sub_dict = Arc::new(sub_dict);
 
             let mut dict = Dictionary::default();
             dict.add_entry(2, "label2", leaf.clone());
@@ -472,7 +466,7 @@ mod tests {
 }"#;
         let mut deserializer = serde_json::Deserializer::new(serde_json::de::StrRead::new(json));
 
-        let buffer: SimpleStringTvf = DictDeserializer::new(Arc::new(dict.clone()))
+        let buffer: SimpleStringTvf = DictDeserializer::new(Cow::Borrowed(&dict))
             .deserialize(&mut deserializer)
             .unwrap();
         assert_eq!(1u8, buffer.get_byte(2).unwrap());
