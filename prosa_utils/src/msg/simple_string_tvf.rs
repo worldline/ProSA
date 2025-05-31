@@ -4,7 +4,8 @@ use super::value::TvfValue;
 use crate::msg::tvf::{Tvf, TvfError};
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
-use std::{borrow::Cow, collections::hash_map::HashMap};
+use regex::Regex;
+use std::{borrow::Cow, collections::hash_map::HashMap, sync::LazyLock};
 
 /// Struct that define a simple string TVF
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -91,10 +92,20 @@ impl Tvf for SimpleStringTvf {
                     } else {
                         Ok(TvfValue::Bytes(Cow::Owned(Bytes::from(bytes))))
                     }
-                } else if let Ok(buffer) = SimpleStringTvf::deserialize(str_value) {
-                    Ok(TvfValue::Buffer(Cow::Owned(buffer)))
                 } else {
-                    Ok(TvfValue::String(Cow::Borrowed(str_value)))
+                    // Check if the string can be interpreted as a sub-buffer
+                    static REGEX: LazyLock<Regex> =
+                        LazyLock::new(|| Regex::new(r"^(\d+;\d+;.*;)+$").unwrap());
+
+                    if REGEX.is_match(str_value) {
+                        if let Ok(buffer) = SimpleStringTvf::deserialize(str_value) {
+                            Ok(TvfValue::Buffer(Cow::Owned(buffer)))
+                        } else {
+                            Ok(TvfValue::String(Cow::Borrowed(str_value)))
+                        }
+                    } else {
+                        Ok(TvfValue::String(Cow::Borrowed(str_value)))
+                    }
                 }
             }
             None => Err(TvfError::FieldNotFound(id)),

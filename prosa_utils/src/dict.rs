@@ -24,7 +24,7 @@ pub enum Entry<P> {
     Leaf(P),
 
     /// Field contains a sub buffer with the corresponding dictionary
-    Node(Arc<Dictionary<P>>),
+    Node(Box<Dictionary<P>>),
 
     /// Field contains a list of sub fields matching with the definition rule
     List(Box<Entry<P>>),
@@ -89,8 +89,8 @@ impl<P> Entry<P> {
 
     /// Create a new sub dictionary
     #[inline]
-    pub fn new_dictionary(dictionary: Arc<Dictionary<P>>) -> Self {
-        Self::Node(dictionary)
+    pub fn new_dictionary(dictionary: Dictionary<P>) -> Self {
+        Self::Node(Box::new(dictionary))
     }
 
     /// Create a new repeatable entry
@@ -101,8 +101,8 @@ impl<P> Entry<P> {
 
     /// Create a list of repeatable entries with common dictionary
     #[inline]
-    pub fn new_repeatable_dictionary(dictionary: Arc<Dictionary<P>>) -> Self {
-        Self::List(Box::new(Self::Node(dictionary)))
+    pub fn new_repeatable_dictionary(dictionary: Dictionary<P>) -> Self {
+        Self::List(Box::new(Self::Node(Box::new(dictionary))))
     }
 }
 
