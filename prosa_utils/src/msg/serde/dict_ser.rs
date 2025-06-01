@@ -1,7 +1,9 @@
+//! This module implements the `Serialize` trait for the `Tvf` trait
+
 use super::{Dictionary, Entry, LabeledTvf};
 use crate::msg::{serialize::SerialTvf, tvf::Tvf, value::TvfValue};
 use serde::{
-    Serialize,
+    Serialize, Serializer,
     ser::{SerializeMap, SerializeSeq},
 };
 
@@ -168,8 +170,10 @@ mod tests {
                 10 => "hello",
                 20 => "world",
                 30 => 11,
-                50 => "1995-01-10" as Date,
+                40 => 4.5,
+                50 => "2025-01-01" as Date,
                 60 => "2023-06-05 15:02:00.000" as DateTime,
+                70 => 0x00010203_04050607_08090A0B_0C0D0E0F as Bytes,
             },
             5 => [
                 {
@@ -183,7 +187,11 @@ mod tests {
                     30 => 31
                 }
             ],
-            6 => "a line"
+            6 => "a line",
+            7 => {
+                1 => 100,
+                2 => "text"
+            }
         });
 
         let labeled = LabeledTvf::new(Cow::Borrowed(dict), Cow::Borrowed(&message));
@@ -196,8 +204,10 @@ mod tests {
                     "first": "hello",
                     "second": "world",
                     "third": 11,
-                    "50": "1995-01-10",
-                    "60": "2023-06-05T15:02:00"
+                    "40": 4.5,
+                    "50": "2025-01-01",
+                    "60": "2023-06-05T15:02:00",
+                    "70": "0x000102030405060708090a0b0c0d0e0f",
                 },
                 "label5": [
                     {
@@ -211,7 +221,11 @@ mod tests {
                         "third": 31
                     }
                 ],
-                "6": "a line"
+                "6": "a line",
+                "7": {
+                    "1": 100,
+                    "2": "text"
+                }
             }),
             serialized
         );
