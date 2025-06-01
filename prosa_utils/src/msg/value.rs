@@ -97,3 +97,20 @@ impl<T: Tvf + Clone> From<T> for TvfValue<'_, T> {
         Self::Buffer(Cow::Owned(value))
     }
 }
+
+impl<T: Tvf + Clone + PartialEq> PartialEq for TvfValue<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Byte(a), Self::Byte(b)) => a == b,
+            (Self::Signed(a), Self::Signed(b)) => a == b,
+            (Self::Unsigned(a), Self::Unsigned(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::Date(a), Self::Date(b)) => a == b,
+            (Self::DateTime(a), Self::DateTime(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Bytes(a), Self::Bytes(b)) => a == b,
+            (Self::Buffer(a), Self::Buffer(b)) => a == b,
+            _ => false,
+        }
+    }
+}

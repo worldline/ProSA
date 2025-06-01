@@ -1,6 +1,13 @@
-use super::{Dictionary, Entry};
-use crate::msg::{tvf::Tvf, value::TvfValue};
+//! This module implements the `Deserialize` trait for the `Tvf` trait
+
+use crate::msg::{
+    dict::{Dictionary, Entry},
+    tvf::Tvf,
+    value::TvfValue,
+};
 use bytes::Bytes;
+use chrono::{NaiveDate, NaiveDateTime};
+use regex::Regex;
 use serde::{
     Deserialize, Deserializer,
     de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor},
@@ -405,11 +412,10 @@ mod tests {
         dict::Entry,
         msg::{simple_string_tvf::SimpleStringTvf, tvf::Tvf},
     };
+    use bytes::Bytes;
+    use chrono::{NaiveDate, NaiveDateTime};
     use serde::de::DeserializeSeed;
-    use std::{
-        borrow::Cow,
-        sync::{Arc, OnceLock},
-    };
+    use std::{borrow::Cow, str::FromStr, sync::OnceLock};
 
     fn create_dictionnary() -> &'static Dictionary<()> {
         static DICT: OnceLock<Dictionary<()>> = OnceLock::new();
@@ -444,25 +450,32 @@ mod tests {
     "label4": {
         "first": "hello",
         "second": "world",
-        "third": 0
+        "third": 21,
+        "5": "2025-01-01",
+        "6": "2023-06-05T15:02:00",
+        "7": "0xF0E1D2C3B4A5968778695A4B3C2D1E0F"
     },
     "5": [
         {
-            "first": "hello",
-            "second": "world",
-            "third": 0
+            "first": "guten tag",
+            "third": 22
         },
         {
-            "first": "hello",
-            "second": "world",
-            "third": 0
+            "first": "bonjour",
+            "second": "tous",
+            "third": 23
         },
         {
-            "first": "hello",
-            "second": "world",
-            "third": 0
+            "first": "egun on",
+            "second": "mundua",
+            "third": 24
         }
-    ]
+    ],
+    "6": "another line",
+    "7": {
+        "1": 200,
+        "2": "text"
+    }
 }"#;
         let mut deserializer = serde_json::Deserializer::new(serde_json::de::StrRead::new(json));
 
@@ -474,14 +487,32 @@ mod tests {
         let sub = buffer.get_buffer(4).unwrap();
         assert_eq!("hello", sub.get_string(10).unwrap().as_str());
         assert_eq!("world", sub.get_string(20).unwrap().as_str());
-        assert_eq!(0, sub.get_unsigned(30).unwrap());
+        assert_eq!(21, sub.get_unsigned(30).unwrap());
+        assert_eq!(
+            NaiveDate::from_ymd_opt(2025, 01, 01).unwrap(),
+            sub.get_date(5).unwrap()
+        );
+        assert_eq!(
+            NaiveDateTime::from_str("2023-06-05T15:02:00").unwrap(),
+            sub.get_datetime(6).unwrap()
+        );
+        static BUFFER: [u8; 16] = [
+            0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5, 0x96, 0x87, 0x78, 0x69, 0x5A, 0x4B, 0x3C, 0x2D,
+            0x1E, 0x0F,
+        ];
+        assert_eq!(
+            Bytes::from_static(&BUFFER),
+            sub.get_bytes(7).unwrap().as_ref()
+        );
 
         let list = buffer.get_buffer(5).unwrap();
         let entry1 = list.get_buffer(1).unwrap();
-        assert_eq!("hello", entry1.get_string(10).unwrap().as_str());
+        assert_eq!("guten tag", entry1.get_string(10).unwrap().as_str());
         let entry2 = list.get_buffer(2).unwrap();
-        assert_eq!("hello", entry2.get_string(10).unwrap().as_str());
+        assert_eq!("bonjour", entry2.get_string(10).unwrap().as_str());
         let entry3 = list.get_buffer(3).unwrap();
-        assert_eq!("hello", entry3.get_string(10).unwrap().as_str());
+        assert_eq!("egun on", entry3.get_string(10).unwrap().as_str());
+
+        assert_eq!("another line", buffer.get_string(6).unwrap().as_str());
     }
 }
