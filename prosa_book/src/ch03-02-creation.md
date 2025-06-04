@@ -1,6 +1,6 @@
 # Processor creation
 
-A processor in ProSA is an autonomous routine executed within its own thread(s).
+A processor in ProSA is an autonomous routine executed within its own [thread(s)](ch03-08-threads.md).
 Processor interact with each other through internal TVF messages.
 
 ## Creation

@@ -10,7 +10,7 @@ The goal of this book and the overarching ProSA initiative is to equip both deve
 We aim to integrate timeless concepts with modern programming and operational practices, empowering teams to create robust solutions.
 
 Worldline, a vast enterprise with an extensive platform ecosystem, exemplifies the value of full integration.
-By providing a product that seamlessly fits into this stack, developers and OPS professionals alike are liberated to focus on what truly matters: implementing and maintaining their unique business cases.
+By providing a product that seamlessly fits into this stack, developers and OPS professionals alike are free to focus on what truly matters: implementing and maintaining their own business solution.
 
 We hope this book offers valuable insights and guidance as you embark on your journey with ProSA.
 

@@ -8,7 +8,7 @@ However, we'll describe good practices for adaptor design to help you understand
 
 ## Instantiation
 
-Processor uses Adaptors to adapt messages, so you typically need a single Adaptor instance to perform this role.
+A Processor uses an Adaptor to transform messages, so you typically need a single Adaptor instance to perform this role.
 This adaptor instance must be both `Send` and `Sync`.
 
 ```rust,noplayground
@@ -33,7 +33,7 @@ where
 
 Most of the time, the processor is provided as a parameter to the adaptor's constructor, allowing you to retrieve all necessary information (e.g., settings, name, etc.).
 
-It's preferable to provide a `new()` method to create your adaptor, rather relying on [`default()`](https://doc.rust-lang.org/std/default/trait.Default.html), because `new()` gives you access to processor settings and other information.
+It's preferable to provide a `new()` method to create your adaptor, rather than relying on [`default()`](https://doc.rust-lang.org/std/default/trait.Default.html), because `new()` gives you access to processor settings and other information.
 Additionally, `new()` can fail with a `ProcError` or a dedicated error type if the processor cannot start.
 
 ## Processing
@@ -68,7 +68,7 @@ where
         + prosa_utils::msg::tvf::Tvf
         + std::default::Default,
 {
-    /// Method to process incomming requests from internal
+    /// Method to process incoming requests from internal
     fn process_internal_request(&mut self, request: &M) -> ExternalObjectRequest;
 
     /// Method to process outgoing requests to external system
@@ -92,7 +92,7 @@ where
         + prosa_utils::msg::tvf::Tvf
         + std::default::Default,
 {
-    /// Method to process incomming requests from external system
+    /// Method to process incoming requests from external system
     fn process_external_request(&mut self, request: &ExternalObjectRequest) -> M;
 
     /// Method to process outgoing requests to internal
@@ -102,7 +102,7 @@ where
 
 ## Additional features
 
-You can leverage Rust traits to enhence the adaptor specification.
+You can leverage Rust traits to enhance the adaptor specification.
 For example, you can use associated `const` values in traits, such as setting a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/User-Agent).
 
 ```rust,noplayground

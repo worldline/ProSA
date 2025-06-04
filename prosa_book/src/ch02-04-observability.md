@@ -11,7 +11,7 @@ It is important to understand how to implement these features within ProSA, as P
 ## Metrics
 
 Metrics in ProSA are managed using the [OpenTelemetry Meter](https://docs.rs/opentelemetry/latest/opentelemetry/metrics/struct.Meter.html).
-With the meter, you can declare counters, gauge, and more.
+With the meter, you can declare counters, gauges, and more.
 
 A meter is created from the [main task](https://docs.rs/prosa/latest/prosa/core/main/struct.Main.html#method.meter) or from [processors](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.meter).
 You create your metrics using this meter object.

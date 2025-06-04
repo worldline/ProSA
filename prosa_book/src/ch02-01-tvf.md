@@ -9,7 +9,7 @@ However, in the future, others could implement the TVF trait, such as [ProtoBuf]
 
 ## Usage
 
-In ProSA, [`Tvf`](https://docs.rs/prosa-utils/latest/prosa_utils/msg/tvf/trait.Tvf.html) is used as a generic to support multiple implementation.
+In ProSA, [`Tvf`](https://docs.rs/prosa-utils/latest/prosa_utils/msg/tvf/trait.Tvf.html) is used as a generic message type that can support various serialization strategies.
 The trait allows you to:
 - Add fields using `put_*` methods
 - Retrieve fields using `get_*` methods
@@ -44,7 +44,7 @@ where
 
 ## Implement your own TVF
 
-If you have your own internal format (as we do at Worldline), you can implement the TVF trait on your own and expose your TVF struct:
+If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:
 ```rust,noplayground
 impl Tvf for MyOwnTvf {
     // All trait method must be implement here
@@ -71,10 +71,10 @@ Be sure to specify the entire path of your implementation, `tvf::MyOwnTvf`, in t
 
 ## Handling sensitive data
 
-At Worldline, since we process payments, buffers may contain sensitive data.
+At Worldline, since we process payments, messages may contain sensitive data.
 This data must not be printed or extracted from the application to ensure security.
 
-To address this, ProSA provides the [`TvfFilter`](https://docs.rs/prosa-utils/latest/prosa_utils/msg/tvf/trait.TvfFilter.html) trait, which allows filtering and masking sensitive data.
+To address this, ProSA provides the [`TvfFilter`](https://docs.rs/prosa-utils/latest/prosa_utils/msg/tvf/trait.TvfFilter.html) trait, which allows filtering and masking sensitive fields.
 
 Depending on your message, sensitive field may vary.
 Since `TvfFilter` is a trait, you can implement your own filter tailored to your message format.

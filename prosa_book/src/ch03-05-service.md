@@ -8,7 +8,7 @@ This part provides all the information you need to work with services within Pro
 
 When your processor starts, you register it with the main task using [`add_proc()`](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_proc).
 After declaration, the main task gains access to a queue for sending service requests to your processor.
-However, by default, your processor doesn't listen to any service.
+However, by default, your processor doesn't listen to any services.
 To start listening to a specific service, call [`add_service_proc()`](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_service_proc)
 
 ```rust,noplayground
@@ -57,7 +57,7 @@ To start listening to a specific service, call [`add_service_proc()`](https://do
 
 ### Multiple
 
-When designing more complex processors, you may need to handle multiple subtasks, each requiring interaction with ProSA services.
+When designing more complex processors, you may need to handle multiple subtasks, each requiring interactions with ProSA services.
 
 In this case, you can declare multiple listener subtasks, each of which subscribes individually to its relevant service(s).
 
@@ -150,7 +150,7 @@ In this case, you can declare multiple listener subtasks, each of which subscrib
 ### Single
 
 Even if your processor only sends messages, it must be registered to receive responses and errors for your requests using [`add_proc()`](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_proc).
-After that, you are free to call any service.
+After that, you are free to call any services.
 
 ```rust,noplayground
 # #[proc]

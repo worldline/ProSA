@@ -9,7 +9,16 @@ The configuration is structured to include common settings and your desired proc
 ```yaml
 name: "prosa-name"
 observability:
-  # See the next part
+  level: debug
+  metrics:
+    stdout:
+      level: info
+  traces:
+    stdout:
+      level: debug
+  logs:
+    stdout:
+      level: debug
 
 proc-1:
   # Your processor 1 configuration
@@ -20,7 +29,7 @@ proc-2:
 
 ## Multiple configuration file
 
-If you prefer to configure ProSA and your processors in seperate files, that's also possible.
+You can also spread the configuration of your ProSA processors over multiple files.
 Instead of specifing a single file, you can indicate a folder containing all your configuration files.
 
 ```yaml
@@ -28,7 +37,16 @@ Instead of specifing a single file, you can indicate a folder containing all you
 
 name: "prosa-name"
 observability:
-  # See the next part
+  level: debug
+  metrics:
+    stdout:
+      level: info
+  traces:
+    stdout:
+      level: debug
+  logs:
+    stdout:
+      level: debug
 ```
 
 ```yaml
@@ -47,5 +65,5 @@ proc-1:
 
 ## Environment variables
 
-If you want to see things up globally, you can also use environment variables.
-For example, you can set the ProSA name filling the variable `PROSA_NAME="prosa-name"`.
+ProSA can also be configured using environment variables, assuming you only have one ProSA instance running on your system.
+For example, you can set the ProSA name by filling the variable `PROSA_NAME="prosa-name"`.

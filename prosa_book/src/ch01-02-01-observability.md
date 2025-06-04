@@ -1,19 +1,20 @@
 # Observability
 
-For observability, ProSA uses [OpenTelemetry](https://opentelemetry.io/) to collect metrics, traces and logs.
+For observability, ProSA uses [OpenTelemetry](https://opentelemetry.io/) to collect metrics, traces, and logs.
 
-Observability is handle through the [Observability settings](https://docs.rs/prosa-utils/latest/prosa_utils/config/observability/struct.Observability.html).
+Observability is handled through the [Observability settings](https://docs.rs/prosa-utils/latest/prosa_utils/config/observability/struct.Observability.html).
 
 ## Settings
 
 Parameters are specified in your ProSA settings file.
-You can configure outputs to stdout, an OpenTelemetry collector, or act as a server to expose metrics.
+You can configure your observability outputs to be redirected to stdout or an OpenTelemetry collector.
+You can also configure your processor to act as a server that exposes those metrics itself.
 
 Of course all configurations can be mixed. You can send your logs to an OpenTelemetry collector and to stdout simultaneously.
 
 ### Stdout
 
-If you want to push everything to stdout, you can do something like:
+If you want to direct all logs to stdout, you can do something like this:
 ```yaml
 observability:
   level: debug

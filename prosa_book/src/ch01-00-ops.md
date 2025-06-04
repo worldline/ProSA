@@ -20,15 +20,18 @@ flowchart LR
 
 A ProSA is useful with a set of processors and adaptors.
 
-Every processor and its adaptor have a role, for example:
+Every processor and its adaptor have a role. For example:
 - Incoming HTTP server
-- Outgoing Database
-- etc,...
-
-Every processor comunicates through an internal bus. This is better explained in the next [Adaptor chapter](ch02-00-adaptor.md).
+- Outgoing database
+- Websocket client
+- Etc.
 
 Each processor and adaptor has its own configuration to define connection adresses, timers and so on.
 
-With this "Lego" architecure, where you can include any processor that you need, you easily understand the necessity of having a tool to manage your ProSA instance structure.
+Every processor communicates through an internal bus.
+The goal of this bus is to facilitate transaction flow between processors with different routing configurations.
+This will be better explained in the next [Adaptor chapter](ch02-00-adaptor.md).
 
-This is the goal of Cargo-ProSA, the next part.
+With this "Lego" architecture, you can include any processor that you need and adapt message from one protocol to another as you wish.
+Because a ProSA solution is deployed using multiple processors, we have created the Cargo-ProSA tool to help you orchestrate your solution.
+We will cover this tool in the next section.

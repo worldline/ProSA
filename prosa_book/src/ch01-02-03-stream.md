@@ -2,13 +2,13 @@
 
 The `Stream` objects have been developed to make socket handling more accessible, with a high level of customization.
 
-## Listenner
+## Listener
 
-For [stream listenner](https://docs.rs/prosa/latest/prosa/io/listener/enum.StreamListener.html), you can use [`ListenerSetting`](https://docs.rs/prosa/latest/prosa/io/listener/struct.ListenerSetting.html) to configure it.
+For [stream listener](https://docs.rs/prosa/latest/prosa/io/listener/enum.StreamListener.html), you can use [`ListenerSetting`](https://docs.rs/prosa/latest/prosa/io/listener/struct.ListenerSetting.html) to configure it.
 
 As a server, you need to specify the URL and optionally [SSL](ch01-02-02-ssl.md).
 ```yaml
-listenner:
+listener:
   url: "0.0.0.0:8080"
   ssl:
     cert: "/opt/cert.pem"
@@ -35,4 +35,4 @@ stream:
   connect_timeout: 3000
 ```
 
-> The `connect_timeout` setting prevents indefinite waiting during connection attempts.
+> The `connect_timeout` setting prevents infinite waits during connection attempts.

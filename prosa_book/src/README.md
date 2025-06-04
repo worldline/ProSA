@@ -1,1 +1,0 @@
-# ProSA - Protocol Service Adaptor

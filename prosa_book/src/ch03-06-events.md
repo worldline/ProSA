@@ -83,9 +83,9 @@ There are three important methods you need to use for this object:
 ## Regulator - `Regulator`
 
 The [`Regulator`](https://docs.rs/prosa/latest/prosa/event/speed/struct.Regulator.html) is used to regulate the flow of transaction to avoid overwhelming a remote peer.
-It can be useful if you have a contract with a maximum number of parallel transactions, or limitations on transaction per second.
+It can be useful if you have a contract with a maximum number of parallel transactions, or limitations on transactions per second.
 
-It serve two main goals:
+It serves two main goals:
 - Enforce a threshold on transaction flow
 - Limit a fixed number of outstanding transactions
 
