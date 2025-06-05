@@ -32,6 +32,6 @@ Every processor communicates through an internal bus.
 The goal of this bus is to facilitate transaction flow between processors with different routing configurations.
 This will be better explained in the next [Adaptor chapter](ch02-00-adaptor.md).
 
-With this "Lego" architecture, you can include any processor that you need and adapt message from one protocol to another as you wish.
+With this "Lego" architecture, you can include any processor that you need and adapt messages from one protocol to another as you wish.
 Because a ProSA solution is deployed using multiple processors, we have created the Cargo-ProSA tool to help you orchestrate your solution.
 We will cover this tool in the next section.

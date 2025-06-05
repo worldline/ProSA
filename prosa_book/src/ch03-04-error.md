@@ -5,7 +5,7 @@ It is out of the question for the application to crash on an unhandled error.
 And even in such occurrence, it is mandatory to have logs about the root cause of such crash.
 
 If there is one advice that we learn implementing ProSA is to avoid using any method that can result in a panic (such as `.unwrap()`) and prefer handling every error correctly.
-Errors should be forwarded back to the caller, transformed into an other error type using the From trait or handled properly when encountered.
+Errors should be forwarded to the caller, transformed into an other error type using the `From` trait or handled properly when encountered.
 
 ```rust,noplayground
 use thiserror::Error;

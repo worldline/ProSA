@@ -12,6 +12,16 @@ This macro adds necessary members to your struct and implements the [`ProcSettin
 
 > From these additional members, you will be able to obtain your adapter configuration and processor restart policy.
 
+You can specify them as configurations for your processor like this:
+```yaml
+proc:
+    adaptor_config_path: /etc/adaptor_path.yaml
+    proc_restart_duration_period: 50
+    proc_max_restart_period: 300
+    my_param: "test"
+```
+
+And declare your settings like this in Rust:
 ```rust,noplayground
 use serde::{Deserialize, Serialize};
 
