@@ -307,7 +307,7 @@ impl PackageMetadata {
     }
 
     /// Method to get a component version from its name if it exist
-    fn get_version(&self, name: &str, ty: &str) -> Option<ComponentVersion> {
+    fn get_version<'a>(&'a self, name: &str, ty: &str) -> Option<ComponentVersion<'a>> {
         if let Some(metadata) = self
             .metadata
             .as_ref()
@@ -364,22 +364,22 @@ impl PackageMetadata {
     }
 
     /// Method to get the processor version from its name if it exist
-    pub fn get_main_version(&self, name: &str) -> Option<ComponentVersion> {
+    pub fn get_main_version<'a>(&'a self, name: &str) -> Option<ComponentVersion<'a>> {
         self.get_version(name, "main")
     }
 
     /// Method to get the processor version from its name if it exist
-    pub fn get_tvf_version(&self, name: &str) -> Option<ComponentVersion> {
+    pub fn get_tvf_version<'a>(&'a self, name: &str) -> Option<ComponentVersion<'a>> {
         self.get_version(name, "tvf")
     }
 
     /// Method to get the processor version from its name if it exist
-    pub fn get_proc_version(&self, name: &str) -> Option<ComponentVersion> {
+    pub fn get_proc_version<'a>(&'a self, name: &str) -> Option<ComponentVersion<'a>> {
         self.get_version(name, "proc")
     }
 
     /// Method to get the adaptor version from its name if it exist
-    pub fn get_adaptor_version(&self, name: &str) -> Option<ComponentVersion> {
+    pub fn get_adaptor_version<'a>(&'a self, name: &str) -> Option<ComponentVersion<'a>> {
         self.get_version(name, "adaptor")
     }
 
@@ -531,7 +531,7 @@ impl CargoMetadata {
     }
 
     /// Getter of the main version from its name if it exist
-    pub fn get_main_version(&self, main_name: &str) -> Option<ComponentVersion> {
+    pub fn get_main_version<'a>(&'a self, main_name: &str) -> Option<ComponentVersion<'a>> {
         for package in &self.packages {
             if let Some(main) = package.get_main_version(main_name) {
                 return Some(main);
@@ -542,7 +542,7 @@ impl CargoMetadata {
     }
 
     /// Getter of the TVF version from its name if it exist
-    pub fn get_tvf_version(&self, main_name: &str) -> Option<ComponentVersion> {
+    pub fn get_tvf_version<'a>(&'a self, main_name: &str) -> Option<ComponentVersion<'a>> {
         for package in &self.packages {
             if let Some(main) = package.get_tvf_version(main_name) {
                 return Some(main);
@@ -553,11 +553,11 @@ impl CargoMetadata {
     }
 
     /// Getter of the (processor, adaptor) version from their name if it exist
-    pub fn get_versions(
-        &self,
+    pub fn get_versions<'a>(
+        &'a self,
         proc_name: &str,
         adaptor_name: &str,
-    ) -> (Option<ComponentVersion>, Option<ComponentVersion>) {
+    ) -> (Option<ComponentVersion<'a>>, Option<ComponentVersion<'a>>) {
         let mut processor_version = None;
         let mut adaptor_version = None;
         for package in &self.packages {
