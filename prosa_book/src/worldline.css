@@ -1,0 +1,10 @@
+#content {
+    background-repeat: no-repeat;
+    background-position-x: right;
+    background-size: 120px;
+    background-image: url("/background_worldline.svg");
+}
+
+.logo {
+    margin-left: 5px;
+}

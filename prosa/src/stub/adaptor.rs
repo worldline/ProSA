@@ -5,7 +5,7 @@ use opentelemetry::metrics::Meter;
 
 /// Adaptator trait for the stub processor
 ///
-/// Need to define the process_request method to know what to do with incomming requests
+/// Need to define the process_request method to know what to do with incoming requests
 /// ```
 /// use prosa::stub::proc::StubProc;
 /// use prosa::core::adaptor::Adaptor;
@@ -52,7 +52,7 @@ where
     fn new(proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>>
     where
         Self: Sized;
-    /// Method to process incomming requests
+    /// Method to process incoming requests
     fn process_request(&mut self, service_name: &str, request: &M) -> M;
 }
 
