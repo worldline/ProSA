@@ -5,7 +5,7 @@ ProSA is a merge of multiple [Worldline](https://worldline.com/) internal produc
 The library aimed at providing a simple and lightweight protocol service adaptor for service oriented architectures.
 The goal of this project is to provide a flexible and scalable platform for developing and deploying microservices, allowing developers to focus on writing business logic while ProSA takes care of the underlying infrastructure concers.
 
-A [ProSA mdBook](https://worldline.github.io/prosa) is available if you want to learn everything about ProSA.
+A [ProSA mdBook](https://worldline.github.io/ProSA/) is available if you want to learn everything about ProSA.
 
 ## Legend
 
