@@ -129,7 +129,7 @@ where
         &mut self.span
     }
 
-    fn enter_span(&self) -> span::Entered {
+    fn enter_span(&self) -> span::Entered<'_> {
         self.span.enter()
     }
 
@@ -238,7 +238,7 @@ where
         &mut self.span
     }
 
-    fn enter_span(&self) -> span::Entered {
+    fn enter_span(&self) -> span::Entered<'_> {
         self.span.enter()
     }
 
@@ -289,9 +289,9 @@ where
         &mut self.span
     }
 
-    fn enter_span(&self) -> span::Entered {
+    fn enter_span(&self) -> span::Entered<'_> {
         let enter = self.span.enter();
-        event!(Level::ERROR, "{}", self.err);
+        event!(Level::WARN, "{}", self.err);
         enter
     }
 
