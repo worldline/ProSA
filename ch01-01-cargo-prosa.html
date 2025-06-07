@@ -1,0 +1,315 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Cargo-ProSA - ProSA - Protocol Service Adaptor</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="src/worldline.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">ProSA - Protocol Service Adaptor</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/worldline/prosa" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="cargo-prosa"><a class="header" href="#cargo-prosa">cargo-prosa</a></h1>
+<p>ProSA is a framework that handles processors organized around a service bus.
+As such, ProSA needs to be built from internal or external Processors/Adaptor/Main.</p>
+<p><a href="https://github.com/worldline/ProSA/tree/main/cargo-prosa">cargo-prosa</a> is a utility to package and deliver a builded ProSA.
+This builder is packaged within cargo as a custom command to be well integrated with the Rust ecosystem.</p>
+<h2 id="install"><a class="header" href="#install">Install</a></h2>
+<p>As you can tell by its name, cargo-prosa, is tool embeded in <a href="https://doc.rust-lang.org/book/ch14-05-extending-cargo.html">Cargo</a>.</p>
+<p>Therefore, you can install it via the Cargo command:</p>
+<pre><code class="language-bash">cargo install cargo-prosa
+</code></pre>
+<p>You should have the command installed with its bounch of functions:</p>
+<pre><code class="language-bash">cargo prosa --help
+</code></pre>
+<h2 id="use"><a class="header" href="#use">Use</a></h2>
+<p>Let's create a ProSA. You'll see cargo-prosa commands are quite similar to cargo regarding project management.</p>
+<pre><code class="language-bash">cargo prosa new my-prosa
+# or from an existing folder, init it
+cargo prosa init
+</code></pre>
+<p><em>cargo-prosa</em> is meant to evolve in the future.
+So maybe new things will be introduced.
+To update your model, you can update the generated file with <code>cargo prosa update</code>.</p>
+<p>At this point you'll want to add componennts to your ProSA.
+To do so, you need to <a href="https://doc.rust-lang.org/cargo/commands/cargo-add.html">add</a> crates that declare them into your <code>Cargo.toml</code>.</p>
+<p>Once it's done, you can list all component avaible to build your ProSA with <code>cargo prosa list</code>.
+This will list all available component:</p>
+<ul>
+<li>Main - Main task (<code>core::main::MainProc</code> by default).</li>
+<li>TVF - Internal message format to use inside your ProSA (<code>msg::simple_string_tvf::SimpleStringTvf</code> by default).</li>
+<li>Processor/Settings - Processor and its associate settings.</li>
+<li>Adaptor - Adaptor related to the processor you want.</li>
+</ul>
+<p>If you have different main/tvf, select them:</p>
+<pre><code class="language-bash">cargo prosa main MainProc
+cargo prosa tvf SimpleStringTvf
+</code></pre>
+<p>Add your dependencies and your processor with its adaptor name</p>
+<pre><code class="language-bash">cargo add prosa
+cargo prosa add -n stub-1 -a StubParotAdaptor stub
+</code></pre>
+<p>Once your ProSA is specified, the file <em>ProSA.toml</em> will contain the configuration.
+This file can be edited manually if you want.</p>
+<p>Your project uses a <em>build.rs</em>/<em>main.rs</em> to create a binary that you can use.</p>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>Keep in mind that you also need to have a settings file.
+A <code>target/config.yml</code> and <code>target/config.toml</code> will be generated when building.</p>
+<p>But you can initiate a default one with:</p>
+<pre><code class="language-bash">cargo run -- -c default_config.yaml --dry_run
+</code></pre>
+<p>A configuration file contains:</p>
+<ul>
+<li>name: Name of your ProSA</li>
+<li>observability: Configuration of log/trace/metrics</li>
+<li>a map of processor name -&gt; their settings</li>
+</ul>
+<h2 id="run"><a class="header" href="#run">Run</a></h2>
+<p>When your ProSA is built, you can deploy like any Rust binary.
+So you'll find it in the target folder.</p>
+<p>And you can run it:</p>
+<pre><code class="language-bash">cargo run -- -n "MyBuiltProSA" -c default_config.yaml
+# or with binary
+target/debug/my-prosa -n "MyBuiltProSA" -c default_config.yaml
+</code></pre>
+<h2 id="deploy"><a class="header" href="#deploy">Deploy</a></h2>
+<p>This builder offer you several possibilities to deploy your ProSA.
+The goal is to use the easiest method of a plateform to run your application.</p>
+<h3 id="container"><a class="header" href="#container">Container</a></h3>
+<p>Containerization will allow you to build and load ProSA in an image:</p>
+<pre><code class="language-bash"># Generate a Containerfile
+cargo prosa container
+# Generate a Dockerfile
+cargo prosa container --docker
+</code></pre>
+<p>For your own needs, you can:</p>
+<ul>
+<li>Select from which image the container need to be build <code>--image debian:stable-slim</code></li>
+<li>Along that you may have to specify the package manager use to install mandatory packages <code>--package_manager apt</code></li>
+<li>If you want to compile ProSA through a builder, you can specify it with <code>--builder rust:latest</code>. A multi stage container file will be created.</li>
+</ul>
+<h3 id="deb-package"><a class="header" href="#deb-package">Deb package</a></h3>
+<p>Deb package can be created with the <a href="https://crates.io/crates/cargo-deb">cargo-deb</a> crate.</p>
+<p>To enable this feature, <em>create</em>, <em>init</em> or <em>update</em> your ProSA with the option <code>--deb</code>.
+It'll add every needed properties to generate a deb package.</p>
+<p>The deb package will include the released binary, a default configuration file, and a systemd service file.</p>
+<h3 id="rpm-package"><a class="header" href="#rpm-package">RPM package</a></h3>
+<p>RPM (Red Hat Package Manager) package can be created with the <a href="https://crates.io/crates/cargo-generate-rpm">cargo-generate-rpm</a> crate.</p>
+<p>To enable this feature, <em>create</em>, <em>init</em> or <em>update</em> your ProSA with the option <code>--rpm</code>.
+It'll add every needed properties to generate an rpm package.</p>
+<p>The rpm package will include the released binary, a default configuration file, and a systemd service file.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="ch01-00-ops.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="ch01-02-config.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="ch01-00-ops.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="ch01-02-config.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="mermaid.min.js"></script>
+        <script src="mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>
