@@ -10,6 +10,6 @@ command = "mdbook-mermaid"
 
 [output.html]
 additional-css = ["worldline.css"]
-git-repository-url = "https://github.com/worldline/prosa"
+git-repository-url = "https://github.com/worldline/ProSA"
 git-repository-icon = "fa-github"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]

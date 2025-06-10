@@ -8,7 +8,7 @@ ProSA was designed to provide a simple and lightweight protocol service adaptor 
 
 ## Contributing
 
-ProSA is free and open source. You can find the source code on [GitHub](https://github.com/worldline/prosa).
+ProSA is free and open source. You can find the source code on [GitHub](https://github.com/worldline/ProSA).
 ProSA relies on Worldliners to fix bugs and add features, but accept contribution from the community: if you'd like to contribute, please read the [CONTRIBUTING](https://github.com/worldline/ProSA/blob/main/CONTRIBUTING.md) guide.
 
 
