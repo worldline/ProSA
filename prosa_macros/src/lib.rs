@@ -1,6 +1,6 @@
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/COPYRIGHT"))]
 //!
-//! [![github]](https://github.com/worldline/prosa)&ensp;[![crates-io]](https://crates.io/crates/prosa-macros)&ensp;[![docs-rs]](crate)&ensp;[![mdbook]](https://worldline.github.io/prosa)
+//! [![github]](https://github.com/worldline/ProSA)&ensp;[![crates-io]](https://crates.io/crates/prosa-macros)&ensp;[![docs-rs]](crate)&ensp;[![mdbook]](https://worldline.github.io/ProSA/)
 //!
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/doc_assets/header_badges.md"))]
 //!

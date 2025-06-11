@@ -5,16 +5,16 @@ ProSA is a merge of multiple [Worldline](https://worldline.com/) internal produc
 The library aimed at providing a simple and lightweight protocol service adaptor for service oriented architectures.
 The goal of this project is to provide a flexible and scalable platform for developing and deploying microservices, allowing developers to focus on writing business logic while ProSA takes care of the underlying infrastructure concers.
 
-A [ProSA mdBook](https://worldline.github.io/prosa) is available if you want to learn everything about ProSA.
+A [ProSA mdBook](https://worldline.github.io/ProSA/) is available if you want to learn everything about ProSA.
 
 ## Legend
 
 ProSA components are illustrated:
- - Main: [<img alt="main" src="https://raw.githubusercontent.com/worldline/prosa/main/assets/main.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/main/ "main")
- - TVF: [<img alt="tvf" src="https://raw.githubusercontent.com/worldline/prosa/main/assets/tvf.svg" width="26">](https://docs.rs/prosa_utils/latest/prosa_utils/msg/tvf/ "tvf")
- - Processor: [<img alt="processor" src="https://raw.githubusercontent.com/worldline/prosa/main/assets/proc.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/proc/ "processor")
- - Settings: [<img alt="settings" src="https://raw.githubusercontent.com/worldline/prosa/main/assets/settings.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/settings/ "settings")
- - Adaptor: [<img alt="adaptor" src="https://raw.githubusercontent.com/worldline/prosa/main/assets/adaptor.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/adaptor/ "adaptor")
+ - Main: [<img alt="main" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/main.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/main/ "main")
+ - TVF: [<img alt="tvf" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/tvf.svg" width="26">](https://docs.rs/prosa_utils/latest/prosa_utils/msg/tvf/ "tvf")
+ - Processor: [<img alt="processor" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/proc.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/proc/ "processor")
+ - Settings: [<img alt="settings" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/settings.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/settings/ "settings")
+ - Adaptor: [<img alt="adaptor" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/adaptor.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/adaptor/ "adaptor")
 
 
 ## Service approach

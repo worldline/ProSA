@@ -9,7 +9,7 @@ title = "ProSA - Protocol Service Adaptor"
 command = "mdbook-mermaid"
 
 [output.html]
-additional-css = ["src/worldline.css"]
-git-repository-url = "https://github.com/worldline/prosa"
+additional-css = ["worldline.css"]
+git-repository-url = "https://github.com/worldline/ProSA"
 git-repository-icon = "fa-github"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
