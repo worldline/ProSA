@@ -30,7 +30,7 @@
         <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-        <link rel="stylesheet" href="src/worldline.css">
+        <link rel="stylesheet" href="worldline.css">
 
 
         <!-- Provide site root and default themes to javascript -->
@@ -142,7 +142,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/worldline/prosa" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/worldline/ProSA" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
 
@@ -176,7 +176,7 @@
 <p>ProSA is an open-source Rust implementation of Worldline's service provider solution.
 ProSA was designed to provide a simple and lightweight protocol service adaptor for service-oriented architectures and to offer a flexible and scalable platform for developing and deploying microservices. This allow developers to focus on writing business logic while ProSA takes care of the underlying infrastructure concerns.</p>
 <h2 id="contributing"><a class="header" href="#contributing">Contributing</a></h2>
-<p>ProSA is free and open source. You can find the source code on <a href="https://github.com/worldline/prosa">GitHub</a>.
+<p>ProSA is free and open source. You can find the source code on <a href="https://github.com/worldline/ProSA">GitHub</a>.
 ProSA relies on Worldliners to fix bugs and add features, but accept contribution from the community: if you'd like to contribute, please read the <a href="https://github.com/worldline/ProSA/blob/main/CONTRIBUTING.md">CONTRIBUTING</a> guide.</p>
 <h2 id="license"><a class="header" href="#license">License</a></h2>
 <p>The ProSA source and documentation are released under
@@ -656,7 +656,8 @@ You will need to install these dependencies separately according to your ProSA s
 <h3 id="prosa-base"><a class="header" href="#prosa-base">ProSA base</a></h3>
 <p>To set up ProSA, you need to use the [<code>prosa</code>][https://forge.puppet.com/modules/worldline/prosa/reference#prosa] class.</p>
 <p>From this class, you should specify the binary repository to retrieve the ProSA binary.
-Additionally, observability is configured by default, but you may need to specify parameters based on your particular stack.</p>
+Additionally, observability is configured by default, but you may need to specify parameters based on your particular stack.
+For more details on configuration, please refer to the <a href="https://worldline.github.io/ProSA/ch01-02-config.html">ProSA configuration guide</a>.</p>
 <pre><code class="language-puppet">class { 'prosa':
   bin_repo        =&gt; 'https://user:password@binary.repo.com/repository/prosa-1.0.0.bin',
   telemetry_level =&gt; 'info',
