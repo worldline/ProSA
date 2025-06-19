@@ -86,7 +86,7 @@ where
     /// Getter of the mutable span of the message (use to add informations for metrics)
     fn get_span_mut(&mut self) -> &mut Span;
     /// Enter the span and push metadata in it
-    fn enter_span(&self) -> span::Entered;
+    fn enter_span(&self) -> span::Entered<'_>;
     /// Return the elapsed time corresponding to the processing time (duration since the request creation)
     fn elapsed(&self) -> Duration;
     /// Getter of the message content
