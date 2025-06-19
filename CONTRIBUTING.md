@@ -2,6 +2,11 @@
 
 ProSA projects accept contributions via GitHub pull requests. This document outlines the process to help get your contribution accepted.
 
+ProSA relies on Worldliners to fix bugs and add features, but accept contribution from the community.
+
+Please note: ProSA is an enterprise open source project.
+Worldline maintains responsibility for guiding the project’s direction and deciding which features are included.
+
 ## How to Contribute Code
 
 1. Identify or create the related issue.
@@ -16,7 +21,7 @@ We use Pull Requests (PRs) to track code changes.
 
 ## Developer Certificate of Origin
 
-As with other CNCF projects, ProSA has adopted a [Developers Certificate of Origin (DCO)](https://developercertificate.org/). A DCO is a lightweight way for a developer to certify that they wrote or otherwise have the right to submit code or documentation to a project.
+ProSA projects use a [Developers Certificate of Origin (DCO)](https://developercertificate.org/). A DCO is a lightweight way for a developer to certify that they wrote or otherwise have the right to submit code or documentation to a project.
 
 The sign-off is a simple line at the end of the explanation for a commit. All commits need to be
 signed. Your signature certifies that you wrote the patch or otherwise have the right to contribute
