@@ -39,6 +39,37 @@ where
     Buffer(Cow<'v, T>),
 }
 
+/// Identify the type of a TVF field
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TvfType {
+    /// A byte type
+    Byte,
+
+    /// An unsigned integer type
+    Unsigned,
+
+    /// A signed integer type
+    Signed,
+
+    /// A floating point number type
+    Float,
+
+    /// A string type
+    String,
+
+    /// A buffer of bytes
+    Bytes,
+
+    /// A date type
+    Date,
+
+    /// A date and time type
+    DateTime,
+
+    /// A TVF sub buffer
+    Buffer,
+}
+
 macro_rules! impl_from {
     ($num_type:ty => $enum_type:ident as $cast_type:ty) => {
         impl<'v, T: Tvf + Clone> From<$num_type> for TvfValue<'v, T> {
@@ -111,6 +142,46 @@ impl<T: Tvf + Clone + PartialEq> PartialEq for TvfValue<'_, T> {
             (Self::Bytes(a), Self::Bytes(b)) => a == b,
             (Self::Buffer(a), Self::Buffer(b)) => a == b,
             _ => false,
+        }
+    }
+}
+
+impl<'v, T> TvfValue<'v, T>
+where
+    T: Tvf + Clone,
+{
+    /// Get the type of the TVF value
+    pub fn get_type(&self) -> TvfType {
+        match &self {
+            Self::Byte(_) => TvfType::Byte,
+            Self::Unsigned(_) => TvfType::Unsigned,
+            Self::Signed(_) => TvfType::Signed,
+            Self::Float(_) => TvfType::Float,
+            Self::String(_) => TvfType::String,
+            Self::Bytes(_) => TvfType::Bytes,
+            Self::Date(_) => TvfType::Date,
+            Self::DateTime(_) => TvfType::DateTime,
+            Self::Buffer(_) => TvfType::Buffer,
+        }
+    }
+}
+
+impl<T> TvfValue<'static, T>
+where
+    T: Tvf + Clone,
+{
+    /// If the inner value is borrowed, clone it to get an owned value
+    pub fn into_owned(self) -> TvfValue<'static, T> {
+        match self {
+            Self::Byte(a) => Self::Byte(a),
+            Self::Unsigned(a) => Self::Unsigned(a),
+            Self::Signed(a) => Self::Signed(a),
+            Self::Float(a) => Self::Float(a),
+            Self::Date(a) => Self::Date(a),
+            Self::DateTime(a) => Self::DateTime(a),
+            Self::String(a) => Self::String(Cow::Owned(a.into_owned())),
+            Self::Bytes(a) => Self::Bytes(Cow::Owned(a.into_owned())),
+            Self::Buffer(a) => Self::Buffer(Cow::Owned(a.into_owned())),
         }
     }
 }

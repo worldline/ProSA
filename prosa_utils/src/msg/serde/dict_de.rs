@@ -7,7 +7,6 @@ use crate::msg::{
 };
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
-use regex::Regex;
 use serde::{
     Deserialize, Deserializer,
     de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor},

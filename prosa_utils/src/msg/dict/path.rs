@@ -6,7 +6,7 @@ use crate::msg::tvf::TvfError;
 use std::fmt;
 
 /// Error that can be encountered when resolving a path
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 pub enum PathError {
     /// Encountered an unknown label in the provided path
     #[error("Encountered an invalid label \"{0}\" in the provided path.")]
@@ -154,7 +154,10 @@ impl<P> Entry<P> {
         match self {
             // End of dictionary.
             // The path can still be evaluated if all remaining elements are numerical.
-            Entry::Leaf(_) => aggregate_path_of_numbers(path, separator, output),
+            Entry::Leaf {
+                expected_type: _,
+                payload: _,
+            } => aggregate_path_of_numbers(path, separator, output),
 
             // Sub dictionary
             Entry::Node(sub_dict) => {
@@ -230,7 +233,7 @@ mod tests {
     use super::*;
     use std::sync::OnceLock;
 
-    fn create_dictionnary() -> &'static Dictionary<()> {
+    fn get_dictionnary() -> &'static Dictionary<()> {
         static DICT: OnceLock<Dictionary<()>> = OnceLock::new();
         DICT.get_or_init(|| {
             let mut dict = Dictionary::<()>::new();
@@ -239,10 +242,20 @@ mod tests {
                 "label1",
                 Entry::List({
                     let mut sub_dict = Dictionary::<()>::new();
-                    sub_dict.add_entry(30, "label3", Entry::Leaf(()));
+                    sub_dict.add_entry(30, "label3", Entry::default());
                     Box::new(sub_dict.into())
                 }),
             );
+            dict.add_entry(
+                2,
+                "LABEL2",
+                Entry::List({
+                    let mut sub_dict = Dictionary::<()>::new();
+                    sub_dict.add_entry(40, "Lab4", Entry::default());
+                    Box::new(sub_dict.into())
+                }),
+            );
+            dict.add_entry(10, "MY_LABEL", Entry::default());
             dict
         })
     }
@@ -267,24 +280,40 @@ mod tests {
 
     #[test]
     fn test_resolve_path() {
-        let path1 = vec![1, 20, 30, 4, 5];
-        let path2 = Path::from_raw("label1.20.label3.4.5", '.');
-
-        // build a simple dictionary
-        let dict = create_dictionnary();
-
-        let path2 = dict.resolve_path(&path2).unwrap();
-        assert_eq!(path1, path2);
+        let dict = get_dictionnary();
+        let path = Path::from_raw("label1.3.label3.4.5", '.');
+        let path = dict.resolve_path(&path).unwrap();
+        assert_eq!(vec![1, 3, 30, 4, 5], path);
     }
 
     #[test]
     fn test_resolve_raw_path() {
-        let path1 = vec![1, 20, 30, 4, 5];
+        let dict = get_dictionnary();
+        let path = dict.resolve_raw_path("LABEL2-12-Lab4-4-5", '-').unwrap();
+        assert_eq!(vec![2, 12, 40, 4, 5], path);
+    }
 
-        // build a simple dictionary
-        let dict = create_dictionnary();
+    #[test]
+    fn test_start_with_numeric() {
+        let dict = get_dictionnary();
+        let path = dict.resolve_raw_path("1=2=label3=6=7", '=').unwrap();
+        assert_eq!(vec![1, 2, 30, 6, 7], path);
+    }
 
-        let path2 = dict.resolve_raw_path("label1-20-label3-4-5", '-').unwrap();
-        assert_eq!(path1, path2);
+    #[test]
+    fn test_unknown_label() {
+        let dict = get_dictionnary();
+        let unknown = dict.resolve_raw_path("toto+10", '+').unwrap_err();
+        assert_eq!(PathError::UnknownLabel("toto".to_string()), unknown);
+    }
+
+    #[test]
+    fn test_edge_case() {
+        let dict = get_dictionnary();
+
+        // if the label contains a character used as a separator,
+        // we cannot do much except return an error.
+        let unknown = dict.resolve_raw_path("MY_LABEL_11", '_').unwrap_err();
+        assert_eq!(PathError::UnknownLabel("MY".to_string()), unknown);
     }
 }

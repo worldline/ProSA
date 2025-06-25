@@ -5,7 +5,7 @@ pub mod path;
 
 use crate::msg::{
     tvf::{Tvf, TvfError},
-    value::TvfValue,
+    value::{TvfType, TvfValue},
 };
 use std::{borrow::Cow, collections::HashMap, ptr, sync::Arc};
 
@@ -22,7 +22,13 @@ pub struct Dictionary<P> {
 #[derive(Debug, Clone)]
 pub enum Entry<P> {
     /// Entry with a custom definition.
-    Leaf(P),
+    Leaf {
+        /// The expected type of the field
+        expected_type: TvfType,
+
+        /// The arbitrary payload
+        payload: P,
+    },
 
     /// Entry expect a sub-buffer mapped to the provided sub-dictionary.
     Node(Box<Dictionary<P>>),
@@ -101,8 +107,11 @@ impl<P> Dictionary<P> {
 impl<P> Entry<P> {
     /// Create a new entry
     #[inline]
-    pub fn new(payload: P) -> Self {
-        Self::Leaf(payload)
+    pub fn new(expected_type: TvfType, payload: P) -> Self {
+        Self::Leaf {
+            expected_type,
+            payload,
+        }
     }
 
     /// Create a new sub dictionary
@@ -113,8 +122,11 @@ impl<P> Entry<P> {
 
     /// Create a new repeatable entry
     #[inline]
-    pub fn new_repeatable(payload: P) -> Self {
-        Self::List(Box::new(Self::Leaf(payload)))
+    pub fn new_repeatable(expected_type: TvfType, payload: P) -> Self {
+        Self::List(Box::new(Self::Leaf {
+            expected_type,
+            payload,
+        }))
     }
 
     /// Create a list of repeatable entries with common dictionary
@@ -131,23 +143,18 @@ where
 {
     #[inline]
     fn default() -> Self {
-        Self::Leaf(P::default())
+        Self::Leaf {
+            expected_type: TvfType::Buffer,
+            payload: P::default(),
+        }
     }
 }
 
-/// Trivially convert a payload into its corresponding entry type
-impl<P> From<P> for Entry<P> {
-    #[inline]
-    fn from(payload: P) -> Self {
-        Self::Leaf(payload)
-    }
-}
-
-/// Trivially convert a dictionary into an entry type
+/// Trivially convert a dictionary into an entry for another dictionary
 impl<P> From<Dictionary<P>> for Entry<P> {
     #[inline]
-    fn from(dict: Dictionary<P>) -> Self {
-        Self::Node(Box::new(dict))
+    fn from(value: Dictionary<P>) -> Self {
+        Entry::Node(Box::new(value))
     }
 }
 
@@ -157,7 +164,16 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Leaf(a), Self::Leaf(b)) => a == b,
+            (
+                Self::Leaf {
+                    expected_type: atype,
+                    payload: apl,
+                },
+                Self::Leaf {
+                    expected_type: btype,
+                    payload: bpl,
+                },
+            ) => atype == btype && apl == bpl,
             (Self::Node(a), Self::Node(b)) => ptr::eq(a, b),
             (Self::List(a), Self::List(b)) => a == b,
             _ => false,
@@ -204,9 +220,13 @@ where
     T: Clone + Tvf,
 {
     /// Access the field of a TVF message using a label instead of the numeric identifier.
-    pub fn get_field(&'t self, label: &str) -> Result<TvfValue<'t, T>, TvfError> {
+    pub fn get_field(
+        &'t self,
+        label: &str,
+        expected: TvfType,
+    ) -> Result<TvfValue<'t, T>, TvfError> {
         if let Some(id) = self.dictionary.get_id(label) {
-            Ok(self.message.get(id)?)
+            Ok(self.message.get(id, expected)?)
         } else {
             Err(TvfError::FieldNotFound(0))
         }
@@ -221,16 +241,16 @@ mod tests {
     use std::sync::OnceLock;
     extern crate self as prosa_utils;
 
-    fn create_dictionnary() -> &'static Dictionary<i32> {
+    fn get_dictionnary() -> &'static Dictionary<i32> {
         static DICT: OnceLock<Dictionary<i32>> = OnceLock::new();
         DICT.get_or_init(|| {
             let mut sub_dict = Dictionary::default();
-            sub_dict.add_entry(10, "first", Entry::Leaf(-1));
-            sub_dict.add_entry(20, "second", Entry::Leaf(-22));
-            sub_dict.add_entry(30, "third", Entry::Leaf(333));
+            sub_dict.add_entry(10, "first", Entry::new(TvfType::String, -1));
+            sub_dict.add_entry(20, "second", Entry::new(TvfType::String, -22));
+            sub_dict.add_entry(30, "third", Entry::new(TvfType::Unsigned, 333));
 
             let mut dict = Dictionary::default();
-            dict.add_entry(2, "label2", Entry::Leaf(24));
+            dict.add_entry(2, "label2", Entry::new(TvfType::Unsigned, 24));
             dict.add_entry(4, "label4", Entry::new_dictionary(sub_dict.clone()));
             dict.add_entry(
                 5,
@@ -244,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_dict() {
-        let dict = create_dictionnary();
+        let dict = get_dictionnary();
         assert_eq!(5, dict.get_id("label5").unwrap());
         assert_eq!("label5", dict.get_label(5).unwrap());
 
@@ -259,7 +279,7 @@ mod tests {
     fn test_labeled_tvf() {
         type V<'t> = TvfValue<'t, SimpleStringTvf>;
 
-        let dict = create_dictionnary();
+        let dict = get_dictionnary();
         let message = tvf!(SimpleStringTvf {
             2 => 7,
             4 => {
@@ -291,6 +311,9 @@ mod tests {
         });
         let labeled = LabeledTvf::new(Cow::Borrowed(dict), Cow::Owned(message));
 
-        assert_eq!(V::Unsigned(7), labeled.get_field("label2").unwrap());
+        assert_eq!(
+            V::Unsigned(7),
+            labeled.get_field("label2", TvfType::Unsigned).unwrap()
+        );
     }
 }

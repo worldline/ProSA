@@ -7,6 +7,8 @@
 //!
 //! [^tvfnote]: **T**ag **V**alue **F**ormat
 
+use crate::msg::value::TvfType;
+
 use super::value::TvfValue;
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
@@ -66,15 +68,28 @@ pub trait Tvf {
     /// Get all the keys for this TVF
     fn keys(&self) -> Vec<usize>;
 
-    /// Get the field for the given id
-    fn get(&self, id: usize) -> Result<TvfValue<'_, Self>, TvfError>
+    /// Get a field from a TVF while specifying the expected output type
+    fn get(&self, id: usize, expected: TvfType) -> Result<TvfValue<'_, Self>, TvfError>
     where
-        Self: Sized + Clone;
+        Self: Clone,
+    {
+        match expected {
+            TvfType::Byte => Ok(self.get_byte(id)?.into()),
+            TvfType::Unsigned => Ok(self.get_unsigned(id)?.into()),
+            TvfType::Signed => Ok(self.get_signed(id)?.into()),
+            TvfType::Float => Ok(self.get_float(id)?.into()),
+            TvfType::Date => Ok(self.get_date(id)?.into()),
+            TvfType::DateTime => Ok(self.get_datetime(id)?.into()),
+            TvfType::String => Ok(TvfValue::String(self.get_string(id)?)),
+            TvfType::Bytes => Ok(TvfValue::Bytes(self.get_bytes(id)?)),
+            TvfType::Buffer => Ok(TvfValue::Buffer(self.get_buffer(id)?)),
+        }
+    }
 
     /// Get a sub buffer from a TVF
     fn get_buffer(&self, id: usize) -> Result<Cow<'_, Self>, TvfError>
     where
-        Self: Tvf + Default + Debug + Clone;
+        Self: Clone;
     /// Get an unsigned value from a TVF
     fn get_unsigned(&self, id: usize) -> Result<u64, TvfError>;
     /// Get a signed value from a TVF
@@ -89,32 +104,30 @@ pub trait Tvf {
     fn get_bytes(&self, id: usize) -> Result<Cow<'_, Bytes>, TvfError>;
     /// Get a date field from a TVF
     fn get_date(&self, id: usize) -> Result<NaiveDate, TvfError>;
-    /// Get a datetime field from  a TVF.  
+    /// Get a datetime field from  a TVF.
     /// The timestamp is considered to be UTC.
     fn get_datetime(&self, id: usize) -> Result<NaiveDateTime, TvfError>;
 
     /// Put a field into a TVF
     fn put(&mut self, id: usize, value: TvfValue<'_, Self>)
     where
-        Self: Sized + Clone + Default + Debug,
+        Self: Sized + Clone,
     {
         match value {
             TvfValue::Byte(byte) => self.put_byte(id, byte),
             TvfValue::Unsigned(unsigned) => self.put_unsigned(id, unsigned),
             TvfValue::Signed(signed) => self.put_signed(id, signed),
             TvfValue::Float(float) => self.put_float(id, float),
-            TvfValue::String(string) => self.put_string(id, string.into_owned()),
-            TvfValue::Bytes(buffer) => self.put_bytes(id, buffer.into_owned()),
             TvfValue::Date(date) => self.put_date(id, date),
             TvfValue::DateTime(datetime) => self.put_datetime(id, datetime),
+            TvfValue::String(string) => self.put_string(id, string.into_owned()),
+            TvfValue::Bytes(buffer) => self.put_bytes(id, buffer.into_owned()),
             TvfValue::Buffer(buffer) => self.put_buffer(id, buffer.into_owned()),
         }
     }
 
     /// Put a buffer as sub field into a TVF
-    fn put_buffer(&mut self, id: usize, buffer: Self)
-    where
-        Self: Tvf + Default + Debug + Clone;
+    fn put_buffer(&mut self, id: usize, buffer: Self);
     /// Put an unsigned value to a TVF
     fn put_unsigned(&mut self, id: usize, unsigned: u64);
     /// Put a signed value to a TVF
@@ -129,9 +142,108 @@ pub trait Tvf {
     fn put_bytes(&mut self, id: usize, buffer: Bytes);
     /// Put a date into a TVF
     fn put_date(&mut self, id: usize, date: NaiveDate);
-    /// Put a datetime into a TVF.  
+    /// Put a datetime into a TVF.
     /// The timestamp is considered to be UTC.
     fn put_datetime(&mut self, id: usize, datetime: NaiveDateTime);
+
+    /// Follow a path to a byte
+    #[inline]
+    fn find_byte(&self, path: &[usize]) -> Result<u8, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_byte(self, path)
+    }
+
+    /// Follow a path to an unsigned integer
+    #[inline]
+    fn find_unsigned(&self, path: &[usize]) -> Result<u64, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_unsigned(self, path)
+    }
+
+    /// Follow a path to an signed integer
+    #[inline]
+    fn find_signed(&self, path: &[usize]) -> Result<i64, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_signed(self, path)
+    }
+
+    /// Follow a path to an floating point number
+    #[inline]
+    fn find_float(&self, path: &[usize]) -> Result<f64, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_float(self, path)
+    }
+
+    /// Follow a path to a string
+    #[inline]
+    fn find_string(&self, path: &[usize]) -> Result<Cow<'_, String>, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_string(self, path)
+    }
+
+    /// Follow a path to an array of bytes
+    #[inline]
+    fn find_bytes(&self, path: &[usize]) -> Result<Cow<'_, Bytes>, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_bytes(self, path)
+    }
+
+    /// Follow a path to a date
+    #[inline]
+    fn find_date(&self, path: &[usize]) -> Result<NaiveDate, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_date(self, path)
+    }
+
+    /// Follow a path to a date time
+    #[inline]
+    fn find_datetime(&self, path: &[usize]) -> Result<NaiveDateTime, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_datetime(self, path)
+    }
+
+    /// Follow a path to a sub-buffer
+    #[inline]
+    fn find_buffer(&self, path: &[usize]) -> Result<Cow<'_, Self>, TvfError>
+    where
+        Self: Clone,
+    {
+        follow_path_to_buffer(self, path)
+    }
+
+    /// Find a field following a path
+    fn find(&self, path: &[usize], expected: TvfType) -> Result<TvfValue<'_, Self>, TvfError>
+    where
+        Self: Clone,
+    {
+        match expected {
+            TvfType::Byte => Ok(self.find_byte(path)?.into()),
+            TvfType::Unsigned => Ok(self.find_unsigned(path)?.into()),
+            TvfType::Signed => Ok(self.find_signed(path)?.into()),
+            TvfType::Float => Ok(self.find_float(path)?.into()),
+            TvfType::Date => Ok(self.find_date(path)?.into()),
+            TvfType::DateTime => Ok(self.find_datetime(path)?.into()),
+            TvfType::String => Ok(TvfValue::String(self.find_string(path)?)),
+            TvfType::Bytes => Ok(TvfValue::Bytes(self.find_bytes(path)?)),
+            TvfType::Buffer => Ok(TvfValue::Buffer(self.find_buffer(path)?)),
+        }
+    }
 }
 
 /// Trait to define a TVF[^tvfnote] filter.
@@ -180,5 +292,90 @@ pub trait TvfFilter {
         }
 
         tvf
+    }
+}
+
+/// Create a function follow path for each TVF type
+macro_rules! make_follow_path {
+    ( $func:ident use $inner:ident -> $out:ty ) => {
+        pub(crate) fn $func<T>(msg: &T, path: &[usize]) -> Result<$out, TvfError>
+        where
+            T: Tvf + Sized + Clone,
+        {
+            if let Some((last, path)) = path.split_last() {
+                if let Some(sub) = follow_path(msg, path)? {
+                    sub.$inner(*last)
+                } else {
+                    msg.$inner(*last)
+                }
+            } else {
+                Err(TvfError::FieldNotFound(0))
+            }
+        }
+    };
+    ( $func:ident use $inner:ident -> cow $out:ty ) => {
+        pub(crate) fn $func<'t, T>(msg: &'t T, path: &[usize]) -> Result<Cow<'t, $out>, TvfError>
+        where
+            T: Tvf + Sized + Clone,
+        {
+            if let Some((last, path)) = path.split_last() {
+                if let Some(sub) = follow_path(msg, path)? {
+                    let value = sub.$inner(*last)?.into_owned();
+                    Ok(Cow::Owned(value))
+                } else {
+                    msg.$inner(*last)
+                }
+            } else {
+                Err(TvfError::FieldNotFound(0))
+            }
+        }
+    };
+}
+
+make_follow_path![ follow_path_to_byte     use get_byte     -> u8            ];
+make_follow_path![ follow_path_to_unsigned use get_unsigned -> u64           ];
+make_follow_path![ follow_path_to_signed   use get_signed   -> i64           ];
+make_follow_path![ follow_path_to_float    use get_float    -> f64           ];
+make_follow_path![ follow_path_to_date     use get_date     -> NaiveDate     ];
+make_follow_path![ follow_path_to_datetime use get_datetime -> NaiveDateTime ];
+make_follow_path![ follow_path_to_string   use get_string   -> cow String    ];
+make_follow_path![ follow_path_to_bytes    use get_bytes    -> cow Bytes     ];
+
+/// Follow a path to a sub buffer
+pub(crate) fn follow_path_to_buffer<'t, T>(
+    msg: &'t T,
+    path: &[usize],
+) -> Result<Cow<'t, T>, TvfError>
+where
+    T: Tvf + Sized + Clone,
+{
+    if let Some(sub) = follow_path(msg, path)? {
+        Ok(Cow::Owned(sub))
+    } else {
+        Err(TvfError::FieldNotFound(0))
+    }
+}
+
+/// Follow a path to get to a sub-buffer
+fn follow_path<T>(msg: &T, path: &[usize]) -> Result<Option<T>, TvfError>
+where
+    T: Tvf + Clone,
+{
+    // split off the first id of the path to avoid copying the first buffer
+    if let Some((first, path)) = path.split_first() {
+        // get the first sub-buffer
+        let mut msg = msg.get_buffer(*first)?.into_owned();
+
+        // follow the rest of the path cloning buffers along the
+        // way such that the borrow checker does not complaing
+        for id in path {
+            msg = msg.get_buffer(*id)?.into_owned();
+        }
+
+        // return the buffer
+        Ok(Some(msg))
+    } else {
+        // the path is actually empty, so we should use the initial buffer as is
+        Ok(None)
     }
 }
