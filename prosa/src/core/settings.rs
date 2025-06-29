@@ -47,7 +47,7 @@ pub use prosa_macros::settings;
 /// ```
 /// use prosa::core::settings::Settings;
 /// use prosa_utils::config::observability::Observability;
-/// use serde::Serialize;
+/// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Debug, Deserialize, Serialize)]
 /// struct MySameSettings {
