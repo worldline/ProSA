@@ -102,7 +102,7 @@
 //!         self.proc.add_proc().await?;
 //!
 //!         // Retrieve param from the processor settings `MyProcSettings`
-//!         let _param = self.proc.settings.param;
+//!         let _param = &self.settings.param;
 //!
 //!         loop {
 //!             if let Some(msg) = self.internal_rx_queue.recv().await {
