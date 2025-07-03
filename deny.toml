@@ -3,7 +3,6 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 ignore = [
-    { id = "RUSTSEC-2024-0437", reason = "this vulnerability does not affect us as prometheus crate don't use the particular code path" },
 ]
 
 [licenses]

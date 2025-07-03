@@ -356,13 +356,18 @@ where
         self.main.is_stopping()
     }
 
+    /// Getter of the Prometheus registry
+    pub fn get_prometheus_registry(&self) -> &prometheus::Registry {
+        self.main.get_prometheus_registry()
+    }
+
     /// Provide the opentelemetry Meter based on ProSA settings
-    pub fn meter(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry::metrics::Meter {
+    pub fn meter(&self, name: &'static str) -> opentelemetry::metrics::Meter {
         self.main.meter(name)
     }
 
     /// Provide the opentelemetry Logger based on ProSA settings
-    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::Logger {
+    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::SdkLogger {
         self.main.logger(name)
     }
 
