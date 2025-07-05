@@ -32,7 +32,7 @@ where
         &mut self,
         _name: String,
     ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
-        let mut adaptor = A::default();
+        let adaptor = A::default();
         self.proc.add_proc().await?;
         self.proc
             .add_service_proc(vec![String::from("PROC_TEST")])
