@@ -28,7 +28,7 @@ where
   let gauge_meter = meter
     .u64_gauge("prosa_gauge_metric_name")
     .with_description("Custom ProSA gauge metric")
-    .init();
+    .build();
 
   // Record your value for the gauge with custom keys
   gauge_meter.record(
@@ -66,7 +66,7 @@ where
 
       // You can call `observe()` multiple time if you have metrics with different labels
     })
-    .init();
+    .build();
 
   value
 }
