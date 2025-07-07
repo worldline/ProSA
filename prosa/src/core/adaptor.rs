@@ -39,8 +39,28 @@ pub use prosa_macros::Adaptor;
 /// #[derive(Adaptor)]
 /// struct MyAdaptor {}
 /// ```
+///
+/// If you have to use the message type in your adaptor
+/// ```
+/// use prosa::core::adaptor::Adaptor;
+///
+/// #[derive(Adaptor)]
+/// struct MyAdaptor<M>
+/// where
+///     M: 'static
+///         + std::marker::Send
+///         + std::marker::Sync
+///         + std::marker::Sized
+///         + std::clone::Clone
+///         + std::fmt::Debug
+///         + prosa_utils::msg::tvf::Tvf
+///         + std::default::Default,
+/// {
+///     _phantom: std::marker::PhantomData<M>,
+/// }
+/// ```
 pub trait Adaptor {
     /// Method call when the ProSA need to shut down.
     /// This method is call only once so the processing will be thread safe.
-    fn terminate(&mut self);
+    fn terminate(&self);
 }
