@@ -149,7 +149,8 @@ impl InjProc {
                 self.get_proc_id(),
                 msg
             ),
-            InternalMsg::Response(msg) => {
+            InternalMsg::Response(mut msg) => {
+                let response_data = msg.take_data();
                 let _enter_span = msg.enter_span();
                 meter_trans_duration.record(
                     msg.elapsed().as_secs_f64(),
@@ -159,13 +160,15 @@ impl InjProc {
                     ],
                 );
 
-                debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = name, service = msg.get_service(), response = format!("{:?}", msg.get_data()));
-                adaptor.process_response(msg.get_data(), msg.get_service())?;
+                if let Some(response) = response_data {
+                    debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = name, service = msg.get_service(), response = format!("{:?}", response));
+                    adaptor.process_response(response, msg.get_service())?;
 
-                regulator.notify_receive_transaction(msg.elapsed());
+                    regulator.notify_receive_transaction(msg.elapsed());
 
-                // Build the next transaction
-                let _ = next_transaction.get_or_insert(adaptor.build_transaction());
+                    // Build the next transaction
+                    let _ = next_transaction.get_or_insert(adaptor.build_transaction());
+                }
             }
             InternalMsg::Error(err) => panic!(
                 "The inj processor {} receive an error {:?}",

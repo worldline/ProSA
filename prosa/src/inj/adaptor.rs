@@ -58,7 +58,7 @@ where
     /// By default response are ignored
     fn process_response(
         &mut self,
-        _response: &M,
+        _response: M,
         _service_name: &str,
     ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         Ok(())
