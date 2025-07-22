@@ -1,3 +1,7 @@
+//! Module to implements the `Serialize` trait on `LabeledTvf`
+//! By binding a dictionary with a TVf message into a `LabeledTvf`,
+//! it is possible to use text fields' identifiers instead of numerical tags.
+
 use super::{Dictionary, Entry, LabeledTvf};
 use crate::msg::{tvf::Tvf, value::TvfValue};
 use serde::{
@@ -53,8 +57,7 @@ where
                     for id in ids {
                         let value = buffer.get(id).map_err(|err| {
                             serde::ser::Error::custom(format!(
-                                "Error while serializing field {}: {}",
-                                id, err
+                                "Error while serializing field {id}: {err}"
                             ))
                         })?;
                         // if the field is a sub-message, we may serialize it with a corresponding sub-dictionary
@@ -99,7 +102,7 @@ where
 
     for id in ids {
         let value = message.get(id).map_err(|err| {
-            serde::ser::Error::custom(format!("Error while serializing field {}: {}", id, err))
+            serde::ser::Error::custom(format!("Error while serializing field {id}: {err}"))
         })?;
 
         if let Some((label, def)) = dictionary.id_to_label.get(&id) {

@@ -1,3 +1,8 @@
+//! Module to implements the `DeserializeSeed` trait on `Tvf` messages
+//! The seed should contain a dictionary so that the text fields' identifiers can
+//! be replaced by there corresponding numerical tags. Which will allow use to
+//! obtain a regular TVF message.
+
 use super::{Dictionary, Entry};
 use crate::msg::{tvf::Tvf, value::TvfValue};
 use bytes::Bytes;

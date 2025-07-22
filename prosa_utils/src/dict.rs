@@ -1,3 +1,5 @@
+//! Module for ProSA TVF dictionary
+
 pub mod ops;
 
 #[cfg(all(feature = "dict", feature = "serde"))]
