@@ -38,7 +38,7 @@ impl<const S: char> fmt::Display for PathOfLabels<S> {
         if !self.0.is_empty() {
             write!(f, "{}", self.0[0])?;
             for elem in &self.0[1..] {
-                write!(f, "{}{}", S, elem)?;
+                write!(f, "{S}{elem}")?;
             }
         }
         Ok(())

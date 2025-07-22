@@ -29,7 +29,7 @@ where
         for id in ids {
             // Get the value for the given id
             let value = self.0.get(id).map_err(|err| {
-                serde::ser::Error::custom(format!("Error while serializing field {}: {}", id, err))
+                serde::ser::Error::custom(format!("Error while serializing field {id}: {err}"))
             })?;
 
             // Serialize the value
