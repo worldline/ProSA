@@ -8,6 +8,8 @@ use tokio::sync::mpsc;
 use tracing::span;
 use tracing::{Level, Span, event};
 
+use crate::core::error::BusError;
+
 use super::{
     error::ProcError,
     service::{ProcService, ServiceError, ServiceTable},
@@ -89,10 +91,52 @@ where
     fn enter_span(&self) -> span::Entered<'_>;
     /// Return the elapsed time corresponding to the processing time (duration since the request creation)
     fn elapsed(&self) -> Duration;
-    /// Getter of the message content
-    fn get_data(&self) -> &M;
-    /// Getter of the mutable message content
-    fn get_data_mut(&mut self) -> &mut M;
+    /// Getter of the message content. Return an error if the data have been taken
+    fn get_data(&self) -> Result<&M, BusError>;
+    /// Getter of the mutable message content. Return an error if the data have been taken
+    fn get_data_mut(&mut self) -> Result<&mut M, BusError>;
+    /// Takes the data out of the message.
+    ///
+    /// ```
+    /// use prosa_utils::msg::tvf::Tvf;
+    /// use prosa::core::msg::Msg;
+    ///
+    /// fn process_msg<T, M>(mut msg: T)
+    /// where
+    ///     M: Sized + Clone + Tvf,
+    ///     T: Msg<M>,
+    /// {
+    ///     if msg.get_data().is_ok() {
+    ///         let data = msg.take_data();
+    ///         assert!(data.is_some());
+    ///         assert!(msg.get_data().is_err());
+    ///     } else {
+    ///         assert!(msg.take_data().is_none());
+    ///     }
+    /// }
+    /// ```
+    fn take_data(&mut self) -> Option<M>;
+    /// Takes the value out of the message, but only if the predicate evaluates to true on a mutable reference to the data.
+    /// This method operates similar to [`Msg<M>::take_data`] but conditional.
+    ///
+    /// ```
+    /// use prosa_utils::msg::tvf::Tvf;
+    /// use prosa::core::msg::Msg;
+    ///
+    /// fn process_msg<T, M>(mut msg: T)
+    /// where
+    ///     M: Sized + Clone + Tvf,
+    ///     T: Msg<M>,
+    /// {
+    ///     if msg.get_data().is_ok() {
+    ///         let data = msg.take_data_if(|data| data.contains(42));
+    ///         // Return the data only if its contain a field 42.
+    ///     }
+    /// }
+    /// ```
+    fn take_data_if<P>(&mut self, predicate: P) -> Option<M>
+    where
+        P: FnOnce(&mut M) -> bool;
 }
 
 /// ProSA request message that define a data message that need to be process by a processor
@@ -104,7 +148,7 @@ where
     id: u64,
     service: String,
     span: Span,
-    data: M,
+    data: Option<M>,
     begin_time: SystemTime,
     response_queue: mpsc::Sender<InternalMsg<M>>,
 }
@@ -137,12 +181,23 @@ where
         self.begin_time.elapsed().unwrap_or(Duration::new(0, 0))
     }
 
-    fn get_data(&self) -> &M {
-        &self.data
+    fn get_data(&self) -> Result<&M, BusError> {
+        self.data.as_ref().ok_or(BusError::NoData)
     }
 
-    fn get_data_mut(&mut self) -> &mut M {
-        &mut self.data
+    fn get_data_mut(&mut self) -> Result<&mut M, BusError> {
+        self.data.as_mut().ok_or(BusError::NoData)
+    }
+
+    fn take_data(&mut self) -> Option<M> {
+        self.data.take()
+    }
+
+    fn take_data_if<P>(&mut self, predicate: P) -> Option<M>
+    where
+        P: FnOnce(&mut M) -> bool,
+    {
+        self.data.take_if(predicate)
     }
 }
 
@@ -162,7 +217,7 @@ where
         RequestMsg {
             id,
             service,
-            data,
+            data: Some(data),
             begin_time,
             span,
             response_queue,
@@ -180,7 +235,7 @@ where
                 service: self.service,
                 span: self.span,
                 response_time: self.begin_time,
-                data: resp,
+                data: Some(resp),
             }))
             .await
     }
@@ -198,7 +253,7 @@ where
                 service: self.service,
                 span: self.span,
                 error_time: self.begin_time,
-                data: data.unwrap_or(self.data),
+                data: data.or(self.data),
                 err,
             }))
             .await
@@ -215,7 +270,7 @@ where
     service: String,
     span: Span,
     response_time: SystemTime,
-    data: M,
+    data: Option<M>,
 }
 
 impl<M> Msg<M> for ResponseMsg<M>
@@ -246,12 +301,23 @@ where
         self.response_time.elapsed().unwrap_or(Duration::new(0, 0))
     }
 
-    fn get_data(&self) -> &M {
-        &self.data
+    fn get_data(&self) -> Result<&M, BusError> {
+        self.data.as_ref().ok_or(BusError::NoData)
     }
 
-    fn get_data_mut(&mut self) -> &mut M {
-        &mut self.data
+    fn get_data_mut(&mut self) -> Result<&mut M, BusError> {
+        self.data.as_mut().ok_or(BusError::NoData)
+    }
+
+    fn take_data(&mut self) -> Option<M> {
+        self.data.take()
+    }
+
+    fn take_data_if<P>(&mut self, predicate: P) -> Option<M>
+    where
+        P: FnOnce(&mut M) -> bool,
+    {
+        self.data.take_if(predicate)
     }
 }
 
@@ -265,7 +331,7 @@ where
     service: String,
     span: Span,
     error_time: SystemTime,
-    data: M,
+    data: Option<M>,
     err: ServiceError,
 }
 
@@ -299,12 +365,23 @@ where
         self.error_time.elapsed().unwrap_or(Duration::new(0, 0))
     }
 
-    fn get_data(&self) -> &M {
-        &self.data
+    fn get_data(&self) -> Result<&M, BusError> {
+        self.data.as_ref().ok_or(BusError::NoData)
     }
 
-    fn get_data_mut(&mut self) -> &mut M {
-        &mut self.data
+    fn get_data_mut(&mut self) -> Result<&mut M, BusError> {
+        self.data.as_mut().ok_or(BusError::NoData)
+    }
+
+    fn take_data(&mut self) -> Option<M> {
+        self.data.take()
+    }
+
+    fn take_data_if<P>(&mut self, predicate: P) -> Option<M>
+    where
+        P: FnOnce(&mut M) -> bool,
+    {
+        self.data.take_if(predicate)
     }
 }
 
@@ -313,7 +390,7 @@ where
     M: Sized + Clone + Tvf,
 {
     /// Method to create a new ErrorMsg
-    pub fn new(id: u64, service: String, span: Span, data: M, err: ServiceError) -> Self {
+    pub fn new(id: u64, service: String, span: Span, data: Option<M>, err: ServiceError) -> Self {
         ErrorMsg {
             id,
             service,

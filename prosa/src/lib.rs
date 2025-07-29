@@ -43,7 +43,7 @@ mod tests {
     use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
     use serde::Serialize;
 
-    use crate::core::error::ProcError;
+    use crate::core::{adaptor::MaybeAsync, error::ProcError, service::ServiceError};
 
     const SERVICE_TEST: &str = "PROSA_TEST";
     const WAIT_TIME: time::Duration = time::Duration::from_secs(5);
@@ -70,9 +70,7 @@ mod tests {
     }
 
     #[derive(Adaptor)]
-    struct TestStubAdaptor {
-        msg_count: u32,
-    }
+    struct TestStubAdaptor {}
 
     impl<M> StubAdaptor<M> for TestStubAdaptor
     where
@@ -86,14 +84,17 @@ mod tests {
             + std::default::Default,
     {
         fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
-            Ok(Self { msg_count: 0 })
+            Ok(Self {})
         }
 
-        fn process_request(&mut self, _service_name: &str, request: &M) -> M {
+        fn process_request(
+            &self,
+            _service_name: &str,
+            request: M,
+        ) -> MaybeAsync<Result<M, ServiceError>> {
             assert!(!request.is_empty());
-            self.msg_count += 1;
             COUNTER.fetch_add(1, Ordering::Relaxed);
-            request.clone()
+            Ok(request.clone()).into()
         }
     }
 

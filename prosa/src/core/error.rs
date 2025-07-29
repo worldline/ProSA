@@ -83,18 +83,18 @@ pub enum BusError {
     /// Error that indicate the queue can't forward the internal main message
     #[error("The Queue can't send the internal main message {0}, proc_id={1}, reason={2}")]
     InternalMainQueue(String, u32, String),
-
     /// Error that indicate the queue can't forward the internal message
     #[error("The Queue can't send the internal message: {0}")]
     InternalQueue(String),
-
     /// Error that indicate the queue can't forward the internal message
     #[error("The Processor {0}/{1} can't be contacted: {2}")]
     ProcComm(u32, u32, String),
-
     /// Error on the internal TVF message use for internal exchange
     #[error("The internal message is not correct: {0}")]
     InternalTvfMsg(#[from] TvfError),
+    /// There is no data to process, it has been consumed
+    #[error("No data to process")]
+    NoData,
 }
 
 impl ProcError for BusError {

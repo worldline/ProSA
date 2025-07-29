@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use prosa_macros::proc_settings;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-use crate::core::adaptor::Adaptor;
-use crate::core::error::ProcError;
+use crate::core::adaptor::{Adaptor, MaybeAsync};
+use crate::core::error::{BusError, ProcError};
 use crate::core::msg::{InternalMsg, Msg};
 use crate::core::proc::{Proc, ProcBusParam, proc};
 
@@ -68,11 +70,11 @@ pub struct StubProc {}
 #[proc]
 impl<A> Proc<A> for StubProc
 where
-    A: Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
+    A: 'static + Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Initiate an adaptor for the stub processor
-        let mut adaptor = A::new(self)?;
+        let adaptor = Arc::new(A::new(self)?);
 
         // Declare the processor
         self.proc.add_proc().await?;
@@ -85,10 +87,43 @@ where
         loop {
             if let Some(msg) = self.internal_rx_queue.recv().await {
                 match msg {
-                    InternalMsg::Request(msg) => {
-                        let resp_data = adaptor.process_request(msg.get_service(), msg.get_data());
-                        debug!(name: "stub_proc", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = name, stub_service = msg.get_service(), stub_req = format!("{:?}", msg.get_data()).to_string(), stub_resp = format!("{:?}", resp_data));
-                        msg.return_to_sender(resp_data).await.unwrap()
+                    InternalMsg::Request(mut msg) => {
+                        let request_data = msg.take_data().ok_or(BusError::NoData)?;
+                        let enter_span = msg.enter_span();
+
+                        debug!(name: "stub_proc_request", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = name, stub_service = msg.get_service(), "{:?}", msg.get_data());
+
+                        match adaptor.process_request(msg.get_service(), request_data) {
+                            MaybeAsync::Ready(Ok(resp)) => {
+                                debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
+                                drop(enter_span);
+                                msg.return_to_sender(resp).await?;
+                            }
+                            MaybeAsync::Ready(Err(err)) => {
+                                debug!(name: "stub_proc_error", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{err}");
+                                drop(enter_span);
+                                msg.return_error_to_sender(None, err).await?;
+                            }
+                            MaybeAsync::Future(future_resp) => {
+                                drop(enter_span);
+                                tokio::spawn(async move {
+                                    let enter_span = msg.enter_span();
+                                    let resp_data = future_resp.await;
+                                    match resp_data {
+                                        Ok(data) => {
+                                            debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{data:?}");
+                                            drop(enter_span);
+                                            msg.return_to_sender(data).await.unwrap()
+                                        }
+                                        Err(err) => {
+                                            debug!(name: "stub_proc_error", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{err}");
+                                            drop(enter_span);
+                                            msg.return_error_to_sender(None, err).await.unwrap();
+                                        }
+                                    }
+                                });
+                            }
+                        }
                     }
                     InternalMsg::Response(msg) => panic!(
                         "The stub processor {} receive a response {:?}",
