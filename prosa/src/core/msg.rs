@@ -1,12 +1,12 @@
 use std::{
-    sync::Arc,
+    sync::{Arc, atomic},
     time::{Duration, SystemTime},
 };
 
 use prosa_utils::msg::tvf::Tvf;
 use tokio::sync::mpsc;
-use tracing::span;
 use tracing::{Level, Span, event};
+use tracing::{info_span, span};
 
 use crate::core::error::BusError;
 
@@ -139,6 +139,8 @@ where
         P: FnOnce(&mut M) -> bool;
 }
 
+pub(crate) static ATOMIC_INTERNAL_MSG_ID: atomic::AtomicU64 = atomic::AtomicU64::new(0);
+
 /// ProSA request message that define a data message that need to be process by a processor
 #[derive(Debug)]
 pub struct RequestMsg<M>
@@ -206,16 +208,30 @@ where
     M: Sized + Clone + Tvf,
 {
     /// Method to create a new RequestMessage
-    pub fn new(
-        id: u64,
+    pub fn new(service: String, data: M, response_queue: mpsc::Sender<InternalMsg<M>>) -> Self {
+        let begin_time = SystemTime::now();
+        let span = info_span!("prosa::Msg", service = service);
+        RequestMsg {
+            id: ATOMIC_INTERNAL_MSG_ID.fetch_add(1, atomic::Ordering::Relaxed),
+            service,
+            data: Some(data),
+            begin_time,
+            span,
+            response_queue,
+        }
+    }
+
+    /// Method to create a new RequestMessage with a specific trace Id
+    pub fn new_with_trace_id(
         service: String,
         data: M,
         response_queue: mpsc::Sender<InternalMsg<M>>,
+        trace_id: tracing::span::Id,
     ) -> Self {
         let begin_time = SystemTime::now();
-        let span = span!(Level::INFO, "prosa::Msg", service = service);
+        let span = info_span!(parent: trace_id, "prosa::Msg", service = service);
         RequestMsg {
-            id,
+            id: ATOMIC_INTERNAL_MSG_ID.fetch_add(1, atomic::Ordering::Relaxed),
             service,
             data: Some(data),
             begin_time,
@@ -389,18 +405,6 @@ impl<M> ErrorMsg<M>
 where
     M: Sized + Clone + Tvf,
 {
-    /// Method to create a new ErrorMsg
-    pub fn new(id: u64, service: String, span: Span, data: Option<M>, err: ServiceError) -> Self {
-        ErrorMsg {
-            id,
-            service,
-            span,
-            error_time: SystemTime::now(),
-            data,
-            err,
-        }
-    }
-
     /// Getter of the service error
     pub fn get_err(&self) -> &ServiceError {
         &self.err

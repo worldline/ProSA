@@ -212,7 +212,6 @@ where
         // Create a message regulator
         let mut regulator = self.settings.get_regulator();
         let mut next_transaction = Some(adaptor.build_transaction());
-        let mut msg_id: u64 = 0;
 
         // Wait for service table
         while !self.service.exist_proc_service(&self.settings.service_name) {
@@ -231,17 +230,15 @@ where
 
         // Send first transaction
         self.service
-            .get_proc_service(&self.settings.service_name, msg_id)
+            .get_proc_service(&self.settings.service_name)
             .unwrap()
             .proc_queue
             .send(InternalMsg::Request(RequestMsg::new(
-                msg_id,
                 self.settings.service_name.clone(),
                 next_transaction.take().unwrap(),
                 self.proc.get_service_queue(),
             )))
             .await?;
-        msg_id += 1;
         regulator.notify_send_transaction();
 
         loop {
@@ -250,17 +247,16 @@ where
                     self.process_internal(name.as_str(), msg, &mut adaptor, &mut regulator, &mut next_transaction, &meter_trans_duration).await?;
                 }
                 _ = regulator.tick() => {
-                    if let Some(service) = self.service.get_proc_service(&self.settings.service_name, msg_id) {
+                    if let Some(service) = self.service.get_proc_service(&self.settings.service_name) {
                         let trans = if let Some(transaction) = next_transaction.take() {
-                            RequestMsg::new(msg_id, self.settings.service_name.clone(), transaction, self.proc.get_service_queue())
+                            RequestMsg::new(self.settings.service_name.clone(), transaction, self.proc.get_service_queue())
                         } else {
-                            RequestMsg::new(msg_id, self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_service_queue())
+                            RequestMsg::new(self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_service_queue())
                         };
 
                         debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = name, service = self.settings.service_name, request = format!("{:?}", trans.get_data()));
                         service.proc_queue.send(InternalMsg::Request(trans)).await?;
 
-                        msg_id += 1;
                         regulator.notify_send_transaction();
                     }
                 },

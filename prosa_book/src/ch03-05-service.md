@@ -165,9 +165,6 @@ After that, you are free to call any services.
         // Register the processor
         self.proc.add_proc().await?;
 
-        // Need to have a unique message id when you send a message
-        let mut msg_id = 0;
-
         // Wait for the service table before sending messages to a service
         loop {
             if let Some(msg) = self.internal_rx_queue.recv().await {
@@ -192,16 +189,13 @@ After that, you are free to call any services.
             }
 
             // Attempt to send a message if the service is available
-            if let Some(service) = self.service.get_proc_service("SERVICE_NAME", msg_id) {
+            if let Some(service) = self.service.get_proc_service("SERVICE_NAME") {
                 let trans = RequestMsg::new(
-                    msg_id,
                     String::from("SERVICE_NAME"),
                     M::default(),
                     self.proc.get_service_queue()
                 );
                 service.proc_queue.send(InternalMsg::Request(trans)).await?;
-
-                msg_id += 1;
             }
         }
 
@@ -227,9 +221,6 @@ The logic is similar to single senders, but you specify the queue when sending m
     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Register the processor
         self.proc.add_proc().await?;
-
-        // Need to have a unique message id when you send a message
-        let mut msg_id = 0;
 
         // Create a queue for subtask communication
         let (tx_queue, mut rx_queue) = tokio::sync::mpsc::channel(2048);
@@ -265,16 +256,13 @@ The logic is similar to single senders, but you specify the queue when sending m
             }
 
             // Attempt to send a message if the service is available
-            if let Some(service) = self.service.get_proc_service("SERVICE_NAME", msg_id) {
+            if let Some(service) = self.service.get_proc_service("SERVICE_NAME") {
                 let trans = RequestMsg::new(
-                    msg_id,
                     String::from("SERVICE_NAME"),
                     M::default(),
                     tx_msg_queue.clone()
                 );
                 service.proc_queue.send(InternalMsg::Request(trans)).await?;
-
-                msg_id += 1;
             }
         })
 

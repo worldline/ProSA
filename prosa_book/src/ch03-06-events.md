@@ -33,7 +33,6 @@ There are three important methods you need to use for this object:
             .add_service_proc(vec![String::from("PROC_TEST")])
             .await?;
         let mut interval = time::interval(time::Duration::from_secs(4));
-        let mut msg_id: u64 = 0;
         let mut pending_msgs: PendingMsgs<RequestMsg<M>, M> = Default::default();
         loop {
             tokio::select! {
