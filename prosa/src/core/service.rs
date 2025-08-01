@@ -237,6 +237,22 @@ pub enum ServiceError {
     ProtocolError(String),
 }
 
+impl ServiceError {
+    /// Method to get the error code of the service error
+    /// - 0: No error
+    /// - 1: Unable to reach service
+    /// - 2: Timeout
+    /// - 3: Protocol error
+    pub fn get_code(&self) -> u8 {
+        match self {
+            ServiceError::NoError(_) => 0,
+            ServiceError::UnableToReachService(_) => 1,
+            ServiceError::Timeout(_, _) => 2,
+            ServiceError::ProtocolError(_) => 3,
+        }
+    }
+}
+
 impl From<TvfError> for ServiceError {
     fn from(err: TvfError) -> Self {
         match err {
