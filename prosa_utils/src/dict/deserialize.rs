@@ -82,9 +82,11 @@ where
                 // keys can be either integers or strings
                 while let Some(pair) = map.next_key_seed(IdSeed::from(self.dictionary.clone()))? {
                     if let Some(def) = pair.entry_def {
-                        buffer.put(pair.id, map.next_value_seed(EntrySeed::new(def.as_ref()))?);
+                        let value = map.next_value_seed(EntrySeed::new(def.as_ref()))?;
+                        value.insert_in(&mut buffer, pair.id);
                     } else {
-                        buffer.put(pair.id, map.next_value()?);
+                        let value: TvfValue<'_, T> = map.next_value()?;
+                        value.insert_in(&mut buffer, pair.id);
                     }
                 }
                 Ok(buffer)
@@ -316,7 +318,10 @@ where
             /// implementation of the visit method for sequences
             fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
                 match self.definition.as_ref() {
-                    Entry::Leaf(_) => {
+                    Entry::Leaf {
+                        expected_type: _,
+                        payload: _,
+                    } => {
                         // use the default deserialization method for sequences
                         let buffer = buffer_visit_seq::<_, T>(seq)?;
                         Ok(TvfValue::Buffer(Cow::Owned(buffer)))
@@ -334,7 +339,7 @@ where
                         while let Some(field) =
                             seq.next_element_seed(EntrySeed::new(def.as_ref()))?
                         {
-                            buffer.put(index, field);
+                            field.insert_in(&mut buffer, index);
                             index += 1;
                         }
                         Ok(TvfValue::Buffer(Cow::Owned(buffer)))
@@ -344,7 +349,10 @@ where
 
             fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
                 match self.definition.as_ref() {
-                    Entry::Leaf(_) => {
+                    Entry::Leaf {
+                        expected_type: _,
+                        payload: _,
+                    } => {
                         // use the default deserialization method for sequences
                         let buffer = buffer_visit_map::<_, T>(map)?;
                         Ok(TvfValue::Buffer(Cow::Owned(buffer)))
@@ -353,12 +361,11 @@ where
                         let mut buffer = T::default();
                         while let Some(pair) = map.next_key_seed(IdSeed::from(dict.clone()))? {
                             if let Some(def) = pair.entry_def {
-                                buffer.put(
-                                    pair.id,
-                                    map.next_value_seed(EntrySeed::new(def.as_ref()))?,
-                                );
+                                let value = map.next_value_seed(EntrySeed::new(def.as_ref()))?;
+                                value.insert_in(&mut buffer, pair.id);
                             } else {
-                                buffer.put(pair.id, map.next_value()?);
+                                let value: TvfValue<'_, _> = map.next_value()?;
+                                value.insert_in(&mut buffer, pair.id);
                             }
                         }
                         Ok(TvfValue::Buffer(Cow::Owned(buffer)))
@@ -366,7 +373,8 @@ where
                     Entry::List(def) => {
                         let mut buffer = T::default();
                         while let Some(id) = map.next_key()? {
-                            buffer.put(id, map.next_value_seed(EntrySeed::new(def.as_ref()))?);
+                            let value = map.next_value_seed(EntrySeed::new(def.as_ref()))?;
+                            value.insert_in(&mut buffer, id);
                         }
                         Ok(TvfValue::Buffer(Cow::Owned(buffer)))
                     }
@@ -392,7 +400,7 @@ where
     let mut buffer = T::default();
     let mut index = 1;
     while let Some(field) = seq.next_element()? {
-        buffer.put(index, field);
+        TvfValue::insert_in(&field, &mut buffer, index);
         index += 1;
     }
     Ok(buffer)
@@ -406,7 +414,7 @@ where
 {
     let mut buffer = T::default();
     while let Some((id, field)) = map.next_entry()? {
-        buffer.put(id, field);
+        TvfValue::insert_in(&field, &mut buffer, id);
     }
     Ok(buffer)
 }
@@ -416,7 +424,7 @@ mod tests {
     use super::{DictDeserializer, Dictionary};
     use crate::{
         dict::Entry,
-        msg::{simple_string_tvf::SimpleStringTvf, tvf::Tvf},
+        msg::{simple_string_tvf::SimpleStringTvf, tvf::Tvf, value::TvfType},
     };
     use serde::de::DeserializeSeed;
     use std::sync::{Arc, OnceLock};
@@ -424,7 +432,10 @@ mod tests {
     fn create_dictionnary() -> &'static Dictionary<()> {
         static DICT: OnceLock<Dictionary<()>> = OnceLock::new();
         DICT.get_or_init(|| {
-            let leaf = Entry::Leaf(());
+            let leaf = Entry::Leaf {
+                expected_type: TvfType::String,
+                payload: (),
+            };
 
             let mut sub_dict = Dictionary::default();
             sub_dict.add_entry(10, "first", leaf.clone());

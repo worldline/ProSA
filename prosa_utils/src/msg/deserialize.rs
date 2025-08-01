@@ -111,7 +111,7 @@ where
             {
                 let mut buffer = T::default();
                 while let Some((id, field)) = map.next_entry()? {
-                    buffer.put(id, field);
+                    TvfValue::insert_in(&field, &mut buffer, id);
                 }
                 Ok(TvfValue::Buffer(Cow::Owned(buffer)))
             }

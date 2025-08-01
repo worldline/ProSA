@@ -3,11 +3,15 @@
 //! it is possible to use text fields' identifiers instead of numerical tags.
 
 use super::{Dictionary, Entry, LabeledTvf};
-use crate::msg::{tvf::Tvf, value::TvfValue};
+use crate::msg::{
+    tvf::Tvf,
+    value::{TvfType, TvfValue},
+};
 use serde::{
     Serialize,
     ser::{SerializeMap, SerializeSeq},
 };
+use std::fmt::Debug;
 
 /// Bind a field definition with a TVF sub buffer to proceed with serialization
 struct SerializeDef<'def, 't, P, T>
@@ -24,7 +28,7 @@ where
 impl<P, T> Serialize for LabeledTvf<'_, '_, P, T>
 where
     P: Clone,
-    T: Clone + Tvf,
+    T: Clone + Tvf + Default + Debug,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -36,7 +40,7 @@ where
 
 impl<P, T> Serialize for SerializeDef<'_, '_, P, T>
 where
-    T: Clone + Tvf,
+    T: Clone + Tvf + Default + Debug,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -55,11 +59,14 @@ where
                         ids
                     };
                     for id in ids {
-                        let value = buffer.get(id).map_err(|err| {
-                            serde::ser::Error::custom(format!(
-                                "Error while serializing field {id}: {err}"
-                            ))
-                        })?;
+                        // TODO
+                        let expected_type = TvfType::Byte;
+                        let value = TvfValue::from_buffer(buffer.as_ref(), id, expected_type)
+                            .map_err(|err| {
+                                serde::ser::Error::custom(format!(
+                                    "Error while serializing field {id}: {err}"
+                                ))
+                            })?;
                         // if the field is a sub-message, we may serialize it with a corresponding sub-dictionary
                         if let TvfValue::Buffer(_) = value {
                             seq.serialize_element(&SerializeDef {
@@ -89,7 +96,7 @@ fn serialize_message<S, P, T>(
 ) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
-    T: Tvf + Clone,
+    T: Tvf + Clone + Default + Debug,
 {
     let mut map = serializer.serialize_map(Some(message.len()))?;
 
@@ -101,7 +108,9 @@ where
     };
 
     for id in ids {
-        let value = message.get(id).map_err(|err| {
+        // TODO
+        let expected_type = TvfType::Byte;
+        let value = TvfValue::from_buffer(message, id, expected_type).map_err(|err| {
             serde::ser::Error::custom(format!("Error while serializing field {id}: {err}"))
         })?;
 
@@ -130,7 +139,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::{Dictionary, LabeledTvf};
-    use crate::{dict::Entry, msg::simple_string_tvf::SimpleStringTvf};
+    use crate::{
+        dict::Entry,
+        msg::{simple_string_tvf::SimpleStringTvf, value::TvfType},
+    };
     use prosa_macros::tvf;
     use std::{
         borrow::Cow,
@@ -141,7 +153,10 @@ mod tests {
     fn create_dictionnary() -> &'static Dictionary<()> {
         static DICT: OnceLock<Dictionary<()>> = OnceLock::new();
         DICT.get_or_init(|| {
-            let leaf = Entry::Leaf(());
+            let leaf = Entry::Leaf {
+                expected_type: TvfType::String,
+                payload: (),
+            };
 
             let mut sub_dict = Dictionary::default();
             sub_dict.add_entry(10, "first", leaf.clone());
