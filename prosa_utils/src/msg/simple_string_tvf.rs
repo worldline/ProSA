@@ -1,6 +1,5 @@
 //! Implementation of a simple String TVF
 
-use super::value::TvfValue;
 use crate::msg::tvf::{Tvf, TvfError};
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
@@ -65,40 +64,6 @@ impl Tvf for SimpleStringTvf {
 
     fn keys(&self) -> Vec<usize> {
         self.fields.keys().cloned().collect()
-    }
-
-    fn get(&self, id: usize) -> Result<TvfValue<'_, Self>, TvfError>
-    where
-        Self: Sized + Clone,
-    {
-        match self.fields.get(&id) {
-            Some(str_value) => {
-                if let Ok(value) = str_value.parse::<u64>() {
-                    Ok(TvfValue::Unsigned(value))
-                } else if let Ok(value) = str_value.parse::<i64>() {
-                    Ok(TvfValue::Signed(value))
-                } else if let Ok(value) = str_value.parse::<f64>() {
-                    Ok(TvfValue::Float(value))
-                } else if let Ok(date) = NaiveDate::parse_from_str(str_value, SIMPLE_DATE_FMT) {
-                    Ok(TvfValue::Date(date))
-                } else if let Ok(datetime) =
-                    NaiveDateTime::parse_from_str(str_value, SIMPLE_DATETIME_FMT)
-                {
-                    Ok(TvfValue::DateTime(datetime))
-                } else if let Ok(bytes) = hex::decode(str_value) {
-                    if bytes.len() == 1 {
-                        Ok(TvfValue::Byte(bytes[0]))
-                    } else {
-                        Ok(TvfValue::Bytes(Cow::Owned(Bytes::from(bytes))))
-                    }
-                } else if let Ok(buffer) = SimpleStringTvf::deserialize(str_value) {
-                    Ok(TvfValue::Buffer(Cow::Owned(buffer)))
-                } else {
-                    Ok(TvfValue::String(Cow::Borrowed(str_value)))
-                }
-            }
-            None => Err(TvfError::FieldNotFound(id)),
-        }
     }
 
     fn get_buffer(&self, id: usize) -> Result<Cow<'_, SimpleStringTvf>, TvfError> {

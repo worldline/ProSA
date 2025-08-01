@@ -1,7 +1,11 @@
 //! This module implements the `Serialize` trait for the `Tvf` trait
 
-use crate::msg::{tvf::Tvf, value::TvfValue};
+use crate::msg::{
+    tvf::Tvf,
+    value::{TvfType, TvfValue},
+};
 use serde::{Serialize, Serializer, ser::SerializeMap};
+use std::fmt::Debug;
 
 /// Wrapper for the TVF trait to serialize it
 pub struct SerialTvf<'t, T>(pub &'t T);
@@ -9,7 +13,7 @@ pub struct SerialTvf<'t, T>(pub &'t T);
 /// Serialize the TVF trait
 impl<T> Serialize for SerialTvf<'_, T>
 where
-    T: Tvf + Clone,
+    T: Tvf + Clone + Default + Debug,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -27,8 +31,10 @@ where
 
         // Iterate over the ids and serialize each field
         for id in ids {
+            // TODO
+            let expected_type = TvfType::Byte;
             // Get the value for the given id
-            let value = self.0.get(id).map_err(|err| {
+            let value = TvfValue::from_buffer(self.0, id, expected_type).map_err(|err| {
                 serde::ser::Error::custom(format!("Error while serializing field {id}: {err}"))
             })?;
 
@@ -42,7 +48,7 @@ where
 /// Serialize the TVF value
 impl<T> Serialize for TvfValue<'_, T>
 where
-    T: Tvf + Clone,
+    T: Tvf + Clone + Default + Debug,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

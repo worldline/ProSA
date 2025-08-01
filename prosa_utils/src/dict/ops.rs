@@ -85,7 +85,10 @@ impl<P> Entry<P> {
     /// Aggregate a path of labels into the corresponding path of ids
     fn aggregate_path(&self, path: &[&str], output: &mut Vec<usize>) -> Result<(), PathError> {
         match self {
-            Entry::Leaf(_) => aggregate_path_of_numbers(path, output),
+            Entry::Leaf {
+                expected_type: _,
+                payload: _,
+            } => aggregate_path_of_numbers(path, output),
             Entry::Node(sub_dict) => {
                 if let Some(&label) = path.first() {
                     if let Some((id, node)) = sub_dict.label_to_id.get(label) {
