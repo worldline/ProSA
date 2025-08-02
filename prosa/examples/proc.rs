@@ -38,7 +38,6 @@ where
             .add_service_proc(vec![String::from("PROC_TEST")])
             .await?;
         let mut interval = time::interval(time::Duration::from_secs(4));
-        let mut msg_id: u64 = 0;
         let mut pending_msgs: PendingMsgs<RequestMsg<M>, M> = Default::default();
         loop {
             tokio::select! {
@@ -80,17 +79,15 @@ where
                     tvf.put_string(2, String::from("request"));
 
                     let stub_service_name = String::from("STUB_TEST");
-                    if let Some(service) = self.service.get_proc_service(&stub_service_name, msg_id) {
+                    if let Some(service) = self.service.get_proc_service(&stub_service_name) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(msg_id, stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await.unwrap();
-                        msg_id += 1;
+                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await.unwrap();
                     }
 
                     let proc_service_name = String::from("PROC_TEST");
-                    if let Some(service) = self.service.get_proc_service(&proc_service_name, msg_id) {
+                    if let Some(service) = self.service.get_proc_service(&proc_service_name) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(msg_id, proc_service_name, tvf, self.proc.get_service_queue()))).await.unwrap();
-                        msg_id += 1;
+                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(proc_service_name, tvf, self.proc.get_service_queue()))).await.unwrap();
                     }
                 },
                 Some(msg) = pending_msgs.pull(), if !pending_msgs.is_empty() => {

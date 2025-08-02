@@ -93,7 +93,7 @@ mod tests {
             request: M,
         ) -> MaybeAsync<Result<M, ServiceError>> {
             assert!(!request.is_empty());
-            COUNTER.fetch_add(1, Ordering::Relaxed);
+            COUNTER.fetch_add(1, Ordering::SeqCst);
             Ok(request.clone()).into()
         }
     }
@@ -126,7 +126,7 @@ mod tests {
         main_task.await.unwrap();
 
         // Check exchanges messages
-        let nb_trans = COUNTER.load(Ordering::Relaxed) as u64;
+        let nb_trans = COUNTER.load(Ordering::SeqCst) as u64;
         let estimated_trans = WAIT_TIME.as_secs() * 5;
         assert!(nb_trans > (estimated_trans - 2) && nb_trans < (estimated_trans + 2));
         // Should have a coherent number of transaction with the regulator

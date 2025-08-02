@@ -260,7 +260,7 @@ where
     ///     let mut pending_msg: PendingMsgs<RequestMsg<SimpleStringTvf>, SimpleStringTvf> = Default::default();
     ///     let mut msg: Option<RequestMsg<SimpleStringTvf>> = pending_msg.pull().await;
     ///     assert!(msg.is_none());
-    ///     pending_msg.push(RequestMsg::new(1, String::from("service"), tvf, queue), Duration::from_millis(200));
+    ///     pending_msg.push(RequestMsg::new(String::from("service"), tvf, queue), Duration::from_millis(200));
     ///     msg = pending_msg.pull().await;
     ///     assert!(msg.is_some());
     ///     println!("Timeout message {:?}", msg);
@@ -344,8 +344,8 @@ mod tests {
                                 assert_eq!(1, pending_timer.len());
                             },
                             InternalMsg::Service(table) => {
-                                if let Some(service) = table.get_proc_service("TEST", 1) {
-                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.unwrap();
+                                if let Some(service) = table.get_proc_service("TEST") {
+                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.unwrap();
                                 }
                             },
                             _ => return Err(BusError::ProcComm(self.get_proc_id(), 0, String::from("Wrong message"))),
@@ -380,10 +380,10 @@ mod tests {
                                 assert_eq!(1, pending_msg.len());
                             },
                             InternalMsg::Service(table) => {
-                                if let Some(service) = table.get_proc_service("TEST", 1) {
+                                if let Some(service) = table.get_proc_service("TEST") {
                                     let mut msg: SimpleStringTvf = Default::default();
                                     msg.put_string(1, "good");
-                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(1, String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.unwrap();
+                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.unwrap();
                                 }
                             },
                             _ => return Err(BusError::ProcComm(self.get_proc_id(), 0, String::from("Wrong message"))),

@@ -1,3 +1,5 @@
+use crate::core::msg;
+
 use super::{
     msg::InternalMsg,
     proc::{ProcBusParam, ProcParam},
@@ -6,6 +8,7 @@ use prosa_utils::msg::tvf::{Tvf, TvfError};
 use std::{
     collections::HashMap,
     fmt::{self, Debug},
+    sync::atomic,
 };
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -47,10 +50,13 @@ where
     /// Method to get a processor that respond to the service
     ///
     /// Call by the processor to send a transaction to a processor that give the corresponding service
-    pub fn get_proc_service(&self, name: &str, msg_id: u64) -> Option<&ProcService<M>> {
+    pub fn get_proc_service(&self, name: &str) -> Option<&ProcService<M>> {
         if let Some(services) = self.table.get(name) {
             match services.len() {
-                2.. => services.get(msg_id as usize % services.len()),
+                2.. => services.get(
+                    msg::ATOMIC_INTERNAL_MSG_ID.load(atomic::Ordering::Relaxed) as usize
+                        % services.len(),
+                ),
                 1 => services.first(),
                 _ => None,
             }
@@ -229,6 +235,22 @@ pub enum ServiceError {
     /// The protocol is not correct on the service
     #[error("The service `{0}` made a protocol error")]
     ProtocolError(String),
+}
+
+impl ServiceError {
+    /// Method to get the error code of the service error
+    /// - 0: No error
+    /// - 1: Unable to reach service
+    /// - 2: Timeout
+    /// - 3: Protocol error
+    pub fn get_code(&self) -> u8 {
+        match self {
+            ServiceError::NoError(_) => 0,
+            ServiceError::UnableToReachService(_) => 1,
+            ServiceError::Timeout(_, _) => 2,
+            ServiceError::ProtocolError(_) => 3,
+        }
+    }
 }
 
 impl From<TvfError> for ServiceError {
