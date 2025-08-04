@@ -54,6 +54,7 @@ impl ProcError for std::io::Error {
     }
 }
 
+#[cfg(feature = "openssl")]
 impl ProcError for openssl::error::Error {
     fn recoverable(&self) -> bool {
         if let Some(reason) = self.reason() {
@@ -65,6 +66,7 @@ impl ProcError for openssl::error::Error {
     }
 }
 
+#[cfg(feature = "openssl")]
 impl ProcError for openssl::error::ErrorStack {
     fn recoverable(&self) -> bool {
         for error in self.errors() {

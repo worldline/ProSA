@@ -87,6 +87,6 @@ jobs:
         with:
           components: llvm-tools, rustc-dev
       - run: >
-          cargo test --all-features --release
-          --tests --verbose --color always
+          cargo test --release --tests
+          --verbose --color always
           --workspace --no-fail-fast

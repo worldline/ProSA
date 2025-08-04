@@ -3,19 +3,14 @@ use std::{
     fmt, io,
     net::{Ipv4Addr, SocketAddrV4},
     os::fd::{AsFd, AsRawFd, BorrowedFd, RawFd},
-    pin::Pin,
     time::Duration,
 };
 
-use openssl::ssl::SslAcceptor;
-use prosa_utils::config::ssl::SslConfig;
+use prosa_utils::config::ssl::{SslConfig, SslConfigContext as _};
 use serde::{Deserialize, Serialize};
 
 pub use prosa_macros::io;
-use tokio::{
-    net::{TcpListener, ToSocketAddrs, UnixListener},
-    time::timeout,
-};
+use tokio::net::{TcpListener, ToSocketAddrs, UnixListener};
 use url::Url;
 
 use super::{SocketAddr, stream::Stream, url_is_ssl};
@@ -27,8 +22,9 @@ pub enum StreamListener {
     Unix(tokio::net::UnixListener),
     /// TCP server socket
     Tcp(TcpListener),
-    /// SSL server socket
-    Ssl(TcpListener, SslAcceptor, Duration),
+    #[cfg(feature = "openssl")]
+    /// OpenSSL server socket
+    OpenSsl(TcpListener, ::openssl::ssl::SslAcceptor, Duration),
 }
 
 impl fmt::Debug for StreamListener {
@@ -37,7 +33,8 @@ impl fmt::Debug for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => f.debug_struct("Unix").field("listener", &l).finish(),
             StreamListener::Tcp(l) => f.debug_struct("Tcp").field("listener", &l).finish(),
-            StreamListener::Ssl(l, a, t) => f
+            #[cfg(feature = "openssl")]
+            StreamListener::OpenSsl(l, a, t) => f
                 .debug_struct("Ssl")
                 .field("listener", &l)
                 .field("ssl_timeout", &t)
@@ -79,7 +76,10 @@ impl StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(listener) => listener.local_addr().map(|addr| addr.into()),
             StreamListener::Tcp(listener) => listener.local_addr().map(|addr| addr.into()),
-            StreamListener::Ssl(listener, _, _) => listener.local_addr().map(|addr| addr.into()),
+            #[cfg(feature = "openssl")]
+            StreamListener::OpenSsl(listener, _, _) => {
+                listener.local_addr().map(|addr| addr.into())
+            }
         }
     }
 
@@ -114,6 +114,7 @@ impl StreamListener {
         Ok(StreamListener::Tcp(TcpListener::bind(addr).await?))
     }
 
+    #[cfg(feature = "openssl")]
     #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Set an OpenSSL acceptor to accept SSL connections from clients
     /// By default, the SSL connect timeout is 3 seconds
@@ -128,7 +129,7 @@ impl StreamListener {
     ///
     /// ```
     /// use tokio::io;
-    /// use prosa_utils::config::ssl::SslConfig;
+    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     /// use prosa::io::listener::StreamListener;
     ///
     /// async fn accepting() -> Result<(), io::Error> {
@@ -147,16 +148,16 @@ impl StreamListener {
     /// ```
     pub fn ssl_acceptor(
         self,
-        ssl_acceptor: SslAcceptor,
+        ssl_acceptor: ::openssl::ssl::SslAcceptor,
         ssl_timeout: Option<Duration>,
     ) -> StreamListener {
         match self {
-            StreamListener::Tcp(listener) => StreamListener::Ssl(
+            StreamListener::Tcp(listener) => StreamListener::OpenSsl(
                 listener,
                 ssl_acceptor,
                 ssl_timeout.unwrap_or(Self::DEFAULT_SSL_TIMEOUT),
             ),
-            StreamListener::Ssl(listener, _, _) => StreamListener::Ssl(
+            StreamListener::OpenSsl(listener, _, _) => StreamListener::OpenSsl(
                 listener,
                 ssl_acceptor,
                 ssl_timeout.unwrap_or(Self::DEFAULT_SSL_TIMEOUT),
@@ -169,7 +170,7 @@ impl StreamListener {
     ///
     /// ```
     /// use tokio::io;
-    /// use prosa_utils::config::ssl::SslConfig;
+    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     /// use prosa::io::listener::StreamListener;
     ///
     /// async fn accepting() -> Result<(), io::Error> {
@@ -191,31 +192,33 @@ impl StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.accept().await.map(|s| (Stream::Unix(s.0), s.1.into())),
             StreamListener::Tcp(l) => l.accept().await.map(|s| (Stream::Tcp(s.0), s.1.into())),
-            StreamListener::Ssl(l, ssl_acceptor, ssl_timeout) => {
+            #[cfg(feature = "openssl")]
+            StreamListener::OpenSsl(l, ssl_acceptor, ssl_timeout) => {
                 let ssl = openssl::ssl::Ssl::new(ssl_acceptor.context())
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
                 let (stream, addr) = l.accept().await?;
                 let mut stream = tokio_openssl::SslStream::new(ssl, stream)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                if let Err(e) = timeout(*ssl_timeout, Pin::new(&mut stream).accept())
-                    .await
-                    .map_err(|_| {
-                        io::Error::new(
-                            io::ErrorKind::TimedOut,
-                            format!(
-                                "SSL timeout[{} ms] for {:?}",
-                                ssl_timeout.as_millis(),
-                                stream
-                            ),
-                        )
-                    })?
+                if let Err(e) =
+                    tokio::time::timeout(*ssl_timeout, std::pin::Pin::new(&mut stream).accept())
+                        .await
+                        .map_err(|_| {
+                            io::Error::new(
+                                io::ErrorKind::TimedOut,
+                                format!(
+                                    "SSL timeout[{} ms] for {:?}",
+                                    ssl_timeout.as_millis(),
+                                    stream
+                                ),
+                            )
+                        })?
                 {
                     if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
                         return Err(io::Error::other(format!("Can't accept the client: {e}")));
                     }
                 }
 
-                Ok((Stream::Ssl(stream), addr.into()))
+                Ok((Stream::OpenSsl(stream), addr.into()))
             }
         }
     }
@@ -224,7 +227,7 @@ impl StreamListener {
     ///
     /// ```
     /// use tokio::io;
-    /// use prosa_utils::config::ssl::SslConfig;
+    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     /// use prosa::io::listener::StreamListener;
     ///
     /// async fn accepting() -> Result<(), io::Error> {
@@ -248,7 +251,8 @@ impl StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.accept().await.map(|s| (Stream::Unix(s.0), s.1.into())),
             StreamListener::Tcp(l) => l.accept().await.map(|s| (Stream::Tcp(s.0), s.1.into())),
-            StreamListener::Ssl(l, _ssl_acceptor, _ssl_timeout) => {
+            #[cfg(feature = "openssl")]
+            StreamListener::OpenSsl(l, _ssl_acceptor, _ssl_timeout) => {
                 l.accept().await.map(|s| (Stream::Tcp(s.0), s.1.into()))
             }
         }
@@ -257,35 +261,36 @@ impl StreamListener {
     /// Method to do an handshake with a client after an accept (Do nothing if the handshake is already done)
     pub async fn handshake(&self, stream: Stream) -> Result<Stream, io::Error> {
         match stream {
-            Stream::Tcp(tcp_stream) => {
-                if let StreamListener::Ssl(_l, ssl_acceptor, ssl_timeout) = self {
+            Stream::Tcp(tcp_stream) => match self {
+                #[cfg(feature = "openssl")]
+                StreamListener::OpenSsl(_l, ssl_acceptor, ssl_timeout) => {
                     let ssl = openssl::ssl::Ssl::new(ssl_acceptor.context())
                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
                     let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream)
                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                    if let Err(e) = timeout(*ssl_timeout, Pin::new(&mut stream).accept())
-                        .await
-                        .map_err(|_| {
-                            io::Error::new(
-                                io::ErrorKind::TimedOut,
-                                format!(
-                                    "SSL timeout[{} ms] for {:?}",
-                                    ssl_timeout.as_millis(),
-                                    stream
-                                ),
-                            )
-                        })?
+                    if let Err(e) =
+                        tokio::time::timeout(*ssl_timeout, std::pin::Pin::new(&mut stream).accept())
+                            .await
+                            .map_err(|_| {
+                                io::Error::new(
+                                    io::ErrorKind::TimedOut,
+                                    format!(
+                                        "SSL timeout[{} ms] for {:?}",
+                                        ssl_timeout.as_millis(),
+                                        stream
+                                    ),
+                                )
+                            })?
                     {
                         if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
                             return Err(io::Error::other(format!("Can't accept the client: {e}")));
                         }
                     }
 
-                    Ok(Stream::Ssl(stream))
-                } else {
-                    Ok(Stream::Tcp(tcp_stream))
+                    Ok(Stream::OpenSsl(stream))
                 }
-            }
+                _ => Ok(Stream::Tcp(tcp_stream)),
+            },
             s => Ok(s),
         }
     }
@@ -297,7 +302,8 @@ impl AsFd for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.as_fd(),
             StreamListener::Tcp(l) => l.as_fd(),
-            StreamListener::Ssl(l, _, _) => l.as_fd(),
+            #[cfg(feature = "openssl")]
+            StreamListener::OpenSsl(l, _, _) => l.as_fd(),
         }
     }
 }
@@ -308,7 +314,8 @@ impl AsRawFd for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.as_raw_fd(),
             StreamListener::Tcp(l) => l.as_raw_fd(),
-            StreamListener::Ssl(l, _, _) => l.as_raw_fd(),
+            #[cfg(feature = "openssl")]
+            StreamListener::OpenSsl(l, _, _) => l.as_raw_fd(),
         }
     }
 }
@@ -325,7 +332,8 @@ impl fmt::Display for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(_) => write!(f, "unix://{addr}"),
             StreamListener::Tcp(_) => write!(f, "tcp://{addr}"),
-            StreamListener::Ssl(_, _, _) => write!(f, "ssl://{addr}"),
+            #[cfg(feature = "openssl")]
+            StreamListener::OpenSsl(_, _, _) => write!(f, "ssl://{addr}"),
         }
     }
 }
@@ -366,9 +374,10 @@ pub struct ListenerSetting {
     pub url: Url,
     /// SSL configuration for target destination
     pub ssl: Option<SslConfig>,
+    #[cfg(feature = "openssl")]
     #[serde(skip)]
     /// OpenSSL configuration for target destination
-    ssl_context: Option<SslAcceptor>,
+    openssl_context: Option<::openssl::ssl::SslAcceptor>,
     #[serde(skip_serializing)]
     #[serde(default = "ListenerSetting::default_max_socket")]
     /// Maximum number of socket
@@ -399,23 +408,25 @@ impl ListenerSetting {
         let mut target = ListenerSetting {
             url: url.clone(),
             ssl,
-            ssl_context: None,
+            #[cfg(feature = "openssl")]
+            openssl_context: None,
             max_socket: Self::default_max_socket(),
         };
 
+        #[cfg(feature = "openssl")]
         target.init_ssl_context(url.host_str());
+
         target
     }
 
+    #[cfg(feature = "openssl")]
     /// Method to init the ssl context out of the ssl target configuration.
     /// Must be call when the configuration is retrieved
     pub fn init_ssl_context(&mut self, domain: Option<&str>) {
-        if let Some(ssl_context_builder) = self
-            .ssl
-            .as_ref()
-            .and_then(|c| c.init_tls_server_context(domain).ok())
-        {
-            self.ssl_context = Some(ssl_context_builder.build());
+        if let Some(ssl_config) = self.ssl.as_ref() {
+            let ssl_acceptor_builder: Option<::openssl::ssl::SslAcceptorBuilder> =
+                ssl_config.init_tls_server_context(domain).ok();
+            self.openssl_context = ssl_acceptor_builder.map(|a| a.build());
         }
     }
 
@@ -429,33 +440,60 @@ impl ListenerSetting {
         let addrs = self.url.socket_addrs(|| self.url.port_or_known_default())?;
         let mut stream_listener = StreamListener::bind(&*addrs).await?;
 
-        if let Some(ssl_acceptor) = &self.ssl_context {
+        #[cfg(feature = "openssl")]
+        if let Some(ssl_acceptor) = &self.openssl_context {
             stream_listener = stream_listener.ssl_acceptor(
                 ssl_acceptor.clone(),
                 self.ssl.as_ref().map(|c| c.get_ssl_timeout()),
             );
-        } else if let Some(ssl_config) = &self.ssl {
-            if let Ok(ssl_acceptor_builder) =
-                ssl_config.init_tls_server_context(self.url.host_str())
-            {
-                stream_listener = stream_listener.ssl_acceptor(
-                    ssl_acceptor_builder.build(),
-                    Some(ssl_config.get_ssl_timeout()),
-                );
-            }
-        } else if url_is_ssl(&self.url) {
-            let ssl_config = SslConfig::default();
-            if let Ok(ssl_acceptor_builder) =
-                ssl_config.init_tls_server_context(self.url.host_str())
-            {
-                stream_listener = stream_listener.ssl_acceptor(
-                    ssl_acceptor_builder.build(),
-                    Some(ssl_config.get_ssl_timeout()),
-                );
-            }
+            return Ok(stream_listener);
         }
 
-        Ok(stream_listener)
+        if let Some(ssl_config) = self.ssl.as_ref() {
+            #[cfg(feature = "openssl")]
+            {
+                let ssl_acceptor_builder_result: Result<
+                    ::openssl::ssl::SslAcceptorBuilder,
+                    prosa_utils::config::ConfigError,
+                > = ssl_config.init_tls_server_context(self.url.host_str());
+                if let Ok(ssl_acceptor_builder) = ssl_acceptor_builder_result {
+                    stream_listener = stream_listener.ssl_acceptor(
+                        ssl_acceptor_builder.build(),
+                        Some(ssl_config.get_ssl_timeout()),
+                    );
+                    return Ok(stream_listener);
+                }
+            }
+
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "No SSL engine available",
+            ))
+        } else if url_is_ssl(&self.url) {
+            let ssl_config = SslConfig::default();
+
+            #[cfg(feature = "openssl")]
+            {
+                let ssl_acceptor_builder_result: Result<
+                    ::openssl::ssl::SslAcceptorBuilder,
+                    prosa_utils::config::ConfigError,
+                > = ssl_config.init_tls_server_context(self.url.host_str());
+                if let Ok(ssl_acceptor_builder) = ssl_acceptor_builder_result {
+                    stream_listener = stream_listener.ssl_acceptor(
+                        ssl_acceptor_builder.build(),
+                        Some(ssl_config.get_ssl_timeout()),
+                    );
+                    return Ok(stream_listener);
+                }
+            }
+
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "No SSL engine available",
+            ))
+        } else {
+            Ok(stream_listener)
+        }
     }
 }
 
@@ -464,7 +502,8 @@ impl From<Url> for ListenerSetting {
         ListenerSetting {
             url,
             ssl: None,
-            ssl_context: None,
+            #[cfg(feature = "openssl")]
+            openssl_context: None,
             max_socket: Self::default_max_socket(),
         }
     }

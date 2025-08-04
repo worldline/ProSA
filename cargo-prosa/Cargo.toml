@@ -15,7 +15,6 @@ path = "src/main.rs"
 
 [dependencies]
 thiserror.workspace = true
-prosa-utils = { workspace = true, features = ["msg", "config", "config-observability"] }
 aquamarine.workspace = true
 clap = "4"
 clap_complete = "4"

@@ -10,8 +10,10 @@ license.workspace = true
 include.workspace = true
 
 [features]
-default = ["http-proxy"]
+default = ["http-proxy", "openssl"]
 http-proxy = ["dep:async-http-proxy"]
+openssl = ["dep:openssl", "dep:tokio-openssl", "prosa-utils/config-openssl"]
+openssl-vendored = ["openssl", "openssl/vendored", "prosa-utils/config-openssl-vendored"]
 
 [[example]]
 name = "proc"
@@ -35,7 +37,7 @@ settings = "stub::proc::StubSettings"
 adaptor = ["stub::adaptor::StubParotAdaptor"]
 
 [dependencies]
-prosa-utils = { workspace = true, features = ["msg", "config", "config-observability"] }
+prosa-utils = { workspace = true, features = ["msg", "config", "config-observability", "config-observability-prometheus"] }
 prosa-macros.workspace = true
 bytes.workspace = true
 tracing = "0.1"
@@ -46,9 +48,9 @@ rlimit = "0.10"
 
 aquamarine.workspace = true
 
-openssl = { version = "0.10" }
+openssl = { workspace = true, optional = true }
 tokio.workspace = true
-tokio-openssl = "0.6"
+tokio-openssl = { version = "0.6", optional = true }
 async-http-proxy = { version = "1", optional = true, features = ["runtime-tokio","basic-auth"] }
 
 serde = { version = "1", features = ["derive"] }

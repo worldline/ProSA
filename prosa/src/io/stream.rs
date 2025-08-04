@@ -8,14 +8,12 @@ use std::{
     task::{Context, Poll},
 };
 
-use openssl::ssl::{self, SslConnector};
-use prosa_utils::config::ssl::SslConfig;
+use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{TcpStream, ToSocketAddrs},
 };
-use tokio_openssl::SslStream;
 use url::Url;
 
 use super::{SocketAddr, url_is_ssl};
@@ -28,14 +26,15 @@ pub enum Stream {
     Unix(tokio::net::UnixStream),
     /// TCP socket
     Tcp(TcpStream),
+    #[cfg(feature = "openssl")]
     /// SSL socket
-    Ssl(SslStream<TcpStream>),
+    OpenSsl(tokio_openssl::SslStream<TcpStream>),
     #[cfg(feature = "http-proxy")]
     /// TCP socket using Http proxy
     TcpHttpProxy(TcpStream),
-    #[cfg(feature = "http-proxy")]
+    #[cfg(all(feature = "openssl", feature = "http-proxy"))]
     /// SSL socket using Http proxy
-    SslHttpProxy(SslStream<TcpStream>),
+    OpenSslHttpProxy(tokio_openssl::SslStream<TcpStream>),
 }
 
 impl Stream {
@@ -62,11 +61,12 @@ impl Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(s) => s.local_addr().map(|addr| addr.into()),
             Stream::Tcp(s) => s.local_addr().map(|addr| addr.into()),
-            Stream::Ssl(s) => s.get_ref().local_addr().map(|addr| addr.into()),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().local_addr().map(|addr| addr.into()),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.local_addr().map(|addr| addr.into()),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.get_ref().local_addr().map(|addr| addr.into()),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().local_addr().map(|addr| addr.into()),
         }
     }
 
@@ -133,19 +133,20 @@ impl Stream {
         Ok(Stream::Tcp(TcpStream::connect(addr).await?))
     }
 
+    #[cfg(feature = "openssl")]
     /// Method to create an SSL stream from a TCP stream
-    async fn create_ssl<S>(
+    async fn create_openssl<S>(
         tcp_stream: S,
-        ssl_connector: &ssl::SslConnector,
+        ssl_connector: &openssl::ssl::SslConnector,
         domain: &str,
-    ) -> Result<SslStream<S>, io::Error>
+    ) -> Result<tokio_openssl::SslStream<S>, io::Error>
     where
         S: AsyncRead + AsyncWrite + std::marker::Unpin,
     {
         let ssl = ssl_connector.configure()?.into_ssl(domain)?;
-        let mut stream = SslStream::new(ssl, tcp_stream).unwrap();
+        let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream).unwrap();
         if let Err(e) = Pin::new(&mut stream).connect().await {
-            if e.code() != ssl::ErrorCode::ZERO_RETURN {
+            if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
                 return Err(io::Error::new(
                     io::ErrorKind::Interrupted,
                     format!("Can't connect the SSL socket `{e}`"),
@@ -156,8 +157,9 @@ impl Stream {
         Ok(stream)
     }
 
+    #[cfg(feature = "openssl")]
     #[cfg_attr(doc, aquamarine::aquamarine)]
-    /// Connect an SSL socket to a distant
+    /// Connect an OpenSSL socket to a distant
     ///
     /// ```mermaid
     /// graph LR
@@ -170,14 +172,14 @@ impl Stream {
     /// ```
     /// use tokio::io;
     /// use url::Url;
-    /// use prosa_utils::config::ssl::SslConfig;
+    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     /// use prosa::io::stream::Stream;
     ///
     /// async fn connecting() -> Result<(), io::Error> {
     ///     let ssl_config = SslConfig::default();
     ///     if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
     ///         let ssl_context = ssl_context_builder.build();
-    ///         let stream: Stream = Stream::connect_ssl(&Url::parse("worldline.com:443").unwrap(), &ssl_context).await?;
+    ///         let stream: Stream = Stream::connect_openssl(&Url::parse("worldline.com:443").unwrap(), &ssl_context).await?;
     ///
     ///         // Handle the stream like any tokio stream
     ///     }
@@ -185,13 +187,13 @@ impl Stream {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn connect_ssl(
+    pub async fn connect_openssl(
         url: &Url,
-        ssl_context: &ssl::SslConnector,
+        ssl_context: &openssl::ssl::SslConnector,
     ) -> Result<Stream, io::Error> {
         let addrs = url.socket_addrs(|| url.port_or_known_default())?;
-        Ok(Stream::Ssl(
-            Self::create_ssl(
+        Ok(Stream::OpenSsl(
+            Self::create_openssl(
                 TcpStream::connect(&*addrs).await?,
                 ssl_context,
                 url.host_str().ok_or(io::Error::new(
@@ -277,9 +279,9 @@ impl Stream {
         ))
     }
 
-    #[cfg(feature = "http-proxy")]
+    #[cfg(all(feature = "openssl", feature = "http-proxy"))]
     #[cfg_attr(doc, aquamarine::aquamarine)]
-    /// Connect an SSL socket to a distant through an HTTP proxy
+    /// Connect an OpenSSL socket to a distant through an HTTP proxy
     ///
     /// ```mermaid
     /// graph LR
@@ -294,7 +296,7 @@ impl Stream {
     /// ```
     /// use tokio::io;
     /// use url::Url;
-    /// use prosa_utils::config::ssl::SslConfig;
+    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     /// use prosa::io::stream::Stream;
     ///
     /// async fn connecting() -> Result<(), io::Error> {
@@ -302,7 +304,7 @@ impl Stream {
     ///     let ssl_config = SslConfig::default();
     ///     if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
     ///         let ssl_context = ssl_context_builder.build();
-    ///         let stream: Stream = Stream::connect_ssl_with_http_proxy("worldline.com", 443, &ssl_context, &proxy_url).await?;
+    ///         let stream: Stream = Stream::connect_openssl_with_http_proxy("worldline.com", 443, &ssl_context, &proxy_url).await?;
     ///
     ///         // Handle the stream like any tokio stream
     ///     }
@@ -310,14 +312,14 @@ impl Stream {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn connect_ssl_with_http_proxy(
+    pub async fn connect_openssl_with_http_proxy(
         host: &str,
         port: u16,
-        ssl_connector: &ssl::SslConnector,
+        ssl_connector: &openssl::ssl::SslConnector,
         proxy: &Url,
     ) -> Result<Stream, io::Error> {
-        Ok(Stream::SslHttpProxy(
-            Self::create_ssl(
+        Ok(Stream::OpenSslHttpProxy(
+            Self::create_openssl(
                 Self::connect_http_proxy(host, port, proxy).await?,
                 ssl_connector,
                 host,
@@ -332,11 +334,12 @@ impl Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(_) => Ok(()),
             Stream::Tcp(s) => s.set_nodelay(nodelay),
-            Stream::Ssl(s) => s.get_ref().set_nodelay(nodelay),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().set_nodelay(nodelay),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.set_nodelay(nodelay),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.get_ref().set_nodelay(nodelay),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().set_nodelay(nodelay),
         }
     }
 
@@ -346,11 +349,12 @@ impl Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(_) => Ok(true),
             Stream::Tcp(s) => s.nodelay(),
-            Stream::Ssl(s) => s.get_ref().nodelay(),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().nodelay(),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.nodelay(),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.get_ref().nodelay(),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().nodelay(),
         }
     }
 
@@ -360,11 +364,12 @@ impl Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(_) => Ok(()),
             Stream::Tcp(s) => s.set_ttl(ttl),
-            Stream::Ssl(s) => s.get_ref().set_ttl(ttl),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().set_ttl(ttl),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.set_ttl(ttl),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.get_ref().set_ttl(ttl),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().set_ttl(ttl),
         }
     }
 
@@ -374,20 +379,22 @@ impl Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(_) => Ok(0),
             Stream::Tcp(s) => s.ttl(),
-            Stream::Ssl(s) => s.get_ref().ttl(),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().ttl(),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.ttl(),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.get_ref().ttl(),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().ttl(),
         }
     }
 
     /// Method to know if the stream is SSL
     pub fn is_ssl(&self) -> bool {
         match self {
-            Stream::Ssl(_) => true,
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(_) => true,
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(_) => true,
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(_) => true,
             _ => false,
         }
     }
@@ -407,15 +414,16 @@ impl Stream {
         F: Fn(&[u8]) -> bool,
     {
         match self {
-            Stream::Ssl(s) => {
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => {
                 if let Some(alpn) = s.ssl().selected_alpn_protocol() {
                     f(alpn)
                 } else {
                     false
                 }
             }
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => {
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => {
                 if let Some(alpn) = s.ssl().selected_alpn_protocol() {
                     f(alpn)
                 } else {
@@ -433,11 +441,12 @@ impl AsFd for Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(s) => s.as_fd(),
             Stream::Tcp(s) => s.as_fd(),
-            Stream::Ssl(s) => s.get_ref().as_fd(),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().as_fd(),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.as_fd(),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.get_ref().as_fd(),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().as_fd(),
         }
     }
 }
@@ -448,11 +457,12 @@ impl AsRawFd for Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(s) => s.as_raw_fd(),
             Stream::Tcp(s) => s.as_raw_fd(),
-            Stream::Ssl(s) => s.get_ref().as_raw_fd(),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().as_raw_fd(),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.as_raw_fd(),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.get_ref().as_raw_fd(),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().as_raw_fd(),
         }
     }
 }
@@ -473,7 +483,8 @@ impl AsyncRead for Stream {
                 let stream = Pin::new(s);
                 stream.poll_read(cx, buf)
             }
-            Stream::Ssl(s) => {
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => {
                 let stream = Pin::new(s);
                 stream.poll_read(cx, buf)
             }
@@ -482,8 +493,8 @@ impl AsyncRead for Stream {
                 let stream = Pin::new(s);
                 stream.poll_read(cx, buf)
             }
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => {
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_read(cx, buf)
             }
@@ -507,7 +518,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_write(cx, buf)
             }
-            Stream::Ssl(s) => {
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write(cx, buf)
             }
@@ -516,8 +528,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_write(cx, buf)
             }
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => {
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write(cx, buf)
             }
@@ -539,7 +551,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_write_vectored(cx, bufs)
             }
-            Stream::Ssl(s) => {
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write_vectored(cx, bufs)
             }
@@ -548,8 +561,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_write_vectored(cx, bufs)
             }
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => {
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_write_vectored(cx, bufs)
             }
@@ -561,11 +574,12 @@ impl AsyncWrite for Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(s) => s.is_write_vectored(),
             Stream::Tcp(s) => s.is_write_vectored(),
-            Stream::Ssl(s) => s.is_write_vectored(),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.is_write_vectored(),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(s) => s.is_write_vectored(),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => s.is_write_vectored(),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.is_write_vectored(),
         }
     }
 
@@ -581,7 +595,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_flush(cx)
             }
-            Stream::Ssl(s) => {
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => {
                 let stream = Pin::new(s);
                 stream.poll_flush(cx)
             }
@@ -590,8 +605,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_flush(cx)
             }
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => {
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_flush(cx)
             }
@@ -609,7 +624,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_shutdown(cx)
             }
-            Stream::Ssl(s) => {
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => {
                 let stream = Pin::new(s);
                 stream.poll_shutdown(cx)
             }
@@ -618,8 +634,8 @@ impl AsyncWrite for Stream {
                 let stream = Pin::new(s);
                 stream.poll_shutdown(cx)
             }
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(s) => {
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => {
                 let stream = Pin::new(s);
                 stream.poll_shutdown(cx)
             }
@@ -639,11 +655,12 @@ impl fmt::Display for Stream {
             #[cfg(target_family = "unix")]
             Stream::Unix(_) => write!(f, "unix://{addr}"),
             Stream::Tcp(_) => write!(f, "tcp://{addr}"),
-            Stream::Ssl(_) => write!(f, "ssl://{addr}"),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(_) => write!(f, "ssl://{addr}"),
             #[cfg(feature = "http-proxy")]
             Stream::TcpHttpProxy(_) => write!(f, "tcp+http_proxy://{addr}"),
-            #[cfg(feature = "http-proxy")]
-            Stream::SslHttpProxy(_) => write!(f, "ssl+http_proxy://{addr}"),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(_) => write!(f, "ssl+http_proxy://{addr}"),
         }
     }
 }
@@ -658,6 +675,13 @@ impl From<tokio::net::UnixStream> for Stream {
 impl From<TcpStream> for Stream {
     fn from(stream: TcpStream) -> Self {
         Stream::Tcp(stream)
+    }
+}
+
+#[cfg(feature = "openssl")]
+impl From<tokio_openssl::SslStream<TcpStream>> for Stream {
+    fn from(openssl_stream: tokio_openssl::SslStream<TcpStream>) -> Self {
+        Stream::OpenSsl(openssl_stream)
     }
 }
 
@@ -685,9 +709,10 @@ pub struct TargetSetting {
     pub ssl: Option<SslConfig>,
     /// Optional proxy use to reach the target
     pub proxy: Option<Url>,
+    #[cfg(feature = "openssl")]
     #[serde(skip)]
-    /// SSL configuration for target destination
-    ssl_context: Option<SslConnector>,
+    /// OpenSSL configuration for target destination
+    openssl_context: Option<::openssl::ssl::SslConnector>,
     #[serde(skip_serializing)]
     #[serde(default = "TargetSetting::get_default_connect_timeout")]
     /// Timeout for socket connection in milliseconds
@@ -705,7 +730,8 @@ impl TargetSetting {
             url,
             ssl,
             proxy,
-            ssl_context: None,
+            #[cfg(feature = "openssl")]
+            openssl_context: None,
             connect_timeout: Self::get_default_connect_timeout(),
         };
 
@@ -713,15 +739,27 @@ impl TargetSetting {
         target
     }
 
+    /// Method to know if the target will be connected with SSL
+    pub fn is_ssl(&self) -> bool {
+        #[cfg(feature = "openssl")]
+        if self.openssl_context.is_some() {
+            return true;
+        }
+
+        self.ssl.is_some() || url_is_ssl(&self.url)
+    }
+
     /// Method to init the ssl context out of the ssl target configuration.
     /// Must be call when the configuration is retrieved
     pub fn init_ssl_context(&mut self) {
-        if let Some(ssl_context_builder) = self
-            .ssl
-            .as_ref()
-            .and_then(|c| c.init_tls_client_context().ok())
-        {
-            self.ssl_context = Some(ssl_context_builder.build());
+        if let Some(ssl_config) = self.ssl.as_ref() {
+            // Init OpenSSL context by default
+            #[cfg(feature = "openssl")]
+            {
+                let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
+                    SslConfigContext::init_tls_client_context(ssl_config).ok();
+                self.openssl_context = ssl_context_builder.map(|c| c.build());
+            }
         }
     }
 
@@ -732,21 +770,18 @@ impl TargetSetting {
             return Stream::connect_unix(self.url.path()).await;
         }
 
-        let ssl_context = if self.ssl_context.is_some() {
-            self.ssl_context.clone()
+        #[cfg(feature = "openssl")]
+        let openssl_context = if self.openssl_context.is_some() {
+            self.openssl_context.clone()
         } else if let Some(ssl_config) = &self.ssl {
-            if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-                Some(ssl_context_builder.build())
-            } else {
-                None
-            }
+            let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
+                SslConfigContext::init_tls_client_context(ssl_config).ok();
+            ssl_context_builder.map(|c| c.build())
         } else if url_is_ssl(&self.url) {
             let ssl_config = SslConfig::default();
-            if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-                Some(ssl_context_builder.build())
-            } else {
-                None
-            }
+            let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
+                SslConfigContext::init_tls_client_context(&ssl_config).ok();
+            ssl_context_builder.map(|c| c.build())
         } else {
             None
         };
@@ -754,15 +789,18 @@ impl TargetSetting {
         if let Some(proxy_url) = &self.proxy {
             if proxy_url.scheme() == "http" {
                 #[cfg(feature = "http-proxy")]
-                if let Some(ssl_cx) = ssl_context {
-                    return Stream::connect_ssl_with_http_proxy(
-                        self.url.host_str().unwrap_or_default(),
-                        self.url.port_or_known_default().unwrap_or_default(),
-                        &ssl_cx,
-                        proxy_url,
-                    )
-                    .await;
-                } else {
+                {
+                    #[cfg(feature = "openssl")]
+                    if let Some(ssl_cx) = openssl_context {
+                        return Stream::connect_openssl_with_http_proxy(
+                            self.url.host_str().unwrap_or_default(),
+                            self.url.port_or_known_default().unwrap_or_default(),
+                            &ssl_cx,
+                            proxy_url,
+                        )
+                        .await;
+                    }
+
                     return Stream::connect_tcp_with_http_proxy(
                         self.url.host_str().unwrap_or_default(),
                         self.url.port_or_known_default().unwrap_or_default(),
@@ -784,12 +822,13 @@ impl TargetSetting {
             }
         }
 
-        if let Some(ssl_cx) = ssl_context {
-            Stream::connect_ssl(&self.url, &ssl_cx).await
-        } else {
-            let addrs = self.url.socket_addrs(|| self.url.port_or_known_default())?;
-            Stream::connect_tcp(&*addrs).await
+        #[cfg(feature = "openssl")]
+        if let Some(ssl_cx) = openssl_context {
+            return Stream::connect_openssl(&self.url, &ssl_cx).await;
         }
+
+        let addrs = self.url.socket_addrs(|| self.url.port_or_known_default())?;
+        Stream::connect_tcp(&*addrs).await
     }
 }
 
@@ -799,7 +838,8 @@ impl From<Url> for TargetSetting {
             url,
             ssl: None,
             proxy: None,
-            ssl_context: None,
+            #[cfg(feature = "openssl")]
+            openssl_context: None,
             connect_timeout: Self::get_default_connect_timeout(),
         }
     }
