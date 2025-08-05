@@ -9,6 +9,7 @@
 #![deny(unreachable_pub)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
+#[cfg(feature = "msg")]
 pub mod msg;
 
 #[cfg(feature = "config")]

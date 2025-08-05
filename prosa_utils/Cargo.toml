@@ -14,6 +14,7 @@ default = ["full"]
 msg = []
 config = ["dep:glob","dep:serde","dep:serde_yaml"]
 config-openssl = ["config", "dep:openssl"]
+config-openssl-vendored = ["config-openssl", "openssl/vendored"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:prometheus"]
 config-observability-prometheus = ["config-observability", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
 full = ["msg", "config", "config-openssl", "config-observability", "config-observability-prometheus"]
@@ -38,7 +39,7 @@ serde = { version = "1", optional = true, features = ["derive"] }
 serde_yaml = { version = "0.9", optional = true }
 
 # Config OpenSSL
-openssl = { version = "0.10", optional = true }
+openssl = { workspace = true, optional = true }
 
 # Config Observability
 log = { workspace = true, optional = true }

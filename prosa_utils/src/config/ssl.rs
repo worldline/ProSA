@@ -1,33 +1,49 @@
 //! Definition of SSL configuration
 
-use bytes::{BufMut, BytesMut};
-use glob::glob;
-use openssl::{
-    asn1::{Asn1Integer, Asn1Time},
-    bn::{BigNum, MsbOption},
-    ec::{Asn1Flag, EcGroup, EcKey},
-    hash::MessageDigest,
-    nid::Nid,
-    pkey::PKey,
-    ssl::{AlpnError, SslContextBuilder, SslFiletype, SslMethod, SslVerifyMode},
-    x509::{X509, X509NameBuilder, extension::SubjectAlternativeName},
-};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    fmt, fs,
-    net::IpAddr,
-    ops::DerefMut,
-    time::{self, Duration},
-};
+use std::{collections::HashMap, fmt, time::Duration};
 
-use super::{ConfigError, os_country};
+use super::ConfigError;
+
+#[cfg(feature = "config-openssl")]
+pub mod openssl;
+
+/// Trait to define an SSL store with custom SSL objects
+pub trait SslStore<C, S> {
+    /// Method to read certificates from its path. Get all certificates in subfolders
+    fn get_file_certificates(path: &std::path::Path) -> Result<Vec<C>, ConfigError>;
+
+    /// Method to get a cert store
+    ///
+    /// ```
+    /// use prosa_utils::config::ssl::{Store, SslStore};
+    ///
+    /// let store = Store::File { path: "./target".into() };
+    /// let ssl_store = store.get_store().unwrap();
+    /// ```
+    fn get_store(&self) -> Result<S, ConfigError>;
+
+    /// Method to get all OpenSSL certificate with their names as key
+    ///
+    /// ```
+    /// use prosa_utils::config::ssl::{Store, SslStore};
+    ///
+    /// let store = Store::File { path: "./target".into() };
+    /// let certs_map = store.get_certs().unwrap();
+    ///
+    /// // No cert in target
+    /// assert!(certs_map.is_empty());
+    /// ```
+    fn get_certs(&self) -> Result<HashMap<String, C>, ConfigError>;
+}
 
 /// SSL configuration object for store certificates
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum Store {
+    /// Will use the system trusted certificates
+    #[default]
+    System,
     /// Store path that contain certificate(s)
     File {
         /// Path of the store (can be directory, file, glob pattern)
@@ -38,156 +54,6 @@ pub enum Store {
         /// List of string PEMs for certificates
         certs: Vec<String>,
     },
-}
-
-impl Store {
-    /// Method to read certificates from its path. Get all certificates in subfolders
-    fn get_file_certificates(
-        path: &std::path::PathBuf,
-    ) -> Result<Vec<openssl::x509::X509>, ConfigError> {
-        if path.is_file() {
-            match &path.extension().and_then(OsStr::to_str) {
-                Some("pem") => match fs::read(path) {
-                    Ok(pem_file) => Ok(vec![openssl::x509::X509::from_pem(&pem_file)?]),
-                    Err(io) => Err(ConfigError::IoFile(
-                        path.to_str().unwrap_or_default().into(),
-                        io,
-                    )),
-                },
-                Some("der") => match fs::read(path) {
-                    Ok(der_file) => Ok(vec![openssl::x509::X509::from_der(&der_file)?]),
-                    Err(io) => Err(ConfigError::IoFile(
-                        path.to_str().unwrap_or_default().into(),
-                        io,
-                    )),
-                },
-                _ => Ok(Vec::new()),
-            }
-        } else if path.is_symlink() {
-            if let Ok(link) = path.read_link() {
-                Self::get_file_certificates(&link)
-            } else {
-                Ok(Vec::new())
-            }
-        } else if let Ok(path_dir) = path.read_dir() {
-            let mut cert_list = Vec::new();
-            for dir_entry in path_dir.flatten() {
-                cert_list.append(&mut Self::get_file_certificates(&dir_entry.path())?);
-            }
-
-            Ok(cert_list)
-        } else {
-            Ok(Vec::new())
-        }
-    }
-
-    /// Method to get an OpenSSL cert store
-    ///
-    /// ```
-    /// use prosa_utils::config::ssl::Store;
-    ///
-    /// let store = Store::File { path: "./target".into() };
-    /// let openssl_store: openssl::x509::store::X509Store = store.get_store().unwrap();
-    /// ```
-    pub fn get_store(&self) -> Result<openssl::x509::store::X509Store, ConfigError> {
-        let mut store = openssl::x509::store::X509StoreBuilder::new()?;
-        match self {
-            Store::File { path } => match glob(path) {
-                Ok(certs) => {
-                    for cert_path in certs.flatten() {
-                        for cert in Self::get_file_certificates(&cert_path)? {
-                            store.add_cert(cert)?;
-                        }
-                    }
-
-                    Ok(store.build())
-                }
-                Err(e) => Err(ConfigError::WrongPath(path.clone(), e)),
-            },
-            Store::Cert { certs } => {
-                for cert in certs {
-                    store.add_cert(openssl::x509::X509::from_pem(cert.as_bytes())?)?;
-                }
-
-                Ok(store.build())
-            }
-        }
-    }
-
-    /// Method to get all OpenSSL certificate with their names as key
-    ///
-    /// ```
-    /// use prosa_utils::config::ssl::Store;
-    ///
-    /// let store = Store::File { path: "./target".into() };
-    /// let certs_map = store.get_certs().unwrap();
-    ///
-    /// // No cert in target
-    /// assert!(certs_map.is_empty());
-    /// ```
-    pub fn get_certs(&self) -> Result<HashMap<String, openssl::x509::X509>, ConfigError> {
-        match self {
-            Store::File { path } => match glob(path) {
-                Ok(certs) => {
-                    let mut certs_map = HashMap::new();
-                    for cert_path in certs.flatten() {
-                        for cert in Self::get_file_certificates(&cert_path)? {
-                            if let Some(name) = cert
-                                .subject_name()
-                                .entries_by_nid(Nid::COMMONNAME)
-                                .last()
-                                .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
-                            {
-                                certs_map.insert(name, cert);
-                            } else if let Some(cert_name) = cert_path
-                                .to_str()
-                                .and_then(|p| p.strip_suffix(".pem").or(p.strip_suffix(".der")))
-                            {
-                                certs_map.insert(cert_name.into(), cert);
-                            }
-                        }
-                    }
-
-                    Ok(certs_map)
-                }
-                Err(e) => Err(ConfigError::WrongPath(path.clone(), e)),
-            },
-            Store::Cert { certs } => {
-                let mut certs_map = HashMap::new();
-                for cert_pem in certs {
-                    let cert = openssl::x509::X509::from_pem(cert_pem.as_bytes())?;
-                    if let Some(name) = cert
-                        .subject_name()
-                        .entries_by_nid(Nid::COMMONNAME)
-                        .last()
-                        .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
-                    {
-                        certs_map.insert(name, cert);
-                    }
-                }
-
-                Ok(certs_map)
-            }
-        }
-    }
-}
-
-#[cfg(target_family = "unix")]
-impl Default for Store {
-    fn default() -> Self {
-        Store::File {
-            path: "/etc/ssl/certs/".into(),
-        }
-    }
-}
-
-#[cfg(target_family = "windows")]
-impl Default for Store {
-    fn default() -> Self {
-        Store::File {
-            path: "HKLM:/Software/Microsoft/SystemCertificates/".into(),
-        }
-    }
 }
 
 impl fmt::Display for Store {
@@ -208,6 +74,34 @@ impl fmt::Display for Store {
     }
 }
 
+/// Trait to define SSL configuration context for socket
+pub trait SslConfigContext<C, S> {
+    /// Method to init an SSL context for a client socket
+    ///
+    /// ```
+    /// use prosa_utils::config::ssl::{Store, SslConfig, SslConfigContext as _};
+    ///
+    /// let mut client_config = SslConfig::default();
+    /// client_config.set_store(Store::File { path: "./target".into() });
+    /// if let Ok(mut ssl_context_builder) = client_config.init_tls_client_context() {
+    ///     let ssl_context = ssl_context_builder.build();
+    /// }
+    /// ```
+    fn init_tls_client_context(&self) -> Result<C, ConfigError>;
+
+    /// Method to init an SSL context for a server socket
+    ///
+    /// ```
+    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext as _};
+    ///
+    /// let server_config = SslConfig::new_pkcs12("server.pkcs12".into());
+    /// if let Ok(mut ssl_context_builder) = server_config.init_tls_server_context(None) {
+    ///     let ssl_context = ssl_context_builder.build();
+    /// }
+    /// ```
+    fn init_tls_server_context(&self, host: Option<&str>) -> Result<S, ConfigError>;
+}
+
 /// SSL configuration for socket
 ///
 /// Client SSL socket
@@ -217,7 +111,7 @@ impl fmt::Display for Store {
 /// use tokio::net::TcpStream;
 /// use tokio_openssl::SslStream;
 /// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
-/// use prosa_utils::config::ssl::SslConfig;
+/// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 ///
 /// async fn client() -> Result<(), io::Error> {
 ///     let mut stream = TcpStream::connect("localhost:4443").await?;
@@ -246,7 +140,7 @@ impl fmt::Display for Store {
 /// use tokio::net::TcpListener;
 /// use tokio_openssl::SslStream;
 /// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
-/// use prosa_utils::config::ssl::SslConfig;
+/// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 ///
 /// async fn server() -> Result<(), io::Error> {
 ///     let listener = TcpListener::bind("0.0.0.0:4443").await?;
@@ -341,6 +235,21 @@ impl SslConfig {
         }
     }
 
+    /// Method to create an ssl configuration that will generate a self signed certificate and write it's certificate to the _cert_path_
+    /// Should be use with config instead of building it manually
+    pub fn new_self_cert(cert_path: String) -> SslConfig {
+        SslConfig {
+            store: None,
+            pkcs12: None,
+            cert: Some(cert_path),
+            key: None,
+            passphrase: None,
+            alpn: Vec::default(),
+            modern_security: Self::default_modern_security(),
+            ssl_timeout: Self::default_ssl_timeout(),
+        }
+    }
+
     /// Getter of the SSL timeout
     pub fn get_ssl_timeout(&self) -> Duration {
         Duration::from_millis(self.ssl_timeout)
@@ -354,206 +263,6 @@ impl SslConfig {
     /// Setter of the ALPN list send by the client, or order of ALPN accepted by the server
     pub fn set_alpn(&mut self, alpn: Vec<String>) {
         self.alpn = alpn;
-    }
-
-    /// Method to init an SSL context for a socket
-    pub(crate) fn init_tls_context<B>(
-        &self,
-        mut context_builder: B,
-        is_server: bool,
-        host: Option<&str>,
-    ) -> Result<B, ConfigError>
-    where
-        B: DerefMut<Target = SslContextBuilder>,
-    {
-        if let Some(pkcs12_path) = &self.pkcs12 {
-            match fs::read(pkcs12_path) {
-                Ok(pkcs12_file) => {
-                    let pkcs12 = openssl::pkcs12::Pkcs12::from_der(pkcs12_file.as_ref())?
-                        .parse2(self.passphrase.as_ref().unwrap_or(&String::from("")))?;
-
-                    if let Some(pkey) = pkcs12.pkey {
-                        context_builder.set_private_key(&pkey)?;
-                    }
-
-                    if let Some(cert) = pkcs12.cert {
-                        context_builder.set_certificate(&cert)?;
-                    }
-
-                    if let Some(ca) = pkcs12.ca {
-                        for cert in ca {
-                            context_builder.add_extra_chain_cert(cert)?;
-                        }
-                    }
-                }
-                Err(io) => return Err(ConfigError::IoFile(pkcs12_path.to_string(), io)),
-            }
-        } else if let (Some(cert_path), Some(key_path)) = (&self.cert, &self.key) {
-            context_builder.set_certificate_file(cert_path, SslFiletype::PEM)?;
-
-            match fs::read(key_path) {
-                Ok(key_file) => {
-                    let pkey = if key_path.ends_with(".der") {
-                        PKey::private_key_from_der(key_file.as_slice())?
-                    } else if let Some(passphrase) = &self.passphrase {
-                        PKey::private_key_from_pem_passphrase(
-                            key_file.as_slice(),
-                            passphrase.as_bytes(),
-                        )?
-                    } else {
-                        PKey::private_key_from_pem(key_file.as_slice())?
-                    };
-
-                    context_builder.set_private_key(&pkey)?;
-                }
-                Err(io) => return Err(ConfigError::IoFile(key_path.to_string(), io)),
-            }
-        } else if is_server {
-            let mut group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1)?;
-            group.set_asn1_flag(Asn1Flag::NAMED_CURVE);
-            let pkey = PKey::from_ec_key(EcKey::generate(&group)?)?;
-            context_builder.set_private_key(&pkey)?;
-
-            let mut cert = X509::builder()?;
-            cert.set_version(2)?;
-            cert.set_pubkey(&pkey)?;
-
-            let mut serial_bn = BigNum::new()?;
-            serial_bn.pseudo_rand(64, MsbOption::MAYBE_ZERO, true)?;
-            let serial_number = Asn1Integer::from_bn(&serial_bn)?;
-            cert.set_serial_number(&serial_number)?;
-
-            let begin_valid_time =
-                Asn1Time::from_unix(time::UNIX_EPOCH.elapsed().unwrap().as_secs() as i64 - 360)?;
-            cert.set_not_before(&begin_valid_time)?;
-            let end_valid_time = Asn1Time::days_from_now(1461)?; // 4 years from now
-            cert.set_not_after(&end_valid_time)?;
-
-            let mut x509_name = X509NameBuilder::new()?;
-            if let Some(cn) = os_country() {
-                x509_name.append_entry_by_text("C", cn.as_str())?;
-            }
-            x509_name.append_entry_by_text("CN", "ProSA")?;
-            let x509_name = x509_name.build();
-            cert.set_subject_name(&x509_name)?;
-            cert.set_issuer_name(&x509_name)?;
-
-            // Add DNS or IP subject alternative name if needed to check the certificate
-            if let Some(host) = host {
-                if let Ok(ip) = host.parse::<IpAddr>() {
-                    if !ip.is_unspecified() && !ip.is_loopback() {
-                        let mut subject_alternative_name = SubjectAlternativeName::new();
-                        let x509_extension = subject_alternative_name
-                            .ip(host)
-                            .build(&cert.x509v3_context(None, None))?;
-                        cert.append_extension2(&x509_extension)?;
-                    }
-                } else {
-                    let mut subject_alternative_name = SubjectAlternativeName::new();
-                    let x509_extension = subject_alternative_name
-                        .dns(host)
-                        .build(&cert.x509v3_context(None, None))?;
-                    cert.append_extension2(&x509_extension)?;
-                }
-            }
-
-            cert.sign(&pkey, MessageDigest::sha256())?;
-
-            context_builder.set_certificate(&cert.build())?;
-        }
-
-        if let Some(store) = &self.store {
-            context_builder.set_cert_store(store.get_store()?);
-            if is_server {
-                context_builder.set_verify(SslVerifyMode::PEER);
-            }
-        } else if !is_server {
-            context_builder.set_cert_store(Store::default().get_store()?);
-        } else {
-            context_builder.set_verify(SslVerifyMode::NONE);
-        }
-
-        if !self.alpn.is_empty() {
-            if is_server {
-                let alpn_list = self.alpn.clone();
-                context_builder.set_alpn_select_callback(move |_ssl, alpn| {
-                    let mut cli_alpn = HashMap::new();
-
-                    let mut current_split = alpn;
-                    while let Some(length) = current_split.first() {
-                        if current_split.len() > *length as usize {
-                            let (left, right) = current_split.split_at(*length as usize + 1);
-                            cli_alpn
-                                .insert(String::from_utf8(left[1..].to_vec()).unwrap(), &left[1..]);
-                            current_split = right;
-                        } else {
-                            return Err(AlpnError::ALERT_FATAL);
-                        }
-                    }
-
-                    for alpn_name in &alpn_list {
-                        if let Some(alpn) = cli_alpn.get(alpn_name) {
-                            return Ok(alpn);
-                        }
-                    }
-
-                    Err(AlpnError::NOACK)
-                });
-            } else {
-                let mut alpn_bytes = BytesMut::new();
-                for alpn in &self.alpn {
-                    alpn_bytes.put_u8(alpn.len() as u8);
-                    alpn_bytes.put(alpn.as_bytes());
-                }
-
-                context_builder.set_alpn_protos(&alpn_bytes)?;
-            }
-        }
-
-        Ok(context_builder)
-    }
-
-    /// Method to init an SSL context for a client socket
-    ///
-    /// ```
-    /// use prosa_utils::config::ssl::{Store, SslConfig};
-    ///
-    /// let mut client_config = SslConfig::default();
-    /// client_config.set_store(Store::File { path: "./target".into() });
-    /// if let Ok(mut ssl_context_builder) = client_config.init_tls_client_context() {
-    ///     let ssl_context = ssl_context_builder.build();
-    /// }
-    /// ```
-    pub fn init_tls_client_context(
-        &self,
-    ) -> Result<openssl::ssl::SslConnectorBuilder, ConfigError> {
-        self.init_tls_context(
-            openssl::ssl::SslConnector::builder(SslMethod::tls_client())?,
-            false,
-            None,
-        )
-    }
-
-    /// Method to init an SSL context for a server socket
-    ///
-    /// ```
-    /// use prosa_utils::config::ssl::SslConfig;
-    ///
-    /// let server_config = SslConfig::new_pkcs12("server.pkcs12".into());
-    /// if let Ok(mut ssl_context_builder) = server_config.init_tls_server_context(None) {
-    ///     let ssl_context = ssl_context_builder.build();
-    /// }
-    /// ```
-    pub fn init_tls_server_context(
-        &self,
-        host: Option<&str>,
-    ) -> Result<openssl::ssl::SslAcceptorBuilder, ConfigError> {
-        let ssl_acceptor = if self.modern_security {
-            openssl::ssl::SslAcceptor::mozilla_modern_v5(SslMethod::tls_server())
-        } else {
-            openssl::ssl::SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server())
-        }?;
-        self.init_tls_context(ssl_acceptor, true, host)
     }
 }
 

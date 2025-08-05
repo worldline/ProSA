@@ -4,10 +4,11 @@
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/doc_assets/settings.svg"))]
 //! </svg>
 
+use std::path::PathBuf;
+
 use thiserror::Error;
 
 // Feature openssl or rusttls,...
-#[cfg(feature = "config-openssl")]
 pub mod ssl;
 
 // Feature opentelemetry
@@ -24,9 +25,12 @@ pub enum ConfigError {
     /// Error that indicate a wrong path format in filesystem
     #[error("The config parameter {0} have an incorrect value `{1}`")]
     WrongValue(String, String),
+    /// Error that indicate a wrong path format pattern in filesystem
+    #[error("The path `{0}` provided don't match the pattern `{1}`")]
+    WrongPathPattern(String, glob::PatternError),
     /// Error that indicate a wrong path format in filesystem
-    #[error("The path `{0}` provided is not correct `{1}`")]
-    WrongPath(String, glob::PatternError),
+    #[error("The path `{0}` provided is not correct")]
+    WrongPath(PathBuf),
     /// Error on a file read
     #[error("The file `{0}` can't be read `{1}`")]
     IoFile(String, std::io::Error),
