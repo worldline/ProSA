@@ -37,6 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -93,10 +94,13 @@
                 sidebar = sidebar || 'visible';
             } else {
                 sidebar = 'hidden';
+                sidebar_toggle.checked = false;
             }
-            sidebar_toggle.checked = sidebar === 'visible';
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
         </script>
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
@@ -150,7 +154,12 @@
 
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -172,6 +181,18 @@
                     <main>
                         <h1 id="ssl"><a class="header" href="#ssl">SSL</a></h1>
 <p>Configuring SSL is a complex task, but many options have been provided to make it accessible and flexible.</p>
+<h2 id="library-selection"><a class="header" href="#library-selection">Library selection</a></h2>
+<p>ProSA through traits:</p>
+<ul>
+<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslStore.html"><code>SslStore</code></a> to handle specific library certificate Store.</li>
+<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslConfigContext.html"><code>SslConfigContext</code></a> to handle specific client/server SSL context for TLS negociation.</li>
+</ul>
+<p>allows the use of <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/openssl/index.html">OpenSSL</a> and later more SSL libraries.</p>
+<p>By default, ProSA will use OpenSSL, but if you want, you can use the following features to change it:</p>
+<ul>
+<li><code>openssl</code>: Use OpenSSL by default</li>
+<li><code>openssl-vendored</code>: <a href="https://docs.rs/openssl/latest/openssl/#vendored">Vendored</a> OpenSSL that compiles and statically links to the OpenSSL library</li>
+</ul>
 <h2 id="store"><a class="header" href="#store">Store</a></h2>
 <p>You have two options to configure an <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/enum.Store.html">SSL store</a>:</p>
 <ul>
@@ -242,6 +263,12 @@
 <blockquote>
 <p>If you specify a certificate with a <code>.der</code> extention, it will be read as DER-encoded.</p>
 </blockquote>
+<h3 id="self-signed-certificate"><a class="header" href="#self-signed-certificate">Self signed certificate</a></h3>
+<p>If your server connection is SSL (with the <code>ssl://</code> or the <code>+ssl://</code> suffixed protocol) and you don't specify a certificate and its private key, it'll generate a self-signed certificate.</p>
+<p>If you want to retrieve the generated certificate because you need to trust it from a remote, you can specify a certificate path where the certificate will be written:</p>
+<pre><code class="language-yaml">ssl_config:
+  cert: "/opt/self_signed_cert.pem"
+</code></pre>
 <h3 id="usage"><a class="header" href="#usage">Usage</a></h3>
 <p>The SslConfig applies both to server and client configurations.</p>
 <p>If you specify a store, it'll be used:</p>
@@ -299,6 +326,7 @@
         <!-- Custom JS scripts -->
         <script src="mermaid.min.js"></script>
         <script src="mermaid-init.js"></script>
+
 
 
     </div>

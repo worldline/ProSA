@@ -38,6 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc.js"></script>
@@ -94,10 +95,13 @@
                 sidebar = sidebar || 'visible';
             } else {
                 sidebar = 'hidden';
+                sidebar_toggle.checked = false;
             }
-            sidebar_toggle.checked = sidebar === 'visible';
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
         </script>
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
@@ -151,7 +155,12 @@
 
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -184,7 +193,7 @@ the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">LGPLv3</a>.</p>
 <p>This license has been chosen to keep the framework and some modules open source, while allowing for other modules to be proprietary.
 In fact, ProSA contains no direct references to Worldline's private properties.</p>
 <h2 id="version"><a class="header" href="#version">Version</a></h2>
-<p>This book is intended for version 0.2.2 of ProSA.</p>
+<p>This book is intended for version 0.3.0 of ProSA.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="foreword"><a class="header" href="#foreword">Foreword</a></h1>
 <p>While programming languages continue to change and evolve, the foundational architectural concepts in software development remain steadfast.</p>
 <p>This book explores these enduring principles through the lens of ProSA, a project rooted in ideas originally conceived by Michel Roux in COBOL and Java.
@@ -461,6 +470,18 @@ It's the role of Prometheus to gather metrics from your application.</p>
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ssl"><a class="header" href="#ssl">SSL</a></h1>
 <p>Configuring SSL is a complex task, but many options have been provided to make it accessible and flexible.</p>
+<h2 id="library-selection"><a class="header" href="#library-selection">Library selection</a></h2>
+<p>ProSA through traits:</p>
+<ul>
+<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslStore.html"><code>SslStore</code></a> to handle specific library certificate Store.</li>
+<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslConfigContext.html"><code>SslConfigContext</code></a> to handle specific client/server SSL context for TLS negociation.</li>
+</ul>
+<p>allows the use of <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/openssl/index.html">OpenSSL</a> and later more SSL libraries.</p>
+<p>By default, ProSA will use OpenSSL, but if you want, you can use the following features to change it:</p>
+<ul>
+<li><code>openssl</code>: Use OpenSSL by default</li>
+<li><code>openssl-vendored</code>: <a href="https://docs.rs/openssl/latest/openssl/#vendored">Vendored</a> OpenSSL that compiles and statically links to the OpenSSL library</li>
+</ul>
 <h2 id="store"><a class="header" href="#store">Store</a></h2>
 <p>You have two options to configure an <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/enum.Store.html">SSL store</a>:</p>
 <ul>
@@ -531,6 +552,12 @@ It's the role of Prometheus to gather metrics from your application.</p>
 <blockquote>
 <p>If you specify a certificate with a <code>.der</code> extention, it will be read as DER-encoded.</p>
 </blockquote>
+<h3 id="self-signed-certificate"><a class="header" href="#self-signed-certificate">Self signed certificate</a></h3>
+<p>If your server connection is SSL (with the <code>ssl://</code> or the <code>+ssl://</code> suffixed protocol) and you don't specify a certificate and its private key, it'll generate a self-signed certificate.</p>
+<p>If you want to retrieve the generated certificate because you need to trust it from a remote, you can specify a certificate path where the certificate will be written:</p>
+<pre><code class="language-yaml">ssl_config:
+  cert: "/opt/self_signed_cert.pem"
+</code></pre>
 <h3 id="usage"><a class="header" href="#usage">Usage</a></h3>
 <p>The SslConfig applies both to server and client configurations.</p>
 <p>If you specify a store, it'll be used:</p>
@@ -972,7 +999,7 @@ where
   let gauge_meter = meter
     .u64_gauge("prosa_gauge_metric_name")
     .with_description("Custom ProSA gauge metric")
-    .init();
+    .build();
 
   // Record your value for the gauge with custom keys
   gauge_meter.record(
@@ -1007,7 +1034,7 @@ where
 
       // You can call `observe()` multiple time if you have metrics with different labels
     })
-    .init();
+    .build();
 
   value
 }
@@ -1410,9 +1437,6 @@ After that, you are free to call any services.</p>
         // Register the processor
         self.proc.add_proc().await?;
 
-        // Need to have a unique message id when you send a message
-        let mut msg_id = 0;
-
         // Wait for the service table before sending messages to a service
         loop {
             if let Some(msg) = self.internal_rx_queue.recv().await {
@@ -1437,16 +1461,13 @@ After that, you are free to call any services.</p>
             }
 
             // Attempt to send a message if the service is available
-            if let Some(service) = self.service.get_proc_service("SERVICE_NAME", msg_id) {
+            if let Some(service) = self.service.get_proc_service("SERVICE_NAME") {
                 let trans = RequestMsg::new(
-                    msg_id,
                     String::from("SERVICE_NAME"),
                     M::default(),
                     self.proc.get_service_queue()
                 );
                 service.proc_queue.send(InternalMsg::Request(trans)).await?;
-
-                msg_id += 1;
             }
         }
 
@@ -1467,9 +1488,6 @@ The logic is similar to single senders, but you specify the queue when sending m
 </span>    async fn internal_run(&amp;mut self, name: String) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         // Register the processor
         self.proc.add_proc().await?;
-
-        // Need to have a unique message id when you send a message
-        let mut msg_id = 0;
 
         // Create a queue for subtask communication
         let (tx_queue, mut rx_queue) = tokio::sync::mpsc::channel(2048);
@@ -1505,16 +1523,13 @@ The logic is similar to single senders, but you specify the queue when sending m
             }
 
             // Attempt to send a message if the service is available
-            if let Some(service) = self.service.get_proc_service("SERVICE_NAME", msg_id) {
+            if let Some(service) = self.service.get_proc_service("SERVICE_NAME") {
                 let trans = RequestMsg::new(
-                    msg_id,
                     String::from("SERVICE_NAME"),
                     M::default(),
                     tx_msg_queue.clone()
                 );
                 service.proc_queue.send(InternalMsg::Request(trans)).await?;
-
-                msg_id += 1;
             }
         })
 
@@ -1551,7 +1566,6 @@ That's the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pend
             .add_service_proc(vec![String::from("PROC_TEST")])
             .await?;
         let mut interval = time::interval(time::Duration::from_secs(4));
-        let mut msg_id: u64 = 0;
         let mut pending_msgs: PendingMsgs&lt;RequestMsg&lt;M&gt;, M&gt; = Default::default();
         loop {
             tokio::select! {
@@ -1719,6 +1733,7 @@ Of course, if you implement it, you can get the number of threads from your proc
             window.setTimeout(window.print, 100);
         });
         </script>
+
 
     </div>
     </body>
