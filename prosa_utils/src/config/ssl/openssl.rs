@@ -135,7 +135,7 @@ impl SslStore<X509, X509Store> for Store {
     fn get_certs(&self) -> Result<HashMap<String, X509>, ConfigError> {
         match self {
             Store::System => {
-                let store: X509Store = self.get_store()?;
+                /*let store: X509Store = self.get_store()?;
                 let mut certs_map = HashMap::new();
                 for cert in store.all_certificates() {
                     if let Some(name) = cert
@@ -148,7 +148,13 @@ impl SslStore<X509, X509Store> for Store {
                     }
                 }
 
-                Ok(certs_map)
+                Ok(certs_map)*/
+
+                // TODO handle it properly with the OpenSSL version
+                Err(ConfigError::WrongValue(
+                    "OpenSSL".to_string(),
+                    "TODO handle this version".to_string(),
+                ))
             }
             Store::File { path } => match glob::glob(path) {
                 Ok(certs) => {
