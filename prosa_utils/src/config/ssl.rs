@@ -289,6 +289,7 @@ impl Default for SslConfig {
     }
 }
 
+#[cfg(feature = "config-openssl")]
 #[cfg(test)]
 mod tests {
     use super::*;
