@@ -6,7 +6,10 @@ use std::{
     time::Duration,
 };
 
-use prosa_utils::config::ssl::{SslConfig, SslConfigContext as _};
+use prosa_utils::config::ssl::SslConfig;
+#[cfg(feature = "openssl")]
+use prosa_utils::config::ssl::SslConfigContext as _;
+
 use serde::{Deserialize, Serialize};
 
 pub use prosa_macros::io;
@@ -212,10 +215,9 @@ impl StreamListener {
                                 ),
                             )
                         })?
+                    && e.code() != openssl::ssl::ErrorCode::ZERO_RETURN
                 {
-                    if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                        return Err(io::Error::other(format!("Can't accept the client: {e}")));
-                    }
+                    return Err(io::Error::other(format!("Can't accept the client: {e}")));
                 }
 
                 Ok((Stream::OpenSsl(stream), addr.into()))
@@ -281,10 +283,9 @@ impl StreamListener {
                                     ),
                                 )
                             })?
+                        && e.code() != openssl::ssl::ErrorCode::ZERO_RETURN
                     {
-                        if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                            return Err(io::Error::other(format!("Can't accept the client: {e}")));
-                        }
+                        return Err(io::Error::other(format!("Can't accept the client: {e}")));
                     }
 
                     Ok(Stream::OpenSsl(stream))
@@ -405,6 +406,7 @@ impl ListenerSetting {
 
     /// Method to create manually a target
     pub fn new(url: Url, ssl: Option<SslConfig>) -> ListenerSetting {
+        #[allow(unused_mut)]
         let mut target = ListenerSetting {
             url: url.clone(),
             ssl,
@@ -438,6 +440,8 @@ impl ListenerSetting {
         }
 
         let addrs = self.url.socket_addrs(|| self.url.port_or_known_default())?;
+
+        #[allow(unused_mut)]
         let mut stream_listener = StreamListener::bind(&*addrs).await?;
 
         #[cfg(feature = "openssl")]
@@ -449,17 +453,17 @@ impl ListenerSetting {
             return Ok(stream_listener);
         }
 
-        if let Some(ssl_config) = self.ssl.as_ref() {
+        if let Some(_ssl_config) = self.ssl.as_ref() {
             #[cfg(feature = "openssl")]
             {
                 let ssl_acceptor_builder_result: Result<
                     ::openssl::ssl::SslAcceptorBuilder,
                     prosa_utils::config::ConfigError,
-                > = ssl_config.init_tls_server_context(self.url.host_str());
+                > = _ssl_config.init_tls_server_context(self.url.host_str());
                 if let Ok(ssl_acceptor_builder) = ssl_acceptor_builder_result {
                     stream_listener = stream_listener.ssl_acceptor(
                         ssl_acceptor_builder.build(),
-                        Some(ssl_config.get_ssl_timeout()),
+                        Some(_ssl_config.get_ssl_timeout()),
                     );
                     return Ok(stream_listener);
                 }
@@ -470,10 +474,9 @@ impl ListenerSetting {
                 "No SSL engine available",
             ))
         } else if url_is_ssl(&self.url) {
-            let ssl_config = SslConfig::default();
-
             #[cfg(feature = "openssl")]
             {
+                let ssl_config = SslConfig::default();
                 let ssl_acceptor_builder_result: Result<
                     ::openssl::ssl::SslAcceptorBuilder,
                     prosa_utils::config::ConfigError,

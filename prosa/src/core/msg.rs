@@ -405,6 +405,27 @@ impl<M> ErrorMsg<M>
 where
     M: Sized + Clone + Tvf,
 {
+    /// Method to create a new ErrorMsg
+    pub fn new<R>(
+        request: R,
+        service: String,
+        span: Span,
+        data: Option<M>,
+        err: ServiceError,
+    ) -> Self
+    where
+        R: Msg<M>,
+    {
+        ErrorMsg {
+            id: request.get_id(),
+            service,
+            span,
+            error_time: SystemTime::now(),
+            data,
+            err,
+        }
+    }
+
     /// Getter of the service error
     pub fn get_err(&self) -> &ServiceError {
         &self.err

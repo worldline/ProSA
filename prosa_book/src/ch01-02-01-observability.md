@@ -31,25 +31,34 @@ observability:
 
 ### OpenTelemetry
 
-You can also push your telemetry to an OpenTelemetry collector:
+You can also push your telemetry to a GRPC OpenTelemetry collector:
 ```yaml
 observability:
   level: debug
   metrics:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
   traces:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
   logs:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
+```
+
+Or an HTTP Opentelemetry collector:
+```yaml
+observability:
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "http://localhost:4318/v1/metrics"
+  traces:
+    otlp:
+      endpoint: "http://localhost:4318/v1/traces"
+  logs:
+    otlp:
+      endpoint: "http://localhost:4318/v1/logs"
 ```
 
 ### Prometheus server

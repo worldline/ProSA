@@ -8,7 +8,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
+use prosa_utils::config::ssl::SslConfig;
+#[cfg(feature = "openssl")]
+use prosa_utils::config::ssl::SslConfigContext;
+
 use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -145,13 +148,13 @@ impl Stream {
     {
         let ssl = ssl_connector.configure()?.into_ssl(domain)?;
         let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream).unwrap();
-        if let Err(e) = Pin::new(&mut stream).connect().await {
-            if e.code() != openssl::ssl::ErrorCode::ZERO_RETURN {
-                return Err(io::Error::new(
-                    io::ErrorKind::Interrupted,
-                    format!("Can't connect the SSL socket `{e}`"),
-                ));
-            }
+        if let Err(e) = Pin::new(&mut stream).connect().await
+            && e.code() != openssl::ssl::ErrorCode::ZERO_RETURN
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::Interrupted,
+                format!("Can't connect the SSL socket `{e}`"),
+            ));
         }
 
         Ok(stream)
@@ -409,7 +412,7 @@ impl Stream {
     ///     // is_http2 is true if the server sent the HTTP/2 ALPN value `h2`
     /// }
     /// ```
-    pub fn selected_alpn_check<F>(&self, f: F) -> bool
+    pub fn selected_alpn_check<F>(&self, _f: F) -> bool
     where
         F: Fn(&[u8]) -> bool,
     {
@@ -417,7 +420,7 @@ impl Stream {
             #[cfg(feature = "openssl")]
             Stream::OpenSsl(s) => {
                 if let Some(alpn) = s.ssl().selected_alpn_protocol() {
-                    f(alpn)
+                    _f(alpn)
                 } else {
                     false
                 }
@@ -425,7 +428,7 @@ impl Stream {
             #[cfg(all(feature = "openssl", feature = "http-proxy"))]
             Stream::OpenSslHttpProxy(s) => {
                 if let Some(alpn) = s.ssl().selected_alpn_protocol() {
-                    f(alpn)
+                    _f(alpn)
                 } else {
                     false
                 }
@@ -752,14 +755,12 @@ impl TargetSetting {
     /// Method to init the ssl context out of the ssl target configuration.
     /// Must be call when the configuration is retrieved
     pub fn init_ssl_context(&mut self) {
+        #[cfg(feature = "openssl")]
         if let Some(ssl_config) = self.ssl.as_ref() {
             // Init OpenSSL context by default
-            #[cfg(feature = "openssl")]
-            {
-                let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
-                    SslConfigContext::init_tls_client_context(ssl_config).ok();
-                self.openssl_context = ssl_context_builder.map(|c| c.build());
-            }
+            let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
+                SslConfigContext::init_tls_client_context(ssl_config).ok();
+            self.openssl_context = ssl_context_builder.map(|c| c.build());
         }
     }
 

@@ -135,26 +135,27 @@ impl SslStore<X509, X509Store> for Store {
     fn get_certs(&self) -> Result<HashMap<String, X509>, ConfigError> {
         match self {
             Store::System => {
-                /*let store: X509Store = self.get_store()?;
-                let mut certs_map = HashMap::new();
-                for cert in store.all_certificates() {
-                    if let Some(name) = cert
-                        .subject_name()
-                        .entries_by_nid(Nid::COMMONNAME)
-                        .last()
-                        .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
-                    {
-                        certs_map.insert(name, cert);
+                #[cfg(ossl300)]
+                {
+                    let store: X509Store = self.get_store()?;
+                    let mut certs_map = HashMap::new();
+
+                    for cert in store.all_certificates() {
+                        if let Some(name) = cert
+                            .subject_name()
+                            .entries_by_nid(Nid::COMMONNAME)
+                            .last()
+                            .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
+                        {
+                            certs_map.insert(name, cert);
+                        }
                     }
+
+                    Ok(certs_map)
                 }
 
-                Ok(certs_map)*/
-
-                // TODO handle it properly with the OpenSSL version
-                Err(ConfigError::WrongValue(
-                    "OpenSSL".to_string(),
-                    "TODO handle this version".to_string(),
-                ))
+                #[cfg(not(ossl300))]
+                Ok(HashMap::new())
             }
             Store::File { path } => match glob::glob(path) {
                 Ok(certs) => {
@@ -521,6 +522,13 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
 
         let ossl_store: ::openssl::x509::store::X509Store = store_le_x1_x2.get_store().unwrap();
         assert!(!ossl_store.all_certificates().is_empty())
+    }
+
+    #[cfg(ossl300)]
+    #[test]
+    fn test_system_store() {
+        let certs_map: HashMap<String, X509> = Store::System.get_certs().unwrap();
+        assert!(!certs_map.is_empty());
     }
 
     #[test]

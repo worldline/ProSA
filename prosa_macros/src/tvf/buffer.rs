@@ -12,15 +12,16 @@ pub(crate) fn generate_list(buffer_type: &Ident, content: &Group) -> Result<Toke
     let mut token_buffer = TokenStream::new();
     for token_tree in content.stream() {
         // if the token is a comma, we have a complete entry
-        if let TokenTree::Punct(punct) = &token_tree {
-            if punct.as_char() == ',' && !token_buffer.is_empty() {
-                // generate the sequence of tokens to build the value
-                entries.push(generate_value(buffer_type, &token_buffer)?);
+        if let TokenTree::Punct(punct) = &token_tree
+            && punct.as_char() == ','
+            && !token_buffer.is_empty()
+        {
+            // generate the sequence of tokens to build the value
+            entries.push(generate_value(buffer_type, &token_buffer)?);
 
-                // reset the buffer
-                token_buffer = TokenStream::new();
-                continue;
-            }
+            // reset the buffer
+            token_buffer = TokenStream::new();
+            continue;
         }
         // otherwise append to the buffer
         token_buffer.extend(token_tree.to_token_stream());
@@ -64,11 +65,12 @@ pub(crate) fn generate_map(buffer_type: &Ident, content: &Group) -> Result<Token
         match read_state {
             ReadState::Key => {
                 // if the token is a `=`, we check if the next token is a `>`
-                if let TokenTree::Punct(punct) = &token_tree {
-                    if punct.as_char() == '=' && punct.spacing() == Spacing::Joint {
-                        read_state = ReadState::Arrow;
-                        continue;
-                    }
+                if let TokenTree::Punct(punct) = &token_tree
+                    && punct.as_char() == '='
+                    && punct.spacing() == Spacing::Joint
+                {
+                    read_state = ReadState::Arrow;
+                    continue;
                 }
                 token_buffer_key.extend(token_tree.to_token_stream());
             }
@@ -84,19 +86,19 @@ pub(crate) fn generate_map(buffer_type: &Ident, content: &Group) -> Result<Token
             }
             ReadState::Value => {
                 // if the token is a comma, we have a complete entry
-                if let TokenTree::Punct(punct) = &token_tree {
-                    if punct.as_char() == ',' && !token_buffer_value.is_empty() {
-                        // generate the sequence of tokens to build the value
-                        let (tokens, value_type) =
-                            generate_value(buffer_type, &token_buffer_value)?;
-                        entries.push((token_buffer_key.clone(), tokens, value_type));
+                if let TokenTree::Punct(punct) = &token_tree
+                    && punct.as_char() == ','
+                    && !token_buffer_value.is_empty()
+                {
+                    // generate the sequence of tokens to build the value
+                    let (tokens, value_type) = generate_value(buffer_type, &token_buffer_value)?;
+                    entries.push((token_buffer_key.clone(), tokens, value_type));
 
-                        // reset the buffers
-                        read_state = ReadState::Key;
-                        token_buffer_key = TokenStream::new();
-                        token_buffer_value = TokenStream::new();
-                        continue;
-                    }
+                    // reset the buffers
+                    read_state = ReadState::Key;
+                    token_buffer_key = TokenStream::new();
+                    token_buffer_value = TokenStream::new();
+                    continue;
                 }
                 token_buffer_value.extend(token_tree.to_token_stream());
             }

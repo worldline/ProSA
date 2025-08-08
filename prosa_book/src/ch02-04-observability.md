@@ -8,6 +8,11 @@ When you create an adaptor, you may want to generate custom metrics, traces or l
 
 It is important to understand how to implement these features within ProSA, as ProSA handles much of the integration for you.
 
+Each time you'll need to include opentelemetry dependency to your project:
+```toml
+opentelemetry = { version = "0.29", features = ["metrics", "trace", "logs"] }
+```
+
 ## Metrics
 
 Metrics in ProSA are managed using the [OpenTelemetry Meter](https://docs.rs/opentelemetry/latest/opentelemetry/metrics/struct.Meter.html).

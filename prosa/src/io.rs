@@ -142,13 +142,13 @@ impl From<tokio::net::unix::SocketAddr> for SocketAddr {
 #[cfg(test)]
 mod tests {
     use futures_util::future;
-    use listener::{ListenerSetting, StreamListener};
+    use listener::StreamListener;
 
     #[cfg(feature = "openssl")]
     use prosa_utils::config::ssl::{SslConfig, SslConfigContext as _, Store};
 
-    use std::{env, os::fd::AsRawFd as _};
-    use stream::{Stream, TargetSetting};
+    use std::os::fd::AsRawFd as _;
+    use stream::Stream;
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt};
 
     use super::*;
@@ -267,7 +267,7 @@ mod tests {
     async fn openssl_client_server() {
         let addr = "localhost:41443";
         let addr_url = Url::parse(format!("tls://{addr}").as_str()).unwrap();
-        let cert_path = env::temp_dir()
+        let cert_path = std::env::temp_dir()
             .join("test_openssl_client_server.pem")
             .to_str()
             .unwrap()
@@ -344,7 +344,7 @@ mod tests {
     async fn openssl_client_server_raw() {
         let addr = "localhost:41453";
         let addr_url = Url::parse(format!("tls://{addr}").as_str()).unwrap();
-        let cert_path = env::temp_dir()
+        let cert_path = std::env::temp_dir()
             .join("test_openssl_client_server_raw.pem")
             .to_str()
             .unwrap()
@@ -422,7 +422,7 @@ mod tests {
     async fn ssl_client_server_with_config() {
         let addr_str = "tls://localhost:41463";
         let addr = Url::parse(addr_str).unwrap();
-        let cert_path = env::temp_dir()
+        let cert_path = std::env::temp_dir()
             .join("test_ssl_client_server_with_config.pem")
             .to_str()
             .unwrap()
@@ -431,7 +431,8 @@ mod tests {
         let mut server_ssl_config = SslConfig::new_self_cert(cert_path.clone());
         server_ssl_config.set_alpn(vec!["prosa/1".into(), "h2".into()]);
 
-        let listener_settings = ListenerSetting::new(addr.clone(), Some(server_ssl_config));
+        let listener_settings =
+            listener::ListenerSetting::new(addr.clone(), Some(server_ssl_config));
         assert!(
             format!("{listener_settings:?}").contains("tls")
                 && format!("{listener_settings:?}").contains("localhost")
@@ -474,7 +475,7 @@ mod tests {
         let mut client_ssl_config = SslConfig::default();
         client_ssl_config.set_alpn(vec!["http/1.1".into(), "prosa/1".into()]);
         client_ssl_config.set_store(Store::File { path: cert_path });
-        let target_settings = TargetSetting::new(addr, Some(client_ssl_config), None);
+        let target_settings = stream::TargetSetting::new(addr, Some(client_ssl_config), None);
         assert_eq!(addr_str, target_settings.to_string());
 
         let client = async {
@@ -508,7 +509,7 @@ mod tests {
         let addr_str = "https://worldline.com/";
         let addr = Url::parse(addr_str).unwrap();
 
-        let target_settings = TargetSetting::new(addr, Some(SslConfig::default()), None);
+        let target_settings = stream::TargetSetting::new(addr, Some(SslConfig::default()), None);
         assert_eq!(addr_str, target_settings.to_string());
 
         let mut stream = target_settings.connect().await.unwrap();

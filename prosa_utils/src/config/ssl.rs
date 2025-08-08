@@ -58,15 +58,23 @@ pub enum Store {
 
 impl fmt::Display for Store {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let certs = self.get_certs().unwrap_or_default();
-        if let Self::File { path } = &self {
-            writeln!(f, "Store cert path [{path}]:")?;
-        }
-        for (name, cert) in certs {
-            if f.alternate() {
-                writeln!(f, "{name}:\n{cert:#?}")?;
-            } else {
-                writeln!(f, "{name}")?;
+        match self {
+            Store::System => write!(f, "System store"),
+            Store::File { path } => write!(f, "Store cert path [{path}]"),
+            Store::Cert { certs: _ } => write!(f, "Store cert list"),
+        }?;
+
+        #[cfg(feature = "config-openssl")]
+        {
+            writeln!(f, ":")?;
+            let certs: HashMap<String, ::openssl::x509::X509> =
+                self.get_certs().unwrap_or_default();
+            for (name, cert) in certs {
+                if f.alternate() {
+                    writeln!(f, "{name}:\n{cert:#?}")?;
+                } else {
+                    writeln!(f, "{name}")?;
+                }
             }
         }
 
@@ -281,6 +289,7 @@ impl Default for SslConfig {
     }
 }
 
+#[cfg(feature = "config-openssl")]
 #[cfg(test)]
 mod tests {
     use super::*;
