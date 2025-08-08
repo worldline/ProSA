@@ -1,6 +1,6 @@
 [package]
 name = "prosa-utils"
-version = "0.3.1"
+version = "0.3.2"
 authors.workspace = true
 description = "ProSA utils"
 homepage.workspace = true
@@ -13,8 +13,8 @@ include.workspace = true
 default = ["full"]
 msg = []
 config = ["dep:glob","dep:serde","dep:serde_yaml"]
-config-openssl = ["config", "dep:openssl"]
-config-openssl-vendored = ["config-openssl", "openssl/vendored"]
+config-openssl = ["config", "dep:openssl", "dep:openssl-sys"]
+config-openssl-vendored = ["config-openssl", "openssl/vendored", "openssl-sys/vendored"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:prometheus"]
 config-observability-prometheus = ["config-observability", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
 full = ["msg", "config", "config-openssl", "config-observability", "config-observability-prometheus"]
@@ -39,6 +39,7 @@ serde = { version = "1", optional = true, features = ["derive"] }
 serde_yaml = { version = "0.9", optional = true }
 
 # Config OpenSSL
+openssl-sys = { workspace = true, optional = true }
 openssl = { workspace = true, optional = true }
 
 # Config Observability

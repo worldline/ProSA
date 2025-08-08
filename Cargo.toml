@@ -22,8 +22,8 @@ include = [
 ]
 
 [workspace.dependencies]
-prosa-utils = { version = "0.3.1", path = "prosa_utils", default-features = false }
-prosa-macros = { version = "0.3.1", path = "prosa_macros" }
+prosa-utils = { version = "0.3.2", path = "prosa_utils", default-features = false }
+prosa-macros = { version = "0.3.2", path = "prosa_macros" }
 thiserror = "2"
 aquamarine = "0.6"
 bytes = "1"
@@ -47,6 +47,7 @@ opentelemetry-prometheus = { version = "0.29" }
 opentelemetry-appender-log = "0.29"
 
 # Config SSL
+openssl-sys = { version = "0.9" }
 openssl = { version = "0.10" }
 
 # Web

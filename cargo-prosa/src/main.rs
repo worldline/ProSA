@@ -394,41 +394,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let dry_run = matches.get_flag("dry_run");
                 let prosa_toml = fs::read_to_string(CONFIGURATION_FILENAME)?;
                 let mut prosa_doc = prosa_toml.parse::<DocumentMut>()?;
-                if let Some(processor) = matches.get_one::<String>("PROCESSOR") {
-                    if let Some(proc_metadata) = CargoMetadata::load_metadata()?
+                if let Some(processor) = matches.get_one::<String>("PROCESSOR")
+                    && let Some(proc_metadata) = CargoMetadata::load_metadata()?
                         .prosa_proc_metadata()
                         .get(processor.as_str())
-                    {
-                        let mut proc_desc = proc_metadata.get_proc_desc(
-                            matches.get_one::<String>("adaptor").map(|x| x.as_str()),
-                            None,
-                        )?;
-                        if let Some(name) = matches.get_one::<String>("name") {
-                            proc_desc.name = Some(name.clone());
-                        } else if proc_desc.name.is_none() {
-                            proc_desc.name = Some(processor.clone());
-                        }
+                {
+                    let mut proc_desc = proc_metadata.get_proc_desc(
+                        matches.get_one::<String>("adaptor").map(|x| x.as_str()),
+                        None,
+                    )?;
+                    if let Some(name) = matches.get_one::<String>("name") {
+                        proc_desc.name = Some(name.clone());
+                    } else if proc_desc.name.is_none() {
+                        proc_desc.name = Some(processor.clone());
+                    }
 
-                        // Use the processor name instead of the crate name
-                        proc_desc.proc_name = processor.clone();
+                    // Use the processor name instead of the crate name
+                    proc_desc.proc_name = processor.clone();
 
-                        if !dry_run {
-                            if let Some(toml_edit::Item::ArrayOfTables(array_tables)) =
-                                prosa_doc.get_mut("proc")
-                            {
-                                array_tables.push(proc_desc.into());
-                            } else {
-                                let mut array_tables = toml_edit::ArrayOfTables::new();
-                                array_tables.push(proc_desc.into());
-                                prosa_doc
-                                    .insert("proc", toml_edit::Item::ArrayOfTables(array_tables));
-                            }
-
-                            let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
-                            prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
+                    if !dry_run {
+                        if let Some(toml_edit::Item::ArrayOfTables(array_tables)) =
+                            prosa_doc.get_mut("proc")
+                        {
+                            array_tables.push(proc_desc.into());
                         } else {
-                            println!("Will add {proc_desc}");
+                            let mut array_tables = toml_edit::ArrayOfTables::new();
+                            array_tables.push(proc_desc.into());
+                            prosa_doc.insert("proc", toml_edit::Item::ArrayOfTables(array_tables));
                         }
+
+                        let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
+                        prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
+                    } else {
+                        println!("Will add {proc_desc}");
                     }
                 }
             }
@@ -447,13 +445,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     array_tables.retain(|table| {
                         if let Some(toml_edit::Item::Value(toml_edit::Value::String(name))) =
                             table.get("name")
+                            && processors.contains(&name.value())
                         {
-                            if processors.contains(&name.value()) {
-                                if dry_run {
-                                    println!("Will remove {}", name.value());
-                                } else {
-                                    return false;
-                                }
+                            if dry_run {
+                                println!("Will remove {}", name.value());
+                            } else {
+                                return false;
                             }
                         }
 
