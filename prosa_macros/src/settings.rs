@@ -26,14 +26,14 @@ where
                             init: Some(syn::LocalInit { expr, .. }),
                             ..
                         }) => {
-                            if let syn::Expr::Struct(expr) = expr.as_mut() {
-                                if expr.path.is_ident(self_ident) {
-                                    if !expr.fields.trailing_punct() {
-                                        expr.fields.push_punct(syn::token::Comma::default());
-                                    }
-
-                                    func(expr);
+                            if let syn::Expr::Struct(expr) = expr.as_mut()
+                                && expr.path.is_ident(self_ident)
+                            {
+                                if !expr.fields.trailing_punct() {
+                                    expr.fields.push_punct(syn::token::Comma::default());
                                 }
+
+                                func(expr);
                             }
                         }
                         // Direct Expr return (Self {..})

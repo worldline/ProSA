@@ -257,10 +257,11 @@ impl PackageMetadata {
         {
             let mut proc_metadata = HashMap::new();
             for (name, data) in metadata {
-                if name != "main" && name != "tvf" {
-                    if let Ok(prosa_metadata) = serde_json::from_value::<Metadata>(data.clone()) {
-                        proc_metadata.insert(name.as_str(), prosa_metadata);
-                    }
+                if name != "main"
+                    && name != "tvf"
+                    && let Ok(prosa_metadata) = serde_json::from_value::<Metadata>(data.clone())
+                {
+                    proc_metadata.insert(name.as_str(), prosa_metadata);
                 }
             }
 
@@ -279,16 +280,15 @@ impl PackageMetadata {
             .and_then(|m| m.get("prosa").and_then(|w| w.as_object()))
         {
             for (meta_name, data) in metadata {
-                if meta_name == ty {
-                    if let Ok(prosa_metadata) =
+                if meta_name == ty
+                    && let Ok(prosa_metadata) =
                         serde_json::from_value::<Vec<String>>(data.clone()).map(|v| v.into_iter())
-                    {
-                        meta_list.append(
-                            &mut prosa_metadata
-                                .map(|w| format!("{}::{}", self.name.replace('-', "_"), w))
-                                .collect::<Vec<String>>(),
-                        );
-                    }
+                {
+                    meta_list.append(
+                        &mut prosa_metadata
+                            .map(|w| format!("{}::{}", self.name.replace('-', "_"), w))
+                            .collect::<Vec<String>>(),
+                    );
                 }
             }
         }
@@ -327,21 +327,21 @@ impl PackageMetadata {
                                     version: &self.version,
                                 });
                             }
-                        } else if ty == "adaptor" {
-                            if let Some(adaptor_name) = prosa_metadata.find_adaptor(
+                        } else if ty == "adaptor"
+                            && let Some(adaptor_name) = prosa_metadata.find_adaptor(
                                 name.replace('-', "_").as_str(),
                                 Some(self.name.replace('-', "_").as_str()),
-                            ) {
-                                return Some(ComponentVersion {
-                                    name: adaptor_name.clone(),
-                                    crate_name: &self.name,
-                                    version: &self.version,
-                                });
-                            }
+                            )
+                        {
+                            return Some(ComponentVersion {
+                                name: adaptor_name.clone(),
+                                crate_name: &self.name,
+                                version: &self.version,
+                            });
                         }
                     }
-                } else if meta_name == ty {
-                    if let Some(component_name) =
+                } else if meta_name == ty
+                    && let Some(component_name) =
                         serde_json::from_value::<Vec<String>>(data.clone())
                             .ok()
                             .and_then(|m| {
@@ -349,13 +349,12 @@ impl PackageMetadata {
                                     format!("{}::{}", self.name.replace('-', "_"), w).contains(name)
                                 })
                             })
-                    {
-                        return Some(ComponentVersion {
-                            name: component_name,
-                            crate_name: &self.name,
-                            version: &self.version,
-                        });
-                    }
+                {
+                    return Some(ComponentVersion {
+                        name: component_name,
+                        crate_name: &self.name,
+                        version: &self.version,
+                    });
                 }
             }
         }
@@ -561,23 +560,23 @@ impl CargoMetadata {
         let mut processor_version = None;
         let mut adaptor_version = None;
         for package in &self.packages {
-            if processor_version.is_none() {
-                if let Some(proc) = package.get_proc_version(proc_name) {
-                    processor_version = Some(proc);
+            if processor_version.is_none()
+                && let Some(proc) = package.get_proc_version(proc_name)
+            {
+                processor_version = Some(proc);
 
-                    if adaptor_version.is_some() {
-                        break;
-                    }
+                if adaptor_version.is_some() {
+                    break;
                 }
             }
 
-            if adaptor_version.is_none() {
-                if let Some(adaptor) = package.get_adaptor_version(adaptor_name) {
-                    adaptor_version = Some(adaptor);
+            if adaptor_version.is_none()
+                && let Some(adaptor) = package.get_adaptor_version(adaptor_name)
+            {
+                adaptor_version = Some(adaptor);
 
-                    if processor_version.is_some() {
-                        break;
-                    }
+                if processor_version.is_some() {
+                    break;
                 }
             }
         }

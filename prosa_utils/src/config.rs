@@ -37,7 +37,7 @@ pub enum ConfigError {
     #[cfg(feature = "config-openssl")]
     /// SSL error
     #[error("Openssl error `{0}`")]
-    Ssl(#[from] openssl::error::ErrorStack),
+    OpenSsl(#[from] openssl::error::ErrorStack),
 }
 
 /// Method to get the country name from the OS
