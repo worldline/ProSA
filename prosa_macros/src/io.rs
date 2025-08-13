@@ -52,7 +52,7 @@ fn generate_struct(mut item_struct: syn::ItemStruct) -> syn::parse::Result<syn::
         // Add the Address field that is the remote address
         fields.named.push(
             syn::Field::parse_named
-                .parse2(quote! { addr: std::option::Option<std::net::SocketAddr> })
+                .parse2(quote! { addr: std::option::Option<prosa::io::SocketAddr> })
                 .unwrap(),
         );
         // Add the buffer object to read from the net object
@@ -115,11 +115,11 @@ fn generate_struct_impl(
                 }
             }
         }
-        impl #item_generics std::convert::From<(IO, std::net::SocketAddr)> for #item_ident #item_generics
+        impl #item_generics std::convert::From<(IO, prosa::io::SocketAddr)> for #item_ident #item_generics
         where
             IO: 'static + tokio::io::AsyncReadExt + tokio::io::AsyncWriteExt + std::os::fd::AsRawFd + std::marker::Unpin + std::marker::Send
         {
-            fn from(socket: (IO, std::net::SocketAddr)) -> Self {
+            fn from(socket: (IO, prosa::io::SocketAddr)) -> Self {
                 let (stream, addr) = socket;
                 let socket_id = stream.as_raw_fd() as u32;
                 #item_ident {

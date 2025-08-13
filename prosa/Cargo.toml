@@ -43,6 +43,7 @@ bytes.workspace = true
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["std", "env-filter"]}
 thiserror.workspace = true
+base64 = "0.22"
 url = { version = "2", features = ["serde"] }
 rlimit = "0.10"
 
@@ -53,7 +54,7 @@ tokio.workspace = true
 tokio-openssl = { version = "0.6", optional = true }
 async-http-proxy = { version = "1", optional = true, features = ["runtime-tokio","basic-auth"] }
 
-serde = { version = "1", features = ["derive"] }
+serde.workspace = true
 config.workspace = true
 glob = { version = "0.3" }
 toml.workspace = true
