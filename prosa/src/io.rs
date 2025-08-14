@@ -1,6 +1,7 @@
 //! Module that define IO that could be use by a ProSA processor
 use std::{
     fmt,
+    hash::{Hash, Hasher},
     net::{SocketAddrV4, SocketAddrV6},
     path::Path,
 };
@@ -50,7 +51,7 @@ pub fn url_is_ssl(url: &Url) -> bool {
 }
 
 /// Internal Socket adress enum to define IPv4, IPv6 and unix socket.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SocketAddr {
     #[cfg(target_family = "unix")]
     /// UNIX socket address
@@ -70,6 +71,50 @@ impl SocketAddr {
             SocketAddr::Unix(_) => true,
             SocketAddr::V4(ipv4) => ipv4.ip().is_loopback(),
             SocketAddr::V6(ipv6) => ipv6.ip().is_loopback(),
+        }
+    }
+
+    /// Returns `true` if the adress is a UNIX address, and `false` otherwise.
+    pub fn is_unix(&self) -> bool {
+        #[cfg(target_family = "unix")]
+        {
+            matches!(self, SocketAddr::Unix(_))
+        }
+        #[cfg(not(target_family = "unix"))]
+        {
+            false
+        }
+    }
+
+    /// Returns `true` if the adress is an IPV4 address, and `false` otherwise.
+    pub fn is_ipv4(&self) -> bool {
+        matches!(self, SocketAddr::V4(_))
+    }
+
+    /// Returns `true` if the adress is an IPV6 address, and `false` otherwise.
+    pub fn is_ipv6(&self) -> bool {
+        matches!(self, SocketAddr::V6(_))
+    }
+
+    /// Returns the IP address associated with this socket address.
+    pub fn ip(&self) -> std::net::IpAddr {
+        match self {
+            #[cfg(target_family = "unix")]
+            SocketAddr::Unix(_) => std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+            SocketAddr::V4(ipv4) => std::net::IpAddr::V4(*ipv4.ip()),
+            SocketAddr::V6(ipv6) => std::net::IpAddr::V6(*ipv6.ip()),
+        }
+    }
+
+    /// Changes the IP address associated with this socket address.
+    pub const fn set_ip(&mut self, new_ip: std::net::IpAddr) {
+        match new_ip {
+            std::net::IpAddr::V4(ipv4_addr) => {
+                *self = SocketAddr::V4(SocketAddrV4::new(ipv4_addr, self.port()))
+            }
+            std::net::IpAddr::V6(ipv6_addr) => {
+                *self = SocketAddr::V6(SocketAddrV6::new(ipv6_addr, self.port(), 0, 0))
+            }
         }
     }
 
@@ -106,6 +151,17 @@ impl PartialEq for SocketAddr {
     }
 }
 
+impl Hash for SocketAddr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            #[cfg(target_family = "unix")]
+            SocketAddr::Unix(unix) => unix.as_pathname().hash(state),
+            SocketAddr::V4(ipv4) => ipv4.hash(state),
+            SocketAddr::V6(ipv6) => ipv6.hash(state),
+        }
+    }
+}
+
 impl fmt::Display for SocketAddr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -120,6 +176,27 @@ impl fmt::Display for SocketAddr {
             SocketAddr::V4(ipv4) => write!(f, "{ipv4}"),
             SocketAddr::V6(ipv6) => write!(f, "{ipv6}"),
         }
+    }
+}
+
+impl<I: Into<std::net::IpAddr>> From<(I, u16)> for SocketAddr {
+    fn from(pieces: (I, u16)) -> Self {
+        match pieces.0.into() {
+            std::net::IpAddr::V4(ipv4) => SocketAddr::V4(SocketAddrV4::new(ipv4, pieces.1)),
+            std::net::IpAddr::V6(ipv6) => SocketAddr::V6(SocketAddrV6::new(ipv6, pieces.1, 0, 0)),
+        }
+    }
+}
+
+impl From<std::net::SocketAddrV4> for SocketAddr {
+    fn from(ipv4: std::net::SocketAddrV4) -> Self {
+        SocketAddr::V4(ipv4)
+    }
+}
+
+impl From<std::net::SocketAddrV6> for SocketAddr {
+    fn from(ipv6: std::net::SocketAddrV6) -> Self {
+        SocketAddr::V6(ipv6)
     }
 }
 

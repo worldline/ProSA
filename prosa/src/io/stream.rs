@@ -12,6 +12,7 @@ use prosa_utils::config::ssl::SslConfig;
 #[cfg(feature = "openssl")]
 use prosa_utils::config::ssl::SslConfigContext;
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -41,7 +42,7 @@ pub enum Stream {
 }
 
 impl Stream {
-    /// Returns the local address that this stream is bound to.
+    /// Returns the socket address of the remote peer of this TCP connection.
     ///
     /// ```
     /// use tokio::io;
@@ -51,10 +52,41 @@ impl Stream {
     /// use std::net::{Ipv4Addr, SocketAddrV4};
     ///
     /// async fn accepting() -> Result<(), io::Error> {
-    ///     let stream: Stream = Stream::connect_tcp("127.0.0.1:80").await?;
+    ///     let stream: Stream = Stream::connect_tcp("127.0.0.1:8080").await?;
     ///
-    ///     assert_eq!(stream.local_addr()?,
-    ///                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 80)));
+    ///     assert_eq!(stream.peer_addr()?,
+    ///                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080)));
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn peer_addr(&self) -> Result<SocketAddr, io::Error> {
+        match self {
+            #[cfg(target_family = "unix")]
+            Stream::Unix(s) => s.peer_addr().map(|addr| addr.into()),
+            Stream::Tcp(s) => s.peer_addr().map(|addr| addr.into()),
+            #[cfg(feature = "openssl")]
+            Stream::OpenSsl(s) => s.get_ref().peer_addr().map(|addr| addr.into()),
+            #[cfg(feature = "http-proxy")]
+            Stream::TcpHttpProxy(s) => s.peer_addr().map(|addr| addr.into()),
+            #[cfg(all(feature = "openssl", feature = "http-proxy"))]
+            Stream::OpenSslHttpProxy(s) => s.get_ref().peer_addr().map(|addr| addr.into()),
+        }
+    }
+
+    /// Returns the local address that this stream is bound to.
+    ///
+    /// ```
+    /// use tokio::io;
+    /// use url::Url;
+    /// use prosa::io::stream::Stream;
+    /// use prosa::io::SocketAddr;
+    /// use std::net::{IpAddr, Ipv4Addr, SocketAddrV4};
+    ///
+    /// async fn accepting() -> Result<(), io::Error> {
+    ///     let stream: Stream = Stream::connect_tcp("127.0.0.1:8080").await?;
+    ///
+    ///     assert_eq!(stream.local_addr()?.ip(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
     ///
     ///     Ok(())
     /// }
@@ -752,6 +784,36 @@ impl TargetSetting {
         self.ssl.is_some() || url_is_ssl(&self.url)
     }
 
+    /// Method to get authentication value out of URL username/password
+    ///
+    /// - If user password is provided, it return *Basic* authentication with base64 encoded username:password
+    /// - If only password is provided, it return *Bearer* authentication with the password as token
+    ///
+    /// ```
+    /// use url::Url;
+    /// use prosa::io::stream::TargetSetting;
+    ///
+    /// let basic_auth_target = TargetSetting::from(Url::parse("http://user:pass@localhost:8080").unwrap());
+    /// assert_eq!(Some(String::from("Basic dXNlcjpwYXNz")), basic_auth_target.get_authentication());
+    ///
+    /// let bearer_auth_target = TargetSetting::from(Url::parse("http://:token@localhost:8080").unwrap());
+    /// assert_eq!(Some(String::from("Bearer token")), bearer_auth_target.get_authentication());
+    /// ```
+    pub fn get_authentication(&self) -> Option<String> {
+        if let Some(password) = self.url.password() {
+            if self.url.username().is_empty() {
+                Some(format!("Bearer {password}"))
+            } else {
+                Some(format!(
+                    "Basic {}",
+                    STANDARD.encode(format!("{}:{}", self.url.username(), password))
+                ))
+            }
+        } else {
+            None
+        }
+    }
+
     /// Method to init the ssl context out of the ssl target configuration.
     /// Must be call when the configuration is retrieved
     pub fn init_ssl_context(&mut self) {
@@ -874,6 +936,14 @@ impl fmt::Display for TargetSetting {
             {
                 let _ = url.set_scheme(format!("{url_scheme}+ssl").as_str());
             }
+        }
+
+        // Mask username and password to avoid data leak in logs
+        if !url.username().is_empty() {
+            let _ = url.set_username("***");
+        }
+        if url.password().is_some() {
+            let _ = url.set_password(Some("***"));
         }
 
         if let Some(proxy_url) = &self.proxy {

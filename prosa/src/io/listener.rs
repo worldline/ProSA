@@ -176,6 +176,7 @@ impl StreamListener {
     /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     /// use prosa::io::listener::StreamListener;
     ///
+    /// # #[cfg(feature="openssl")]
     /// async fn accepting() -> Result<(), io::Error> {
     ///     let ssl_acceptor = SslConfig::default().init_tls_server_context(None).unwrap().build();
     ///     let stream_listener: StreamListener = StreamListener::bind("0.0.0.0:10000").await?.ssl_acceptor(ssl_acceptor, None);
@@ -232,6 +233,7 @@ impl StreamListener {
     /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     /// use prosa::io::listener::StreamListener;
     ///
+    /// # #[cfg(feature="openssl")]
     /// async fn accepting() -> Result<(), io::Error> {
     ///     let ssl_acceptor = SslConfig::default().init_tls_server_context(None).unwrap().build();
     ///     let stream_listener: StreamListener = StreamListener::bind("0.0.0.0:10000").await?.ssl_acceptor(ssl_acceptor, None);

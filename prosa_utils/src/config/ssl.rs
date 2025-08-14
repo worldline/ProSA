@@ -19,6 +19,7 @@ pub trait SslStore<C, S> {
     /// use prosa_utils::config::ssl::{Store, SslStore};
     ///
     /// let store = Store::File { path: "./target".into() };
+    /// # #[cfg(feature="config-openssl")]
     /// let ssl_store = store.get_store().unwrap();
     /// ```
     fn get_store(&self) -> Result<S, ConfigError>;
@@ -29,9 +30,11 @@ pub trait SslStore<C, S> {
     /// use prosa_utils::config::ssl::{Store, SslStore};
     ///
     /// let store = Store::File { path: "./target".into() };
+    /// # #[cfg(feature="config-openssl")]
     /// let certs_map = store.get_certs().unwrap();
     ///
     /// // No cert in target
+    /// # #[cfg(feature="config-openssl")]
     /// assert!(certs_map.is_empty());
     /// ```
     fn get_certs(&self) -> Result<HashMap<String, C>, ConfigError>;
@@ -91,6 +94,7 @@ pub trait SslConfigContext<C, S> {
     ///
     /// let mut client_config = SslConfig::default();
     /// client_config.set_store(Store::File { path: "./target".into() });
+    /// # #[cfg(feature="config-openssl")]
     /// if let Ok(mut ssl_context_builder) = client_config.init_tls_client_context() {
     ///     let ssl_context = ssl_context_builder.build();
     /// }
@@ -103,6 +107,7 @@ pub trait SslConfigContext<C, S> {
     /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext as _};
     ///
     /// let server_config = SslConfig::new_pkcs12("server.pkcs12".into());
+    /// # #[cfg(feature="config-openssl")]
     /// if let Ok(mut ssl_context_builder) = server_config.init_tls_server_context(None) {
     ///     let ssl_context = ssl_context_builder.build();
     /// }
@@ -118,9 +123,11 @@ pub trait SslConfigContext<C, S> {
 /// use std::pin::Pin;
 /// use tokio::net::TcpStream;
 /// use tokio_openssl::SslStream;
+/// # #[cfg(feature="config-openssl")]
 /// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
 /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 ///
+/// # #[cfg(feature="config-openssl")]
 /// async fn client() -> Result<(), io::Error> {
 ///     let mut stream = TcpStream::connect("localhost:4443").await?;
 ///
@@ -147,9 +154,11 @@ pub trait SslConfigContext<C, S> {
 /// use std::pin::Pin;
 /// use tokio::net::TcpListener;
 /// use tokio_openssl::SslStream;
+/// # #[cfg(feature="config-openssl")]
 /// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
 /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 ///
+/// # #[cfg(feature="config-openssl")]
 /// async fn server() -> Result<(), io::Error> {
 ///     let listener = TcpListener::bind("0.0.0.0:4443").await?;
 ///
