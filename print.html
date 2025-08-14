@@ -193,7 +193,7 @@ the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">LGPLv3</a>.</p>
 <p>This license has been chosen to keep the framework and some modules open source, while allowing for other modules to be proprietary.
 In fact, ProSA contains no direct references to Worldline's private properties.</p>
 <h2 id="version"><a class="header" href="#version">Version</a></h2>
-<p>This book is intended for version 0.3.1 of ProSA.</p>
+<p>This book is intended for version 0.3.2 of ProSA.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="foreword"><a class="header" href="#foreword">Foreword</a></h1>
 <p>While programming languages continue to change and evolve, the foundational architectural concepts in software development remain steadfast.</p>
 <p>This book explores these enduring principles through the lens of ProSA, a project rooted in ideas originally conceived by Michel Roux in COBOL and Java.
@@ -433,24 +433,31 @@ You can also configure your processor to act as a server that exposes those metr
       level: debug
 </code></pre>
 <h3 id="opentelemetry"><a class="header" href="#opentelemetry">OpenTelemetry</a></h3>
-<p>You can also push your telemetry to an OpenTelemetry collector:</p>
+<p>You can also push your telemetry to a GRPC OpenTelemetry collector:</p>
 <pre><code class="language-yaml">observability:
   level: debug
   metrics:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
   traces:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
   logs:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
+</code></pre>
+<p>Or an HTTP Opentelemetry collector:</p>
+<pre><code class="language-yaml">observability:
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "http://localhost:4318/v1/metrics"
+  traces:
+    otlp:
+      endpoint: "http://localhost:4318/v1/traces"
+  logs:
+    otlp:
+      endpoint: "http://localhost:4318/v1/logs"
 </code></pre>
 <h3 id="prometheus-server"><a class="header" href="#prometheus-server">Prometheus server</a></h3>
 <p>Prometheus works as a metric puller.</p>
@@ -691,14 +698,12 @@ For more details on configuration, please refer to the <a href="https://worldlin
   observability   =&gt; {
     'metrics' =&gt; {
       'otlp' =&gt; {
-        'endpoint' =&gt; 'http://opentelemetry-collector:4317',
-        'protocol' =&gt; 'Grpc'
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
       },
     },
     'traces' =&gt; {
       'otlp' =&gt; {
-        'endpoint' =&gt; 'http://opentelemetry-collector:4317',
-        'protocol' =&gt; 'Grpc'
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
       },
       'stdout' =&gt; {
         'level' =&gt; 'info',
@@ -706,8 +711,7 @@ For more details on configuration, please refer to the <a href="https://worldlin
     },
     'logs' =&gt; {
       'otlp' =&gt; {
-        'endpoint' =&gt; 'http://opentelemetry-collector:4317',
-        'protocol' =&gt; 'Grpc'
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
       },
       'stdout' =&gt; {
         'level' =&gt; 'info',
@@ -983,6 +987,9 @@ All required settings are described in this chapter.</p>
 <p>This section explains how you can use observability features for your own purposes.
 When you create an adaptor, you may want to generate custom metrics, traces or logs from relevant data you are processing.</p>
 <p>It is important to understand how to implement these features within ProSA, as ProSA handles much of the integration for you.</p>
+<p>Each time you'll need to include opentelemetry dependency to your project:</p>
+<pre><code class="language-toml">opentelemetry = { version = "0.29", features = ["metrics", "trace", "logs"] }
+</code></pre>
 <h2 id="metrics"><a class="header" href="#metrics">Metrics</a></h2>
 <p>Metrics in ProSA are managed using the <a href="https://docs.rs/opentelemetry/latest/opentelemetry/metrics/struct.Meter.html">OpenTelemetry Meter</a>.
 With the meter, you can declare counters, gauges, and more.</p>

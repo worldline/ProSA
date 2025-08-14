@@ -202,24 +202,31 @@ You can also configure your processor to act as a server that exposes those metr
       level: debug
 </code></pre>
 <h3 id="opentelemetry"><a class="header" href="#opentelemetry">OpenTelemetry</a></h3>
-<p>You can also push your telemetry to an OpenTelemetry collector:</p>
+<p>You can also push your telemetry to a GRPC OpenTelemetry collector:</p>
 <pre><code class="language-yaml">observability:
   level: debug
   metrics:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
   traces:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
   logs:
     otlp:
-      endpoint: "http://localhost:4317"
-      timeout_sec: 3
-      protocol: Grpc
+      endpoint: "grpc://localhost:4317"
+</code></pre>
+<p>Or an HTTP Opentelemetry collector:</p>
+<pre><code class="language-yaml">observability:
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "http://localhost:4318/v1/metrics"
+  traces:
+    otlp:
+      endpoint: "http://localhost:4318/v1/traces"
+  logs:
+    otlp:
+      endpoint: "http://localhost:4318/v1/logs"
 </code></pre>
 <h3 id="prometheus-server"><a class="header" href="#prometheus-server">Prometheus server</a></h3>
 <p>Prometheus works as a metric puller.</p>

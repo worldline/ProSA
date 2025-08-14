@@ -185,6 +185,9 @@ All required settings are described in this chapter.</p>
 <p>This section explains how you can use observability features for your own purposes.
 When you create an adaptor, you may want to generate custom metrics, traces or logs from relevant data you are processing.</p>
 <p>It is important to understand how to implement these features within ProSA, as ProSA handles much of the integration for you.</p>
+<p>Each time you'll need to include opentelemetry dependency to your project:</p>
+<pre><code class="language-toml">opentelemetry = { version = "0.29", features = ["metrics", "trace", "logs"] }
+</code></pre>
 <h2 id="metrics"><a class="header" href="#metrics">Metrics</a></h2>
 <p>Metrics in ProSA are managed using the <a href="https://docs.rs/opentelemetry/latest/opentelemetry/metrics/struct.Meter.html">OpenTelemetry Meter</a>.
 With the meter, you can declare counters, gauges, and more.</p>

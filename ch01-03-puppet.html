@@ -230,14 +230,12 @@ For more details on configuration, please refer to the <a href="https://worldlin
   observability   =&gt; {
     'metrics' =&gt; {
       'otlp' =&gt; {
-        'endpoint' =&gt; 'http://opentelemetry-collector:4317',
-        'protocol' =&gt; 'Grpc'
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
       },
     },
     'traces' =&gt; {
       'otlp' =&gt; {
-        'endpoint' =&gt; 'http://opentelemetry-collector:4317',
-        'protocol' =&gt; 'Grpc'
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
       },
       'stdout' =&gt; {
         'level' =&gt; 'info',
@@ -245,8 +243,7 @@ For more details on configuration, please refer to the <a href="https://worldlin
     },
     'logs' =&gt; {
       'otlp' =&gt; {
-        'endpoint' =&gt; 'http://opentelemetry-collector:4317',
-        'protocol' =&gt; 'Grpc'
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
       },
       'stdout' =&gt; {
         'level' =&gt; 'info',
