@@ -54,7 +54,14 @@ pub fn adaptor(input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Procedural macro to help building an ProSA Processor
+/// Procedural macro to help building a ProSA Processor
+///
+/// This macro can take as argument:
+/// - `settings` to indicate the processor settings path (undefined by default)
+/// - `queue_type` to specify the queue that the processor will use (Tokio mpsc by default)
+///     - `tokio::sync::mpsc`
+///     - `prosa::event::queue::mpsc`
+/// - `queue_size` maximum size of the processor queue (2048 by default)
 #[proc_macro_attribute]
 pub fn proc(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = match Punctuated::<syn::Meta, Token![,]>::parse_terminated.parse2(args.into()) {
@@ -67,7 +74,7 @@ pub fn proc(args: TokenStream, input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Procedural macro to help building an ProSA Settings
+/// Procedural macro to help building a ProSA Settings
 #[proc_macro_attribute]
 pub fn settings(args: TokenStream, input: TokenStream) -> TokenStream {
     assert!(args.is_empty());
@@ -76,7 +83,7 @@ pub fn settings(args: TokenStream, input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Procedural macro to help building an ProSA Processor Settings
+/// Procedural macro to help building a ProSA Processor Settings
 #[proc_macro_attribute]
 pub fn proc_settings(args: TokenStream, input: TokenStream) -> TokenStream {
     assert!(args.is_empty());
@@ -85,7 +92,7 @@ pub fn proc_settings(args: TokenStream, input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Procedural macro to help defining an ProSA IO (use for socket,...)
+/// Procedural macro to help defining a ProSA IO (use for socket,...)
 ///
 /// ```
 /// struct MyIoClass<IO> {

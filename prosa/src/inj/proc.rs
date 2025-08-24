@@ -236,7 +236,7 @@ where
             .send(InternalMsg::Request(RequestMsg::new(
                 self.settings.service_name.clone(),
                 next_transaction.take().unwrap(),
-                self.proc.get_service_queue(),
+                self.proc.get_msg_queue(),
             )))
             .await?;
         regulator.notify_send_transaction();
@@ -249,9 +249,9 @@ where
                 _ = regulator.tick() => {
                     if let Some(service) = self.service.get_proc_service(&self.settings.service_name) {
                         let trans = if let Some(transaction) = next_transaction.take() {
-                            RequestMsg::new(self.settings.service_name.clone(), transaction, self.proc.get_service_queue())
+                            RequestMsg::new(self.settings.service_name.clone(), transaction, self.proc.get_msg_queue())
                         } else {
-                            RequestMsg::new(self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_service_queue())
+                            RequestMsg::new(self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_msg_queue())
                         };
 
                         debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = name, service = self.settings.service_name, request = format!("{:?}", trans.get_data()));

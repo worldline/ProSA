@@ -1,3 +1,6 @@
+pub use crate::core::queue::SendError;
+pub use prosa_utils::queue::{QueueChecker, QueueError};
+
 /// Multi producer / Single consumer queue
 pub mod mpsc;
 

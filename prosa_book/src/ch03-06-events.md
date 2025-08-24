@@ -96,3 +96,34 @@ Using the object is pretty simple:
 
 To check if you can send the next transaction, call [`tick()`](https://docs.rs/prosa/latest/prosa/event/speed/struct.Regulator.html#method.tick).
 This method blocks if you need to wait, and lets you continue if you are within the allowed threshold.
+
+## Timed Queue
+
+ProSA introduced a queue system to enhance its functionality.
+While this book does not cover the standard queue (for which you can find more details in the [ProSA documentation](https://docs.rs/prosa/latest/prosa/event/queue/index.html)), it focuses on the [`Timed Queue`](file:///Users/jht/ProSA-queue/target/doc/prosa/event/queue/timed/index.html). This is a novel queuing concept designed for time-sensitive operations.
+
+The `TimedQueue` follows an **SPMC** (**S**ingle **P**roducer, **M**ultiple **C**onsumers) model, where only the sender can enforce timeouts.
+It ensures a regular message flow, as illustrated below:
+``` mermaid
+flowchart LR
+    send[Sender]
+    queue[(Timed Queue)]
+    recv1[Receiver 1]
+    recvn[Receiver N]
+    send --> queue
+    queue --> recv1
+    queue --> recvn
+```
+
+However, if a message in the queue expires (because a receiver failed to consume it in time), the sender retrieves the message:
+``` mermaid
+flowchart LR
+    send[Sender]
+    queue[(Timed Queue)]
+    send --> queue
+    queue -- timeout --> send
+```
+
+This is the key advantage of the `TimedQueue`.
+Unlike a standard queue, where a message is only returned if explicitly pulled, the `TimedQueue` allows messages to expire even if they are in the middle of the queue.
+In real-time systems, this ensures that every message receives a response within a specified timeframe—even if that response is simply an acknowledgment of a missed deadline.

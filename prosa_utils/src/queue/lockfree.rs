@@ -280,7 +280,7 @@ macro_rules! impl_consumer_queue {
     (false, false, $p:ty) => {
         /// Try to pull an item from the queue.
         ///
-        /// For a single consumer, it return a `Full` error if the queue was full to notify that item can bu push again in the queue.
+        /// For a single consumer, it return a `Full` error if the queue was full to notify that item can be push again in the queue.
         ///
         /// # Safety
         ///
@@ -317,7 +317,7 @@ macro_rules! impl_consumer_queue {
 
         /// Pull an item from the queue.
         ///
-        /// For a single consumer, it return a `Full` error if the queue was full to notify that item can bu push again in the queue.
+        /// For a single consumer, it return a `Full` error if the queue was full to notify that item can be push again in the queue.
         ///
         /// # Safety
         ///

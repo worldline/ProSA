@@ -1,4 +1,4 @@
-use crate::event::pending::Timers;
+use crate::{core::queue::SendError, event::pending::Timers};
 use prosa_utils::queue::{
     QueueChecker, QueueError,
     spmc::{LockFreeOptQueueU16, LockFreeOptQueueU32},
@@ -12,7 +12,6 @@ use tokio::{
 macro_rules! spmc {
     ($channel:ident, $queue:ident, $p:ty, $sender:ident, $receiver:ident) => {
         /// Sends values to the associated `Receiver`.
-        #[derive(Debug)]
         pub struct $sender<T, const N: usize> {
             queue: Arc<$queue<T, N>>,
             timers: Timers<$p>,
@@ -28,22 +27,38 @@ macro_rules! spmc {
             }
 
             /// Wait to send a value in the queue until there is capacity
-            async fn send_wait(&self, value: T) -> Result<($p, $p), QueueError<T>> {
+            async fn send_wait(&self, value: T) -> Result<($p, $p), SendError<T>> {
                 match unsafe { self.queue.push(value) } {
                     Ok(head_id) => {
                         self.recv_notify.notify_one();
                         Ok(head_id)
                     },
-                    Err(QueueError::<T>::Full(value, _)) => {
-                        let _permit = self.send_sem.acquire().await.map_err(|_| QueueError::<T>::Retrieve(N))?;
-                        Box::pin(self.send_wait(value)).await
+                    Err(QueueError::<T>::Full(ret_value, _)) => {
+                        if let Ok(_permit) = self.send_sem.acquire().await {
+                            Box::pin(self.send_wait(ret_value)).await
+                        } else {
+                            Err(SendError::Drop(ret_value))
+                        }
                     }
-                    Err(e) => Err(e),
+                    Err(e) => Err(e.into()),
                 }
             }
 
             /// Sends a value, waiting until there is capacity.
-            pub async fn send(&mut self, value: T, timeout: Instant) -> Result<(), QueueError<T>> {
+            ///
+            /// ```
+            /// use std::ops::Add;
+            /// use tokio::time::{Duration, Instant};
+            /// use prosa::event::queue::{QueueChecker, timed};
+            ///
+            /// #[tokio::main]
+            /// async fn main() {
+            #[doc = concat!("   let (mut tx, _rx) = timed::", stringify!($channel), "::<i32, 4096>();")]
+            ///     assert!(tx.is_empty());
+            ///     assert_eq!(Ok(()), tx.send(0, Instant::now().add(Duration::from_millis(200))).await);
+            /// }
+            /// ```
+            pub async fn send(&mut self, value: T, timeout: Instant) -> Result<(), SendError<T>> {
                 match unsafe { self.queue.push(value) } {
                     Ok((head, id)) => {
                         self.recv_notify.notify_one();
@@ -51,15 +66,18 @@ macro_rules! spmc {
                         self.timers.push_at(id, timeout);
                         Ok(())
                     },
-                    Err(QueueError::<T>::Full(value, _)) => {
-                        let permit = self.send_sem.acquire().await.map_err(|_| QueueError::<T>::Retrieve(N))?;
-                        let (head, id) = Box::pin(self.send_wait(value)).await?;
-                        drop(permit);
+                    Err(QueueError::<T>::Full(ret_value, _)) => {
+                        let (head, id) = if let Ok(_permit) = self.send_sem.acquire().await {
+                            Box::pin(self.send_wait(ret_value)).await
+                        } else {
+                            Err(SendError::Drop(ret_value))
+                        }?;
+
                         self.timers_retain(head, id);
                         self.timers.push_at(id, timeout);
                         Ok(())
                     }
-                    Err(e) => Err(e),
+                    Err(e) => Err(e.into()),
                 }
             }
 
@@ -68,14 +86,13 @@ macro_rules! spmc {
             /// ```
             /// use std::ops::Add;
             /// use tokio::time::{Duration, Instant};
-            /// use prosa_utils::queue::QueueChecker;
-            /// use prosa::event::queue::timed;
+            /// use prosa::event::queue::{QueueChecker, timed};
             ///
             #[doc = concat!("let (mut tx, _rx) = timed::", stringify!($channel), "::<i32, 4096>();")]
             /// assert!(tx.is_empty());
             /// assert_eq!(Ok(()), tx.try_send(0, Instant::now().add(Duration::from_millis(200))));
             /// ```
-            pub fn try_send(&mut self, value: T, timeout: Instant) -> Result<(), QueueError<T>> {
+            pub fn try_send(&mut self, value: T, timeout: Instant) -> Result<(), SendError<T>> {
                 let ret = unsafe { self.queue.push(value) };
                 match ret {
                     Ok((head, id)) => {
@@ -84,7 +101,7 @@ macro_rules! spmc {
                         self.timers.push_at(id, timeout);
                         Ok(())
                     },
-                    Err(e) => Err(e),
+                    Err(e) => Err(e.into()),
                 }
             }
 
@@ -117,12 +134,19 @@ macro_rules! spmc {
             }
         }
 
+        impl<T, const N: usize> std::fmt::Debug for $sender<T, N> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!($sender))
+                .field("queue", &self.queue)
+                .finish()
+            }
+        }
+
         impl<T, const N: usize> QueueChecker<$p> for $sender<T, N> {
             crate::event::queue::impl_queue_checker! {queue, $p}
         }
 
         /// Receives values from the associated `Sender`.
-        #[derive(Debug, Clone)]
         pub struct $receiver<T, const N: usize> {
             queue: Arc<$queue<T, N>>,
             recv_notify: Arc<Notify>,
@@ -131,6 +155,22 @@ macro_rules! spmc {
 
         impl<T, const N: usize> $receiver<T, N> {
             /// Receives the next value for this receiver.
+            ///
+            /// ```
+            /// use std::ops::Add;
+            /// use tokio::time::{Duration, Instant};
+            /// use prosa::event::queue::{QueueChecker, timed};
+            ///
+            /// #[tokio::main]
+            /// async fn main() {
+            #[doc = concat!("    let (mut tx, rx) = timed::", stringify!($channel), "::<i32, 4096>();")]
+            ///     assert!(tx.is_empty());
+            ///     assert_eq!(Ok(()), tx.try_send(0, Instant::now().add(Duration::from_millis(200))));
+            ///
+            ///     // If the element hasn't been consumed and it's not expired, you should get it
+            ///     assert_eq!(0, rx.recv().await);
+            /// }
+            /// ```
             pub async fn recv(&self) -> T {
                 loop {
                     match self.queue.pull() {
@@ -160,8 +200,7 @@ macro_rules! spmc {
             /// ```
             /// use std::ops::Add;
             /// use tokio::time::{Duration, Instant};
-            /// use prosa_utils::queue::QueueChecker;
-            /// use prosa::event::queue::timed;
+            /// use prosa::event::queue::{QueueChecker, timed};
             ///
             #[doc = concat!("let (mut tx, rx) = timed::", stringify!($channel), "::<i32, 4096>();")]
             /// assert!(tx.is_empty());
@@ -186,6 +225,24 @@ macro_rules! spmc {
                         Err(QueueError::Empty)
                     }
                     v => v,
+                }
+            }
+        }
+
+        impl<T, const N: usize> std::fmt::Debug for $receiver<T, N> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!($receiver))
+                .field("queue", &self.queue)
+                .finish()
+            }
+        }
+
+        impl<T, const N: usize> Clone for $receiver<T, N> {
+            fn clone(&self) -> Self {
+                $receiver::<T, N> {
+                    queue: self.queue.clone(),
+                    recv_notify: self.recv_notify.clone(),
+                    send_sem: self.send_sem.clone(),
                 }
             }
         }

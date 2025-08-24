@@ -3,6 +3,7 @@
 /// Module for pending message handling
 pub mod pending;
 
+#[cfg(feature = "queue")]
 /// Module for queue
 pub mod queue;
 

@@ -25,6 +25,23 @@ pub enum QueueError<T> {
 }
 
 /// Trait to define all information getter from the queue
+///
+/// ```no_run
+/// use prosa_utils::queue::QueueChecker;
+///
+/// fn queue_checker<Q>(queue: Q)
+/// where
+///     Q: QueueChecker<usize>,
+/// {
+///     if queue.is_empty() {
+///         assert!(!queue.is_full());
+///         assert_eq!(0, queue.len());
+///     } else if queue.is_full() {
+///         assert!(!queue.is_empty());
+///         assert_eq!(queue.max_capacity(), queue.len());
+///     }
+/// }
+/// ```
 pub trait QueueChecker<P> {
     /// Checks if the queue is empty.
     /// Prefer this method over `len() != 0`

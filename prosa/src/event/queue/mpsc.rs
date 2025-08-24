@@ -1,3 +1,4 @@
+use crate::core::queue::SendError;
 use prosa_utils::queue::{
     QueueChecker, QueueError,
     mpsc::{LockFreeQueueU16, LockFreeQueueU32},
@@ -5,10 +6,31 @@ use prosa_utils::queue::{
 use std::sync::Arc;
 use tokio::sync::{Notify, Semaphore};
 
+/// Trait that define mpsc queue sender methods for global exposure
+pub trait Sender<T> {
+    /// Try to send a value, return a Full error if the queue is full
+    ///
+    /// ```
+    /// use prosa::event::queue::{QueueChecker, QueueError, mpsc::Sender};
+    ///
+    /// async fn sender_process<S, T, P>(sender: S)
+    /// where
+    ///     S: Sender<T> + QueueChecker<P>,
+    ///     T: std::cmp::PartialEq + std::fmt::Debug + std::default::Default,
+    /// {
+    ///     if sender.is_full() {
+    ///         assert!(sender.try_send(T::default()).is_err());
+    ///     } else {
+    ///         assert_eq!(Ok(()), sender.try_send(T::default()));
+    ///     }
+    /// }
+    /// ```
+    fn try_send(&self, value: T) -> Result<(), SendError<T>>;
+}
+
 macro_rules! mpsc {
     ($channel:ident, $queue:ident, $p:ty, $sender:ident, $receiver:ident) => {
         /// Sends values to the associated `Receiver`.
-        #[derive(Debug, Clone)]
         pub struct $sender<T, const N: usize> {
             queue: Arc<$queue<T, N>>,
             recv_notify: Arc<Notify>,
@@ -17,40 +39,76 @@ macro_rules! mpsc {
 
         impl<T, const N: usize> $sender<T, N> {
             /// Sends a value, waiting until there is capacity.
-            pub async fn send(&self, value: T) -> Result<(), QueueError<T>> {
-                match self.queue.push(value) {
-                    Ok(()) => {
-                        self.recv_notify.notify_one();
-                        Ok(())
+            ///
+            /// ```
+            /// use prosa::event::queue::{QueueChecker, mpsc, mpsc::Sender};
+            ///
+            /// #[tokio::main]
+            /// async fn main() {
+            #[doc = concat!("    let (mut tx, _rx) = mpsc::", stringify!($channel), "::<i32, 4096>();")]
+            ///     assert!(tx.is_empty());
+            ///     assert_eq!(Ok(()), tx.send(0).await);
+            /// }
+            /// ```
+            pub async fn send(&self, mut value: T) -> Result<(), SendError<T>> {
+                loop {
+                    match self.queue.push(value) {
+                        Ok(()) => {
+                            self.recv_notify.notify_one();
+                            return Ok(())
+                        }
+                        Err(QueueError::<T>::Full(ret_value, _)) => {
+                            if let Ok(_permit) = self
+                                .send_sem
+                                .acquire()
+                                .await
+                            {
+                                value = ret_value;
+                            }
+                            else {
+                                return Err(SendError::Drop(ret_value))
+                            }
+                        }
+                        Err(e) => return Err(e.into()),
                     }
-                    Err(QueueError::<T>::Full(value, _)) => {
-                        let _permit = self
-                            .send_sem
-                            .acquire()
-                            .await
-                            .map_err(|_| QueueError::<T>::Retrieve(N))?;
-                        Box::pin(self.send(value)).await
-                    }
-                    e => e,
                 }
             }
+        }
 
+        impl<T, const N: usize> Sender<T> for $sender<T, N> {
             /// Try to send a value, return a Full error if the queue is full
             ///
             /// ```
-            /// use prosa_utils::queue::QueueChecker;
-            /// use prosa::event::queue::mpsc;
+            /// use prosa::event::queue::{QueueChecker, mpsc, mpsc::Sender};
             ///
             #[doc = concat!("let (mut tx, _rx) = mpsc::", stringify!($channel), "::<i32, 4096>();")]
             /// assert!(tx.is_empty());
             /// assert_eq!(Ok(()), tx.try_send(0));
             /// ```
-            pub fn try_send(&self, value: T) -> Result<(), QueueError<T>> {
+            fn try_send(&self, value: T) -> Result<(), SendError<T>> {
                 let ret = self.queue.push(value);
                 if ret.is_ok() {
                     self.recv_notify.notify_one();
                 }
-                ret
+                Ok(ret?)
+            }
+        }
+
+        impl<T, const N: usize> std::fmt::Debug for $sender<T, N> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!($sender))
+                .field("queue", &self.queue)
+                .finish()
+            }
+        }
+
+        impl<T, const N: usize> Clone for $sender<T, N> {
+            fn clone(&self) -> Self {
+                $sender::<T, N> {
+                    queue: self.queue.clone(),
+                    recv_notify: self.recv_notify.clone(),
+                    send_sem: self.send_sem.clone(),
+                }
             }
         }
 
@@ -59,15 +117,28 @@ macro_rules! mpsc {
         }
 
         /// Receives values from the associated `Sender`.
-        #[derive(Debug)]
         pub struct $receiver<T, const N: usize> {
             queue: Arc<$queue<T, N>>,
             recv_notify: Arc<Notify>,
             send_sem: Arc<Semaphore>,
         }
 
-        impl<T, const N: usize> $receiver<T, N> {
+        impl<T, const N: usize> $receiver<T, N>
+        {
             /// Receives the next value for this receiver.
+            ///
+            /// ```
+            /// use prosa::event::queue::{QueueChecker, mpsc, mpsc::Sender};
+            ///
+            /// #[tokio::main]
+            /// async fn main() {
+            #[doc = concat!("    let (mut tx, rx) = mpsc::", stringify!($channel), "::<i32, 4096>();")]
+            ///     assert_eq!(Ok(()), tx.try_send(0));
+            ///     assert!(!tx.is_empty());
+            ///
+            ///     assert_eq!(0, rx.recv().await);
+            /// }
+            /// ```
             pub async fn recv(&self) -> T {
                 loop {
                     match unsafe { self.queue.pull() } {
@@ -91,21 +162,16 @@ macro_rules! mpsc {
                 }
             }
 
-            /// Tries to receive the next value for this receiver.
-            ///
-            /// If the queue is empty, it return `Err(QueueError::Empty)`
-            /// If the element can't be pulled because of synchronicity, it return `Ok(None)`
+            /// Receives the next value for this receiver.
             ///
             /// ```
-            /// use prosa_utils::queue::QueueChecker;
-            /// use prosa::event::queue::mpsc;
+            /// use prosa::event::queue::{QueueChecker, QueueError, mpsc, mpsc::Sender};
             ///
             #[doc = concat!("let (mut tx, rx) = mpsc::", stringify!($channel), "::<i32, 4096>();")]
-            /// assert!(tx.is_empty());
+            /// assert_eq!(Err(QueueError::Empty), rx.try_recv());
             /// assert_eq!(Ok(()), tx.try_send(0));
+            /// assert!(!tx.is_empty());
             ///
-            /// // The try_recv method return an Ok.
-            /// // But can return either `Ok(Some(0))` or `Ok(None)` depending on internal atomic
             /// assert!(rx.try_recv().is_ok());
             /// ```
             pub fn try_recv(&self) -> Result<Option<T>, QueueError<T>> {
@@ -127,6 +193,14 @@ macro_rules! mpsc {
             }
         }
 
+        impl<T, const N: usize> std::fmt::Debug for $receiver<T, N> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct(stringify!($receiver))
+                .field("queue", &self.queue)
+                .finish()
+            }
+        }
+
         impl<T, const N: usize> Unpin for $receiver<T, N> {}
 
         impl<T, const N: usize> QueueChecker<$p> for $receiver<T, N> {
@@ -136,7 +210,7 @@ macro_rules! mpsc {
         /// Creates a bounded mpsc channel for communicating between asynchronous tasks.
         ///
         /// ```
-        /// use prosa::event::queue::mpsc;
+        /// use prosa::event::queue::{mpsc, mpsc::Sender};
         ///
         /// #[tokio::main]
         /// async fn main() {
