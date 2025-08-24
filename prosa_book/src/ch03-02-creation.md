@@ -75,6 +75,22 @@ where
 The generic parameter `A` represents the adaptor type your processor uses.
 Specify in the _where_ clause which traits your adaptor must implement (commonly, [`Adaptor`](https://docs.rs/prosa/latest/prosa/core/adaptor/trait.Adaptor.html) plus `Send` and `Sync`)
 
+### Custom queue
+
+When using the [`proc` macro](https://docs.rs/prosa/latest/prosa_macros/attr.proc.html), you can specify the type and size of the queue for your processor.
+
+By default, the macro declares a Tokio MPSC queue with a maximum capacity of 2,048 elements:
+```rust,noplayground
+#[proc(settings = MyProcSettings, queue_type = tokio::sync::mpsc, queue_size = 2048)]
+pub struct MyProc { /* No members here */ }
+```
+
+Alternatively, you can use a ProSA-specific queue and adjust its size. For example, here’s how to declare a ProSA queue with a maximum of 4,096 elements:
+```rust,noplayground
+#[proc(settings = MyProcSettings, queue_type = prosa::event::queue::mpsc, queue_size = 4096)]
+pub struct MyProc { /* No members here */ }
+```
+
 ### Specific TVF
 
 Sometimes, you may want your processor to handle only specific TVF objects, possibly to optimize data handling performance or to provide dedicated logic.

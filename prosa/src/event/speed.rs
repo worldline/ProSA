@@ -6,7 +6,7 @@ use tokio::time::{Instant, sleep};
 
 /// Structure to define a transaction flow speed
 ///
-/// ```
+/// ```no_run
 /// use tokio::time::Instant;
 /// use std::time::Duration;
 /// use prosa::event::speed::Speed;

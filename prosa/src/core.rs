@@ -34,6 +34,9 @@ pub mod msg;
 /// A processor in ProSA is an element that process transactions and can contact external component. It's similar to a micro service.
 /// It can answer to a service request or ask something to a service.
 pub mod proc;
+/// Module to define core helpers for queues
+/// Use to handle queues in a unique way
+pub mod queue;
 /// Service defined for a ProSA
 pub mod service;
 /// Settings module of a ProSA

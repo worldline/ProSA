@@ -14,3 +14,6 @@ pub mod msg;
 
 #[cfg(feature = "config")]
 pub mod config;
+
+#[cfg(feature = "queue")]
+pub mod queue;
