@@ -8,14 +8,13 @@ This builder is packaged within cargo as a custom command to be well integrated 
 
 ## Install
 
-As you can tell by its name, cargo-prosa, is tool embeded in [Cargo](https://doc.rust-lang.org/book/ch14-05-extending-cargo.html).
-
-Therefore, you can install it via the Cargo command:
+`cargo-prosa` is a [Cargo subcommand](https://doc.rust-lang.org/book/ch14-05-extending-cargo.html), so you need to have [Cargo installed](https://doc.rust-lang.org/cargo/getting-started/installation.html) to use it.
+Install cargo-prosa using the following command:
 ```bash
 cargo install cargo-prosa
 ```
 
-You should have the command installed with its bounch of functions:
+After installation, verify that the command is available and explore its features:
 ```bash
 cargo prosa --help
 ```
@@ -93,6 +92,115 @@ target/debug/my-prosa -n "MyBuiltProSA" -c default_config.yaml
 
 This builder offer you several possibilities to deploy your ProSA.
 The goal is to use the easiest method of a plateform to run your application.
+
+### Locally
+
+On Linux or MacOS, you can install ProSA directly on your machine:
+```bash
+# Install ProSA
+cargo prosa install
+
+# Uninstall ProSA
+cargo prosa uninstall
+```
+
+To avoid conflicts, specify a unique name during installation:
+```bash
+cargo prosa install --name dummy
+```
+
+Use the same name when uninstalling:
+```bash
+cargo prosa uninstall --name dummy
+```
+
+If the package isn't compiled for debug or release (--release), it will automatically compile during installation.
+
+Simulate an installation with:
+```bash
+cargo prosa install --dry_run -n dummy
+```
+
+#### Linux
+
+When you want to install ProSA with `cargo prosa install`:
+```bash
+$ cargo prosa install -r -n dummy
+Creating service file OK
+Copying binary OK
+Generating configuration OK
+Installed [12183 kB] ProSA `dummy`
+Binary file : $HOME/.local/bin/prosa-dummy
+Config file : $HOME/.config/prosa/dummy/prosa.toml
+Service file: $HOME/.config/systemd/user/dummy.service
+```
+
+And you'll be able to handle it through `systemctl`:
+```bash
+$ systemctl --user status dummy.service
+○ dummy.service - Local ProSA instance
+     Loaded: loaded ($HOME/.config/systemd/user/dummy.service; disabled; preset: enabled)
+     Active: inactive (dead)
+```
+
+To install it for the whole system, you can use the `--system` option:
+```bash
+$ sudo -E $HOME/.cargo/bin/cargo prosa install -r -s -n dummy
+Creating service file OK
+Copying binary OK
+Generating configuration OK
+Installed [12184 kB] ProSA `dummy`
+Binary file : /usr/local/bin/prosa-dummy
+Config file : /etc/prosa/dummy/prosa.toml
+Service file: /etc/systemd/system/dummy.service
+```
+
+By installing ProSA system wide, you are able to see the service:
+```bash
+$ sudo service dummy status       
+○ dummy.service - Local ProSA instance
+     Loaded: loaded (/etc/systemd/system/dummy.service; disabled; preset: enabled)
+     Active: inactive (dead)
+```
+
+#### MacOS
+
+On MacOS it's the same as Linux, but with MacOS specifics.
+
+So you can install it, and if the binary don't exist, it'll compil the project:
+```bash
+$ cargo prosa install -r -n dummy
+Creating service OK
+   Compiling ...
+    Finished `release` profile [optimized] target(s) in 24.58s
+Copying binary OK
+Generating configuration OK
+Installed [10578 kB] ProSA `dummy`
+Binary file : $HOME/.local/bin/prosa-dummy
+Config file : $HOME/.config/prosa/dummy/prosa.toml
+Service file: $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+```
+
+And once cargo-prosa installed the service, MacOS should notify you to indicate the new created service:
+
+![MacOS service creation notification](/assets/macos_prosa_background.png)
+
+You can now load it and run it with:
+```bash
+launchctl load $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+```
+
+and you can uninstall it with:
+```bash
+$ launchctl unload $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+$ cargo prosa uninstall -n dummy
+Remove service OK
+Remove binary OK
+Uninstalled ProSA `dummy`
+Binary file : $HOME/.local/bin/prosa-dummy
+Config file : $HOME/.config/prosa/dummy/prosa.toml
+Service file: $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+```
 
 ### Container
 

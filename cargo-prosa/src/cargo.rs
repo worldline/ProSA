@@ -231,6 +231,8 @@ pub struct PackageMetadata {
 
     /// Metadata of the package
     metadata: Option<HashMap<String, serde_json::Value>>,
+    /// target of the package
+    targets: Option<Vec<HashMap<String, serde_json::Value>>>,
 }
 
 impl PackageMetadata {
@@ -240,6 +242,30 @@ impl PackageMetadata {
             metadata.contains_key(name)
         } else {
             false
+        }
+    }
+
+    /// Getter of the targets for a specific `kind` (bin, custom-build)
+    pub fn get_targets(&self, kind: &str) -> Option<Vec<String>> {
+        if let Some(targets) = &self.targets {
+            let kind_tera_value = tera::Value::String(kind.to_string());
+            let mut binary_targets = Vec::new();
+            for target in targets {
+                if let Some(kinds) = target.get("kind").and_then(|k| k.as_array())
+                    && kinds.contains(&kind_tera_value)
+                    && let Some(name) = target.get("name").and_then(|k| k.as_str())
+                {
+                    binary_targets.push(name.to_string());
+                }
+            }
+
+            if binary_targets.is_empty() {
+                None
+            } else {
+                Some(binary_targets)
+            }
+        } else {
+            None
         }
     }
 
