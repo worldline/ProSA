@@ -220,86 +220,110 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
 }
 
 fn cli() -> Command {
+    let mut prosa_cmd = Command::new("prosa")
+        .about(env!("CARGO_PKG_DESCRIPTION"))
+        .version(env!("CARGO_PKG_VERSION"))
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .subcommand(
+            Command::new("new")
+                .about("Create a new ProSA package")
+                .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
+                .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
+                .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
+                .arg(arg!(<PATH> "Name of the new ProSA"))
+                .arg_required_else_help(true),
+        )
+        .subcommand(
+            Command::new("init")
+                .about("Initialize a new ProSA package in an existing directory")
+                .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
+                .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
+        )
+        .subcommand(
+            Command::new("update")
+                .about("Update ProSA files to the latest skeleton")
+                .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
+                .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
+        )
+        .subcommand(
+            Command::new("add")
+                .about("Add a ProSA processor")
+                .arg(arg!(--dry_run "Displays what would be updated, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-n --name <NAME> "Name of the processor schedule inside the ProSA (use the processor name by default)"))
+                .arg(arg!(-a --adaptor <ADAPTOR> "Adaptor name to use for the processor"))
+                .arg(arg!(<PROCESSOR> "Processor to add"))
+                .arg_required_else_help(true),
+        )
+        .subcommand(
+            Command::new("remove")
+                .about("Remove one or more ProSA processors")
+                .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
+                .arg(arg!(<PROCESSORS> ... "Processors to remove"))
+                .arg_required_else_help(true),
+        )
+        .subcommand(
+            Command::new("main")
+                .about("Change the ProSA main processor")
+                .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
+                .arg(arg!(<MAIN> "Name of the main processor"))
+                .arg_required_else_help(true),
+        )
+        .subcommand(
+            Command::new("tvf")
+                .about("Change the ProSA TVF (internal messaging)")
+                .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
+                .arg(arg!(<TVF> "Name of the TVF"))
+                .arg_required_else_help(true),
+        )
+        .subcommand(
+            Command::new("list")
+                .about("List all available ProSA components")
+        )
+        .subcommand(
+            Command::new("container")
+                .about("Create a container file to containerize ProSA")
+                .arg(arg!(--docker "Generate Dockerfile container format").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-i --image <IMG> "Base image to use for ProSA container image").default_value("debian:stable-slim"))
+                .arg(arg!(-b --builder <BUILDER_IMG> "Builder to use to compile the ProSA"))
+                .arg(arg!(-p --package_manager <PKG_MANAGER> "Indicate which package manager to use with the Docker image to install pre-requisite").default_value("apt"))
+                .arg(arg!([PATH] "Path of the output container file to generate an image"))
+        );
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        // Allow install only on Linux or MacOS
+        prosa_cmd = prosa_cmd.subcommand(
+            Command::new("install")
+                .about("Install the ProSA instance on the host")
+                .arg(arg!(--dry_run "Displays what would be installed, but doesn't actually install it").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-s --system "Install in system folders instead of home").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-r --release "Install binary in release mode, with optimizations").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-n --name <NAME> "Set ProSA instance name. Defaults to the directory name"))
+        )
+        .subcommand(
+            Command::new("uninstall")
+                .about("Uninstall the ProSA instance from the host")
+                .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually remove it").action(clap::ArgAction::SetTrue))
+                .arg(arg!(--purge "Purge all files").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-s --system "Remove from system folders instead of home").action(clap::ArgAction::SetTrue))
+                .arg(arg!(-n --name <NAME> "Set ProSA instance name. Defaults to the directory name"))
+        );
+    }
+
+    prosa_cmd = prosa_cmd.subcommand(
+        Command::new("completion")
+            .about("Output shell completion code for the specified shell (Bash, Elvish, Fish, PowerShell, or Zsh)")
+            .arg(arg!(<SHELL>))
+            .arg_required_else_help(true),
+    );
+
     Command::new("cargo")
         .bin_name("cargo")
         .subcommand_required(true)
         .arg_required_else_help(true)
-        .subcommand(Command::new("prosa")
-            .about("ProSA builder")
-            .subcommand_required(true)
-            .arg_required_else_help(true)
-            .subcommand(
-                Command::new("new")
-                    .about("Create a new ProSA package")
-                    .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
-                    .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(<PATH> "Name of the new ProSA"))
-                    .arg_required_else_help(true),
-            )
-            .subcommand(
-                Command::new("init")
-                    .about("Create a new ProSA package in an existing directory")
-                    .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(-n --name <NAME> "Set the package name. Defaults to the directory name"))
-            )
-            .subcommand(
-                Command::new("update")
-                    .about("Update ProSA files to the latest skeleton")
-                    .arg(arg!(--deb "Configure the ProSA to generate a deb package").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(--rpm "Configure the ProSA to generate an rpm package").action(clap::ArgAction::SetTrue))
-            )
-            .subcommand(
-                Command::new("add")
-                    .about("Add a ProSA processor")
-                    .arg(arg!(--dry_run "Displays what would be updated, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(-n --name <NAME> "Name of the processor schedule inside the ProSA (use the processor name by default)"))
-                    .arg(arg!(-a --adaptor <ADAPTOR> "Adaptor name to use for the processor"))
-                    .arg(arg!(<PROCESSOR> "Processor to add"))
-                    .arg_required_else_help(true),
-            )
-            .subcommand(
-                Command::new("remove")
-                    .about("Remove one or more ProSA processor")
-                    .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(<PROCESSORS> ... "Processors to remove"))
-                    .arg_required_else_help(true),
-            )
-            .subcommand(
-                Command::new("main")
-                    .about("Change the ProSA main processor")
-                    .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(<MAIN> "Name of the main processor"))
-                    .arg_required_else_help(true),
-            )
-            .subcommand(
-                Command::new("tvf")
-                    .about("Change the ProSA TVF internal messaging")
-                    .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(<TVF> "Name of the TVF"))
-                    .arg_required_else_help(true),
-            )
-            .subcommand(
-                Command::new("list")
-                    .about("List all available ProSA component")
-            )
-            .subcommand(
-                Command::new("container")
-                    .about("Create a container file to containerize ProSA")
-                    .arg(arg!(--docker "Generate Dockerfile container format").action(clap::ArgAction::SetTrue))
-                    .arg(arg!(-i --image <IMG> "Base image to use for ProSA container image").default_value("debian:stable-slim"))
-                    .arg(arg!(-b --builder <BUILDER_IMG> "Builder to use to compile the ProSA"))
-                    .arg(arg!(-p --package_manager <PKG_MANAGER> "Indicate which package manager to use with the Docker image to install pre-requisite").default_value("apt"))
-                    .arg(arg!([PATH] "Path of the output container file to generate an image"))
-            )
-            .subcommand(
-                Command::new("completion")
-                    .about("Output shell completion code for the specified shell (Bash, Elvish, Fish, PowerShell, or Zsh)")
-                    .arg(arg!(<SHELL>))
-                    .arg_required_else_help(true),
-            )
-        )
+        .subcommand(prosa_cmd)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -533,6 +557,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // Help on use
                 print!("{container}");
+            }
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Some(("install", matches)) => {
+                let install = cargo_prosa::package::install::InstanceInstall::new(matches)?;
+                if matches.get_flag("dry_run") {
+                    print!("Will Install {install}");
+                } else {
+                    let file_size = install.install(matches.get_flag("release"))?;
+
+                    // Display all files created
+                    print!("Installed [{} kB] {install}", file_size / 1000);
+                }
+            }
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Some(("uninstall", matches)) => {
+                let uninstall = cargo_prosa::package::install::InstanceInstall::new(matches)?;
+                if matches.get_flag("dry_run") {
+                    print!("Will uninstall {uninstall}");
+                } else {
+                    uninstall.uninstall(matches.get_flag("purge"))?;
+
+                    // Display all files removed
+                    print!("Uninstalled {uninstall}");
+                }
             }
             Some(("completion", matches)) => {
                 let shell = clap_complete::Shell::from_str(
