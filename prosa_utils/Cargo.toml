@@ -10,7 +10,7 @@ license.workspace = true
 include.workspace = true
 
 [features]
-default = ["full"]
+default = ["serde", "dict", "full"]
 msg = []
 dict = []
 serde = ["dep:serde", "dep:regex", "chrono/serde", "bytes/serde"]

@@ -1,10 +1,11 @@
 //! This module implements the `Serialize` trait for the `Tvf` trait
 
 use crate::msg::{
-    tvf::Tvf,
-    value::{TvfType, TvfValue},
+    tvf::{Tvf, TvfError},
+    value::TvfValue,
 };
-use serde::{Serialize, Serializer, ser::SerializeMap};
+use serde::{ser::{self, SerializeMap}, Serialize, Serializer};
+use core::fmt;
 use std::fmt::Debug;
 
 /// Wrapper for the TVF trait to serialize it
@@ -31,10 +32,8 @@ where
 
         // Iterate over the ids and serialize each field
         for id in ids {
-            // TODO
-            let expected_type = TvfType::Byte;
             // Get the value for the given id
-            let value = TvfValue::from_buffer(self.0, id, expected_type).map_err(|err| {
+            let value = TvfValue::from_buffer(self.0, id).map_err(|err| {
                 serde::ser::Error::custom(format!("Error while serializing field {id}: {err}"))
             })?;
 
@@ -54,16 +53,25 @@ where
     where
         S: Serializer,
     {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         match self {
-            Self::Byte(value) => serializer.serialize_u8(*value),
+            Self::Byte    (value) => serializer.serialize_u8(*value),
             Self::Unsigned(value) => serializer.serialize_u64(*value),
-            Self::Signed(value) => serializer.serialize_i64(*value),
-            Self::Float(value) => serializer.serialize_f64(*value),
-            Self::String(string) => serializer.serialize_str(string.as_ref()),
-            Self::Bytes(bytes) => serializer.serialize_bytes(bytes.as_ref()),
-            Self::Date(date) => date.serialize(serializer),
-            Self::DateTime(datetime) => datetime.serialize(serializer),
-            Self::Buffer(buffer) => SerialTvf(buffer.as_ref()).serialize(serializer),
+            Self::Signed  (value) => serializer.serialize_i64(*value),
+            Self::Float   (value) => serializer.serialize_f64(*value),
+            Self::String  (value) => serializer.serialize_str(value.as_ref()),
+            Self::Bytes   (value) => serializer.serialize_bytes(value.as_ref()),
+            Self::Date    (value) => value.serialize(serializer),
+            Self::DateTime(value) => value.serialize(serializer),
+            Self::Buffer  (value) => SerialTvf(value.as_ref()).serialize(serializer),
         }
     }
 }
+
+
+impl ser::Error for TvfError {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        TvfError::SerializationError(msg.to_string())
+    }
+}
+

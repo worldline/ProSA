@@ -1,8 +1,7 @@
 //! Type specifying all the variant types supported by the TVF trait
 
-use crate::msg::tvf::TvfError;
-
 use super::tvf::Tvf;
+use crate::msg::tvf::TvfError;
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
 use std::{borrow::Cow, fmt::Debug};
@@ -136,22 +135,53 @@ impl<'v, T> TvfValue<'v, T>
 where
     T: Tvf + Clone + Default + Debug,
 {
-    /// Extract a TVF value from a buffer
-    pub fn from_buffer(
+    /// Extract a TVF value from a buffer with an expected type
+    pub fn from_buffer_with_type(
         message: &'v T,
         id: usize,
         expected_type: TvfType,
     ) -> Result<Self, TvfError> {
+        // If an expected type was provided, try to deserialize using it
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         match expected_type {
-            TvfType::Byte => Ok(Self::Byte(message.get_byte(id)?)),
+            TvfType::Byte     => Ok(Self::Byte    (message.get_byte    (id)?)),
             TvfType::Unsigned => Ok(Self::Unsigned(message.get_unsigned(id)?)),
-            TvfType::Signed => Ok(Self::Signed(message.get_signed(id)?)),
-            TvfType::Float => Ok(Self::Float(message.get_float(id)?)),
-            TvfType::String => Ok(Self::String(message.get_string(id)?)),
-            TvfType::Bytes => Ok(Self::Bytes(message.get_bytes(id)?)),
-            TvfType::Date => Ok(Self::Date(message.get_date(id)?)),
+            TvfType::Signed   => Ok(Self::Signed  (message.get_signed  (id)?)),
+            TvfType::Float    => Ok(Self::Float   (message.get_float   (id)?)),
+            TvfType::String   => Ok(Self::String  (message.get_string  (id)?)),
+            TvfType::Bytes    => Ok(Self::Bytes   (message.get_bytes   (id)?)),
+            TvfType::Date     => Ok(Self::Date    (message.get_date    (id)?)),
             TvfType::DateTime => Ok(Self::DateTime(message.get_datetime(id)?)),
-            TvfType::Buffer => Ok(Self::Buffer(message.get_buffer(id)?)),
+            TvfType::Buffer   => Ok(Self::Buffer  (message.get_buffer  (id)?)),
+        }
+    }
+
+    /// Extract a TVF value from a buffer without expecting any particular type
+    pub fn from_buffer(
+        message: &'v T,
+        id: usize,
+    ) -> Result<Self, TvfError> {
+        // No prefered type was provided try different types until a valid one is found
+        if let Ok(value) = message.get_byte(id) {
+            Ok(Self::Byte(value))
+        } else if let Ok(value) = message.get_unsigned(id) {
+            Ok(Self::Unsigned(value))
+        } else if let Ok(value) = message.get_signed(id) {
+            Ok(Self::Signed(value))
+        } else if let Ok(value) = message.get_float(id) {
+            Ok(Self::Float(value))
+        } else if let Ok(value) = message.get_date(id) {
+            Ok(Self::Date(value))
+        } else if let Ok(value) = message.get_datetime(id) {
+            Ok(Self::DateTime(value))
+        } else if let Ok(value) = message.get_buffer(id) {
+            Ok(Self::Buffer(value))
+        } else if let Ok(value) = message.get_string(id) {
+            Ok(Self::String(value))
+        } else if let Ok(value) = message.get_bytes(id) {
+            Ok(Self::Bytes(value))
+        } else {
+            Err(TvfError::TypeMismatch)
         }
     }
 

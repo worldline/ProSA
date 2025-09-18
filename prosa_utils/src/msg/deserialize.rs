@@ -1,10 +1,10 @@
 //! This module implements the `Deserialize` trait for the `Tvf` trait
 
-use crate::msg::{tvf::Tvf, value::TvfValue};
+use crate::msg::{tvf::{Tvf, TvfError}, value::TvfValue};
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
 use regex::Regex;
-use serde::{Deserialize, Deserializer, de::Visitor};
+use serde::{de::{self, Visitor}, Deserialize, Deserializer};
 use std::{
     borrow::Cow,
     fmt::{self, Debug},
@@ -121,5 +121,12 @@ where
             marker: PhantomData,
             lifetime: PhantomData,
         })
+    }
+}
+
+
+impl de::Error for TvfError {
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        TvfError::SerializationError(msg.to_string())
     }
 }

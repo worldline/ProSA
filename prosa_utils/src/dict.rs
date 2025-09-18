@@ -182,7 +182,7 @@ where
                 payload: _,
             } = entry
             {
-                Ok(TvfValue::from_buffer(
+                Ok(TvfValue::from_buffer_with_type(
                     self.message.as_ref(),
                     id,
                     *expected_type,

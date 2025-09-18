@@ -20,8 +20,8 @@ pub enum TvfError {
     /// Error that indicate the field is not found in the TVF. Missing key
     #[error("The key `{0}` is not present in the Tvf")]
     FieldNotFound(usize),
-    /// Error that indicate the field can't be retrieve because the type is not compatible
-    #[error("The type can't be retrieve from the Tvf")]
+    /// Error that indicate the field can't be retrieved because the type is not compatible
+    #[error("The type can't be retrieved from the Tvf")]
     TypeMismatch,
     /// Error that indicate the field can't be converted due to an other error
     #[error("The field can't be Converted. {0}")]

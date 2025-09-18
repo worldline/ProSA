@@ -4,12 +4,11 @@
 
 use super::{Dictionary, Entry, LabeledTvf};
 use crate::msg::{
-    tvf::Tvf,
+    tvf::{Tvf, TvfError},
     value::{TvfType, TvfValue},
 };
 use serde::{
-    Serialize,
-    ser::{SerializeMap, SerializeSeq},
+    ser::{self, SerializeMap, SerializeSeq}, Serialize
 };
 use std::fmt::Debug;
 
@@ -59,9 +58,12 @@ where
                         ids
                     };
                     for id in ids {
-                        // TODO
-                        let expected_type = TvfType::Byte;
-                        let value = TvfValue::from_buffer(buffer.as_ref(), id, expected_type)
+                        let expected_type = match sub_def.as_ref() {
+                            Entry::Leaf { expected_type, payload: _ } => *expected_type,
+                            Entry::Node(_) => TvfType::Buffer,
+                            Entry::List(_) => TvfType::Buffer,
+                        };
+                        let value = TvfValue::from_buffer_with_type(buffer.as_ref(), id, expected_type)
                             .map_err(|err| {
                                 serde::ser::Error::custom(format!(
                                     "Error while serializing field {id}: {err}"
@@ -108,6 +110,50 @@ where
     };
 
     for id in ids {
+
+        // check if the field is known in the dictionary
+        if let Some((label, entry)) = dictionary.get_label_and_entry(id) {
+
+            // The field is known, we expect either a leaf or a sub tree
+            match entry {
+                // we expect a leaf
+                Entry::Leaf { expected_type, payload: _ } => {
+                    let value = match TvfValue::from_buffer_with_type(message, id, *expected_type) {
+                        Ok(value) => value,
+                        Err(err) => {return Err(convert_error(&err))}
+                    };
+                    map.serialize_entry(label.as_ref(), &value)?;
+                },
+
+                // we expect a sub buffer
+                Entry::Node(sub_dict) => {
+                    let sub_msg = match message.get_buffer(id) {
+                        Ok(sub_msg) => sub_msg,
+                        Err(err) => {return Err(convert_error(&err))}
+                    };
+
+                map.serialize_entry(
+                    label.as_ref(),
+                    &SerializeDef {
+                        definition: sub_dict.as_ref(),
+                        value: sub_msg.clone(),
+                    },
+                )?;
+
+                },
+
+                // we expect a list of either leaves or sub buffers
+                Entry::List(sub_entry) => {
+
+                },
+            }
+        } else {
+
+            // The field is not known, try to serialize it
+
+
+        }
+
         // TODO
         let expected_type = TvfType::Byte;
         let value = TvfValue::from_buffer(message, id, expected_type).map_err(|err| {
@@ -135,6 +181,13 @@ where
 
     map.end()
 }
+
+
+#[inline]
+fn convert_error<E>(err: &TvfError) -> E where E: ser::Error {
+    E::custom(err.to_string())
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -209,7 +262,7 @@ mod tests {
         });
 
         let labeled = LabeledTvf::new(Cow::Borrowed(dict), Cow::Borrowed(&message));
-
+        panic!("{:?}", serde_json::to_value(&labeled));
         let serialized = serde_json::to_value(&labeled).unwrap();
 
         assert_eq!(
