@@ -27,11 +27,6 @@ where
         }
     }
 
-    /// Method to create a new pending timer from an id and an instant
-    pub(crate) fn new_at(timer_id: T, timeout: Instant) -> PendingTimer<T> {
-        PendingTimer { timer_id, timeout }
-    }
-
     /// Getter of the timer id (object link to the timer)
     pub(crate) fn get_timer_id(&self) -> T {
         self.timer_id
@@ -117,7 +112,8 @@ where
     }
 
     /// Method to push a pending timer
-    fn push_timer(&mut self, timer: PendingTimer<T>) {
+    pub fn push(&mut self, timer_id: T, timeout: Duration) {
+        let timer = PendingTimer::new(timer_id, timeout);
         let mut timer_iter = self.timers.iter();
         let index = loop {
             if let Some(val) = timer_iter.next() {
@@ -130,16 +126,6 @@ where
         };
 
         self.timers.insert(index, timer);
-    }
-
-    /// Method to push a pending timer with a specifc timeout duration
-    pub fn push(&mut self, timer_id: T, timeout_duration: Duration) {
-        self.push_timer(PendingTimer::new(timer_id, timeout_duration));
-    }
-
-    /// Method to push a pending timer with a specifc timeout
-    pub fn push_at(&mut self, timer_id: T, timeout: Instant) {
-        self.push_timer(PendingTimer::new_at(timer_id, timeout));
     }
 
     /// Method to wait for the first timer
@@ -168,30 +154,6 @@ where
         } else {
             None
         }
-    }
-
-    /// Retains only the elements specified by the predicate.
-    ///
-    /// ```
-    /// use std::time::Duration;
-    /// use prosa::event::pending::Timers;
-    ///
-    /// async fn processing() {
-    ///     let mut pending_timer: Timers<u64> = Default::default();
-    ///     pending_timer.push(1, Duration::from_secs(1));
-    ///     pending_timer.push(2, Duration::from_secs(2));
-    ///     pending_timer.push(3, Duration::from_secs(3));
-    ///     pending_timer.push(4, Duration::from_secs(4));
-    ///     assert_eq!(4, pending_timer.len());
-    ///     pending_timer.retain(|x| x % 2 == 0);
-    ///     assert_eq!(2, pending_timer.len());
-    /// }
-    /// ```
-    pub fn retain<F>(&mut self, mut f: F)
-    where
-        F: FnMut(T) -> bool,
-    {
-        self.timers.retain(|t| f(t.timer_id));
     }
 
     /// Method to pop the inner Pending timer of the timer list
@@ -299,11 +261,9 @@ where
     ///     let mut msg: Option<RequestMsg<SimpleStringTvf>> = pending_msg.pull().await;
     ///     assert!(msg.is_none());
     ///     pending_msg.push(RequestMsg::new(String::from("service"), tvf, queue), Duration::from_millis(200));
-    ///     tokio::select! {
-    ///         Some(msg) = pending_msg.pull(), if !pending_msg.is_empty() => {
-    ///             println!("Timeout message {:?}", msg);
-    ///         }
-    ///     }
+    ///     msg = pending_msg.pull().await;
+    ///     assert!(msg.is_some());
+    ///     println!("Timeout message {:?}", msg);
     /// }
     /// ```
     pub async fn pull(&mut self) -> Option<T> {
