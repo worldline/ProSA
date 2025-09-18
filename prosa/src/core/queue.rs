@@ -1,7 +1,7 @@
 use crate::core::error::ProcError;
 
 /// Error define for Queue senders
-/// Use by [`InternalMsgQueue`], and internal queues:
+/// Use by internal queues:
 #[cfg_attr(feature = "queue", doc = "[`crate::event::queue::mpsc::SenderU16`]")]
 #[cfg_attr(feature = "queue", doc = "[`crate::event::queue::mpsc::SenderU32`]")]
 #[cfg_attr(feature = "queue", doc = "[`crate::event::queue::timed::SenderU16`]")]
