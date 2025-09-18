@@ -1,6 +1,9 @@
-use crate::core::{msg, queue::ProcQueue};
+use crate::core::msg;
 
-use super::proc::{ProcBusParam, ProcParam};
+use super::{
+    msg::InternalMsg,
+    proc::{ProcBusParam, ProcParam},
+};
 use prosa_utils::msg::tvf::{Tvf, TvfError};
 use std::{
     collections::HashMap,
@@ -8,6 +11,7 @@ use std::{
     sync::atomic,
 };
 use thiserror::Error;
+use tokio::sync::mpsc;
 
 /// Strucure that define the service table which contain information to how contact a processor for a given service name
 #[derive(Debug, Default, Clone)]
@@ -152,7 +156,7 @@ where
     proc_name: String,
     queue_id: u32,
     /// Processor queue use to send transactionnal message to the processor
-    pub proc_queue: ProcQueue<M>,
+    pub proc_queue: mpsc::Sender<InternalMsg<M>>,
 }
 
 impl<M> ProcService<M>
@@ -160,7 +164,11 @@ where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     /// Method to create a processor service with its processor ID and a message queue
-    pub fn new(proc: &ProcParam<M>, proc_queue: ProcQueue<M>, queue_id: u32) -> ProcService<M> {
+    pub fn new(
+        proc: &ProcParam<M>,
+        proc_queue: mpsc::Sender<InternalMsg<M>>,
+        queue_id: u32,
+    ) -> ProcService<M> {
         ProcService {
             proc_id: proc.get_proc_id(),
             proc_name: proc.name().to_string(),
@@ -175,7 +183,7 @@ where
             proc_id: proc.get_proc_id(),
             proc_name: proc.name().to_string(),
             queue_id,
-            proc_queue: proc.get_service_queue().clone(),
+            proc_queue: proc.get_service_queue(),
         }
     }
 

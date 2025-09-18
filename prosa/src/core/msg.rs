@@ -1,14 +1,19 @@
-use super::{
-    error::{BusError, ProcError},
-    queue::{InternalMsgQueue, SendError},
-    service::{ProcService, ServiceError, ServiceTable},
-};
-use prosa_utils::msg::tvf::Tvf;
 use std::{
     sync::{Arc, atomic},
     time::{Duration, SystemTime},
 };
-use tracing::{Level, Span, event, info_span, span};
+
+use prosa_utils::msg::tvf::Tvf;
+use tokio::sync::mpsc;
+use tracing::{Level, Span, event};
+use tracing::{info_span, span};
+
+use crate::core::error::BusError;
+
+use super::{
+    error::ProcError,
+    service::{ProcService, ServiceError, ServiceTable},
+};
 
 /// Internal ProSA message that define all message type that can be received by the main ProSA processor
 #[derive(Debug)]
@@ -59,7 +64,7 @@ where
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
-/// Trait that define a ProSA Msg use to send transactions
+/// Trait that define a ProSAMsg use to send transactions
 ///
 /// ```mermaid
 /// sequenceDiagram
@@ -147,7 +152,7 @@ where
     span: Span,
     data: Option<M>,
     begin_time: SystemTime,
-    response_queue: InternalMsgQueue<M>,
+    response_queue: mpsc::Sender<InternalMsg<M>>,
 }
 
 impl<M> Msg<M> for RequestMsg<M>
@@ -203,7 +208,7 @@ where
     M: Sized + Clone + Tvf,
 {
     /// Method to create a new RequestMessage
-    pub fn new(service: String, data: M, response_queue: impl Into<InternalMsgQueue<M>>) -> Self {
+    pub fn new(service: String, data: M, response_queue: mpsc::Sender<InternalMsg<M>>) -> Self {
         let begin_time = SystemTime::now();
         let span = info_span!("prosa::Msg", service = service);
         RequestMsg {
@@ -212,7 +217,7 @@ where
             data: Some(data),
             begin_time,
             span,
-            response_queue: response_queue.into(),
+            response_queue,
         }
     }
 
@@ -220,7 +225,7 @@ where
     pub fn new_with_trace_id(
         service: String,
         data: M,
-        response_queue: impl Into<InternalMsgQueue<M>>,
+        response_queue: mpsc::Sender<InternalMsg<M>>,
         trace_id: tracing::span::Id,
     ) -> Self {
         let begin_time = SystemTime::now();
@@ -231,28 +236,42 @@ where
             data: Some(data),
             begin_time,
             span,
-            response_queue: response_queue.into(),
+            response_queue,
         }
     }
 
     /// Method to return the response to the called processor
-    pub async fn return_to_sender(mut self, resp: M) -> Result<(), SendError<InternalMsg<M>>> {
-        let response_queue = self.response_queue.take();
-        response_queue
-            .send(InternalMsg::Response(ResponseMsg::from_request(self, resp)))
+    pub async fn return_to_sender(
+        self,
+        resp: M,
+    ) -> Result<(), tokio::sync::mpsc::error::SendError<InternalMsg<M>>> {
+        self.response_queue
+            .send(InternalMsg::Response(ResponseMsg {
+                id: self.id,
+                service: self.service,
+                span: self.span,
+                response_time: self.begin_time,
+                data: Some(resp),
+            }))
             .await
     }
 
     /// Method to return an error to the called processor
     /// You can specify a return data otherwise
     pub async fn return_error_to_sender(
-        mut self,
+        self,
         data: Option<M>,
         err: ServiceError,
-    ) -> Result<(), SendError<InternalMsg<M>>> {
-        let response_queue = self.response_queue.take();
-        response_queue
-            .send(InternalMsg::Error(ErrorMsg::from_request(self, data, err)))
+    ) -> Result<(), tokio::sync::mpsc::error::SendError<InternalMsg<M>>> {
+        self.response_queue
+            .send(InternalMsg::Error(ErrorMsg {
+                id: self.id,
+                service: self.service,
+                span: self.span,
+                error_time: self.begin_time,
+                data: data.or(self.data),
+                err,
+            }))
             .await
     }
 }
@@ -268,22 +287,6 @@ where
     span: Span,
     response_time: SystemTime,
     data: Option<M>,
-}
-
-impl<M> ResponseMsg<M>
-where
-    M: Sized + Clone + Tvf,
-{
-    /// Method to create a `ResponseMsg` from a [`RequestMsg`]
-    pub fn from_request(request: RequestMsg<M>, resp_data: M) -> Self {
-        ResponseMsg {
-            id: request.id,
-            service: request.service,
-            span: request.span,
-            response_time: request.begin_time,
-            data: Some(resp_data),
-        }
-    }
 }
 
 impl<M> Msg<M> for ResponseMsg<M>
@@ -348,28 +351,6 @@ where
     err: ServiceError,
 }
 
-impl<M> ErrorMsg<M>
-where
-    M: Sized + Clone + Tvf,
-{
-    /// Method to create an `ErrorMsg` from a [`RequestMsg`] (if the request encounter an error)
-    pub fn from_request(request: RequestMsg<M>, data: Option<M>, err: ServiceError) -> Self {
-        ErrorMsg {
-            id: request.id,
-            service: request.service,
-            span: request.span,
-            error_time: request.begin_time,
-            data: data.or(request.data),
-            err,
-        }
-    }
-
-    /// Getter of the service error
-    pub fn get_err(&self) -> &ServiceError {
-        &self.err
-    }
-}
-
 impl<M> Msg<M> for ErrorMsg<M>
 where
     M: Sized + Clone + Tvf,
@@ -417,5 +398,36 @@ where
         P: FnOnce(&mut M) -> bool,
     {
         self.data.take_if(predicate)
+    }
+}
+
+impl<M> ErrorMsg<M>
+where
+    M: Sized + Clone + Tvf,
+{
+    /// Method to create a new ErrorMsg
+    pub fn new<R>(
+        request: R,
+        service: String,
+        span: Span,
+        data: Option<M>,
+        err: ServiceError,
+    ) -> Self
+    where
+        R: Msg<M>,
+    {
+        ErrorMsg {
+            id: request.get_id(),
+            service,
+            span,
+            error_time: SystemTime::now(),
+            data,
+            err,
+        }
+    }
+
+    /// Getter of the service error
+    pub fn get_err(&self) -> &ServiceError {
+        &self.err
     }
 }

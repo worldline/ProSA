@@ -7,8 +7,6 @@
 //!
 //! Main can be consider as a service bus that routing processor messages.
 
-use crate::core::queue::SendError;
-
 use super::error::{BusError, ProcError};
 use super::msg::{InternalMainMsg, InternalMsg};
 use super::proc::ProcBusParam;
@@ -136,14 +134,17 @@ where
     }
 
     /// Method to declare a new processor on the main bus
-    pub async fn add_proc_queue(
-        &self,
-        proc: ProcService<M>,
-    ) -> Result<(), SendError<InternalMainMsg<M>>> {
-        Ok(self
-            .internal_tx_queue
+    pub async fn add_proc_queue(&self, proc: ProcService<M>) -> Result<(), BusError> {
+        self.internal_tx_queue
             .send(InternalMainMsg::NewProcQueue(proc.clone()))
-            .await?)
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue(
+                    "NewProcQueue".into(),
+                    proc.get_proc_id(),
+                    e.to_string(),
+                )
+            })
     }
 
     /// Method to remove an entire processor from the main bus
@@ -151,35 +152,31 @@ where
         &self,
         proc_id: u32,
         proc_err: Option<Box<dyn ProcError + Send + Sync>>,
-    ) -> Result<(), SendError<InternalMainMsg<M>>> {
-        Ok(self
-            .internal_tx_queue
+    ) -> Result<(), BusError> {
+        self.internal_tx_queue
             .send(InternalMainMsg::DeleteProc(proc_id, proc_err))
-            .await?)
+            .await
+            .map_err(|e| BusError::InternalMainQueue("DeleteProc".into(), proc_id, e.to_string()))
     }
 
     /// Method to declare a new processor on the main bus
-    pub async fn remove_proc_queue(
-        &self,
-        proc_id: u32,
-        queue_id: u32,
-    ) -> Result<(), SendError<InternalMainMsg<M>>> {
-        Ok(self
-            .internal_tx_queue
+    pub async fn remove_proc_queue(&self, proc_id: u32, queue_id: u32) -> Result<(), BusError> {
+        self.internal_tx_queue
             .send(InternalMainMsg::DeleteProcQueue(proc_id, queue_id))
-            .await?)
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue("DeleteProcQueue".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to declare a new service for a whole processor on the main bus
-    pub async fn add_service_proc(
-        &self,
-        names: Vec<String>,
-        proc_id: u32,
-    ) -> Result<(), SendError<InternalMainMsg<M>>> {
-        Ok(self
-            .internal_tx_queue
+    pub async fn add_service_proc(&self, names: Vec<String>, proc_id: u32) -> Result<(), BusError> {
+        self.internal_tx_queue
             .send(InternalMainMsg::NewProcService(names, proc_id))
-            .await?)
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue("NewProcService".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to declare a new service for a processor queue on the main bus
@@ -188,11 +185,11 @@ where
         names: Vec<String>,
         proc_id: u32,
         queue_id: u32,
-    ) -> Result<(), SendError<InternalMainMsg<M>>> {
-        Ok(self
-            .internal_tx_queue
+    ) -> Result<(), BusError> {
+        self.internal_tx_queue
             .send(InternalMainMsg::NewService(names, proc_id, queue_id))
-            .await?)
+            .await
+            .map_err(|e| BusError::InternalMainQueue("NewService".into(), proc_id, e.to_string()))
     }
 
     /// Method to remove a service for a whole processor from the main bus
@@ -200,11 +197,13 @@ where
         &self,
         names: Vec<String>,
         proc_id: u32,
-    ) -> Result<(), SendError<InternalMainMsg<M>>> {
-        Ok(self
-            .internal_tx_queue
+    ) -> Result<(), BusError> {
+        self.internal_tx_queue
             .send(InternalMainMsg::DeleteProcService(names, proc_id))
-            .await?)
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue("DeleteProcService".into(), proc_id, e.to_string())
+            })
     }
 
     /// Method to remove a service from the main bus
@@ -213,11 +212,13 @@ where
         names: Vec<String>,
         proc_id: u32,
         queue_id: u32,
-    ) -> Result<(), SendError<InternalMainMsg<M>>> {
-        Ok(self
-            .internal_tx_queue
+    ) -> Result<(), BusError> {
+        self.internal_tx_queue
             .send(InternalMainMsg::DeleteService(names, proc_id, queue_id))
-            .await?)
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue("DeleteService".into(), proc_id, e.to_string())
+            })
     }
 
     /// Indicates whether ProSA is stopping
@@ -226,12 +227,12 @@ where
     }
 
     /// Method to stop all processors
-    pub async fn stop(&self, reason: String) -> Result<(), SendError<InternalMainMsg<M>>> {
+    pub async fn stop(&self, reason: String) -> Result<(), BusError> {
         self.stop.store(true, Ordering::Relaxed);
-        Ok(self
-            .internal_tx_queue
+        self.internal_tx_queue
             .send(InternalMainMsg::Shutdown(reason))
-            .await?)
+            .await
+            .map_err(|e| BusError::InternalMainQueue("Shutdown".into(), 0, e.to_string()))
     }
 
     /// Provide the ProSA name based on ProSA settings

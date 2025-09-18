@@ -6,87 +6,8 @@ use syn::{parse::Parser, punctuated::Punctuated};
 
 use crate::add_angle_bracketed;
 
-#[derive(Default)]
-enum ProcQueueType {
-    #[default]
-    /// `tokio::sync::mpsc`
-    TokioMpsc,
-    /// `prosa::event::queue::mpsc`
-    ProsaMpsc,
-}
-
-impl ProcQueueType {
-    fn quote_internal_rx_queue(&self, queue_size: &syn::LitInt) -> Result<TokenStream, syn::Error> {
-        match self {
-            ProcQueueType::TokioMpsc => Ok(
-                quote! { internal_rx_queue: tokio::sync::mpsc::Receiver<prosa::core::msg::InternalMsg<M>> },
-            ),
-            ProcQueueType::ProsaMpsc => {
-                if queue_size.base10_parse::<usize>()? < u16::MAX as usize {
-                    Ok(
-                        quote! { internal_rx_queue: prosa::event::queue::mpsc::ReceiverU16<prosa::core::msg::InternalMsg<M>, #queue_size> },
-                    )
-                } else {
-                    Ok(
-                        quote! { internal_rx_queue: prosa::event::queue::mpsc::ReceiverU32<prosa::core::msg::InternalMsg<M>, #queue_size> },
-                    )
-                }
-            }
-        }
-    }
-
-    fn quote_channel(&self, queue_size: &syn::LitInt) -> Result<TokenStream, syn::Error> {
-        match self {
-            ProcQueueType::TokioMpsc => Ok(
-                quote! { tokio::sync::mpsc::channel::<prosa::core::msg::InternalMsg<M>>(#queue_size) },
-            ),
-            ProcQueueType::ProsaMpsc => {
-                if queue_size.base10_parse::<usize>()? < u16::MAX as usize {
-                    Ok(
-                        quote! { prosa::event::queue::mpsc::channel_u16::<prosa::core::msg::InternalMsg<M>, #queue_size>() },
-                    )
-                } else {
-                    Ok(
-                        quote! { prosa::event::queue::mpsc::channel_u32::<prosa::core::msg::InternalMsg<M>, #queue_size>() },
-                    )
-                }
-            }
-        }
-    }
-}
-
-impl TryFrom<&syn::Path> for ProcQueueType {
-    type Error = syn::Error;
-
-    fn try_from(path: &syn::Path) -> Result<Self, Self::Error> {
-        let mut segments_iter = path.segments.iter();
-        if let Some(crate_name) = segments_iter.next() {
-            if crate_name.ident == "prosa"
-                && let Some(module_type) = segments_iter.next()
-                && module_type.ident == "event"
-                && let Some(module) = segments_iter.next()
-                && module.ident == "queue"
-                && let Some(queue_type) = segments_iter.next()
-                && queue_type.ident == "mpsc"
-            {
-                return Ok(ProcQueueType::ProsaMpsc);
-            } else if crate_name.ident == "tokio"
-                && let Some(module) = segments_iter.next()
-                && module.ident == "sync"
-                && let Some(queue_type) = segments_iter.next()
-                && queue_type.ident == "mpsc"
-            {
-                return Ok(ProcQueueType::TokioMpsc);
-            }
-        }
-
-        Err(syn::Error::new(path.span(), "Unknown queue type path"))
-    }
-}
-
 struct ProcParams {
     settings: Option<syn::Path>,
-    queue_type: ProcQueueType,
     queue_size: syn::LitInt,
 }
 
@@ -105,16 +26,7 @@ impl ProcParams {
                         } else {
                             return Err(syn::Error::new(
                                 v.value.span(),
-                                "expected path value for proc args settings",
-                            ));
-                        }
-                    } else if name == "queue_type" {
-                        if let syn::Expr::Path(syn::ExprPath { path, .. }) = &v.value {
-                            self.queue_type = ProcQueueType::try_from(path)?;
-                        } else {
-                            return Err(syn::Error::new(
-                                v.value.span(),
-                                "expected path value for proc args queue_type",
+                                "expected string value for proc args name",
                             ));
                         }
                     } else if name == "queue_size" {
@@ -146,21 +58,12 @@ impl ProcParams {
 
         Ok(())
     }
-
-    fn quote_internal_rx_queue(&self) -> Result<TokenStream, syn::Error> {
-        self.queue_type.quote_internal_rx_queue(&self.queue_size)
-    }
-
-    fn quote_channel(&self) -> Result<TokenStream, syn::Error> {
-        self.queue_type.quote_channel(&self.queue_size)
-    }
 }
 
 impl std::default::Default for ProcParams {
     fn default() -> Self {
         Self {
             settings: None,
-            queue_type: ProcQueueType::default(),
             queue_size: syn::LitInt::new("2048", Span::call_site()),
         }
     }
@@ -223,10 +126,9 @@ fn generate_struct(
         );
 
         // Add the receiver queue for processor messaging
-        let internal_rx_queue_quote = args.quote_internal_rx_queue()?;
         fields.named.push(
             syn::Field::parse_named
-                .parse2(internal_rx_queue_quote)
+                .parse2(quote! { internal_rx_queue: tokio::sync::mpsc::Receiver<prosa::core::msg::InternalMsg<M>> })
                 .unwrap(),
         );
 
@@ -279,7 +181,7 @@ fn generate_struct_impl_config(
 ) -> syn::parse::Result<proc_macro2::TokenStream> {
     let item_ident = &item_struct.ident;
     let item_generics = &item_struct.generics;
-    let queue_channel = args.quote_channel()?;
+    let queue_size = &args.queue_size;
 
     let (settings, settings_quote) = if let Some(settings) = &args.settings {
         (settings.clone(), quote! { settings, })
@@ -298,7 +200,7 @@ fn generate_struct_impl_config(
             type Settings = #settings;
 
             fn create(proc_id: u32, main: prosa::core::main::Main<M>, settings: Self::Settings) -> Self {
-                let (internal_tx_queue, internal_rx_queue) = #queue_channel;
+                let (internal_tx_queue, internal_rx_queue) = tokio::sync::mpsc::channel(#queue_size);
                 let proc = prosa::core::proc::ProcParam::new(proc_id, internal_tx_queue, main);
                 #item_ident {
                     proc,

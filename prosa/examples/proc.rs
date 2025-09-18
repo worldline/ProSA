@@ -81,13 +81,13 @@ where
                     let stub_service_name = String::from("STUB_TEST");
                     if let Some(service) = self.service.get_proc_service(&stub_service_name) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(stub_service_name, tvf.clone(), self.proc.get_msg_queue()))).await.unwrap();
+                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await.unwrap();
                     }
 
                     let proc_service_name = String::from("PROC_TEST");
                     if let Some(service) = self.service.get_proc_service(&proc_service_name) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(proc_service_name, tvf, self.proc.get_msg_queue()))).await.unwrap();
+                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(proc_service_name, tvf, self.proc.get_service_queue()))).await.unwrap();
                     }
                 },
                 Some(msg) = pending_msgs.pull(), if !pending_msgs.is_empty() => {
