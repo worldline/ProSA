@@ -91,16 +91,20 @@ pub(crate) use impl_queue_checker;
 /// Every ID in this range is considered for the queue.
 ///
 /// In the following example:
-/// - `h` represent head position
-/// - `t` represent tail position
-/// - `o` active items
-/// - `x` represent inactive items
+/// - `o` represent active items
+/// - `-` represent inactive items
 ///
-/// If head is before the tail:
-/// `x h[ o [t x`
+/// If the head is before the tail:
+/// ```text
+/// [      |start      |end  ]
+/// [------oooooooooooo------]
+/// ```
 ///
-/// If head is after the tail:
-/// `o [t x h[ o`
+/// If the head is after the tail:
+/// ```text
+/// [      |end        |start]
+/// [oooooo------------oooooo]
+/// ```
 macro_rules! id_in_queue {
     ( $id:ident, $head:ident, $tail:ident ) => {
         ($head > $tail && ($id >= $head || $id < $tail)) || ($id >= $head && $id < $tail)

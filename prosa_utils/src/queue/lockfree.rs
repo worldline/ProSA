@@ -1,6 +1,6 @@
 macro_rules! impl_producer_queue {
-    // Single producer, no optionnal
-    (false, false, $p:ty, $n:ident) => {
+    // Single producer, non optional
+    ("single-producer", "non-optional", $p:ty, $n:ident) => {
         /// Push an item in the queue.
         /// Return an error if it can't
         ///
@@ -36,8 +36,8 @@ macro_rules! impl_producer_queue {
             }
         }
     };
-    // Single producer, optionnal
-    (false, true, $p:ty, $n:ident) => {
+    // Single producer, optional
+    ("single-producer", "optional", $p:ty, $n:ident) => {
         /// Push an item in the queue.
         /// Return the id of the element in the queue, or an error if it can't push the item
         ///
@@ -73,8 +73,8 @@ macro_rules! impl_producer_queue {
             }
         }
     };
-    // Multiple producers, no optionnal
-    (true, false, $p:ty, $n:ident) => {
+    // Multiple producers, non optional
+    ("multi-producers", "non-optional", $p:ty, $n:ident) => {
         /// Push an item in the queue.
         /// Return an error if it can't
         pub fn push(&self, val: T) -> Result<(), QueueError<T>> {
@@ -115,7 +115,7 @@ pub(crate) use impl_producer_queue;
 
 macro_rules! impl_consumer_id_queue {
     // Standard queue
-    (false, $p:ty) => {
+    ("non-optional", $p:ty) => {
         /// Try to pull an item from the queue after a consume.
         ///
         /// # Safety
@@ -136,8 +136,8 @@ macro_rules! impl_consumer_id_queue {
             }
         }
     };
-    // Option queue
-    (true, $p:ty) => {
+    // Optional queue
+    ("optional", $p:ty) => {
         /// Try to pull an item from the queue.
         /// The item need to be in the queue otherwise it will not try.
         pub fn try_pull_id(&self, id: $p) -> Option<T> {
@@ -180,8 +180,8 @@ macro_rules! impl_consumer_id_queue {
 pub(crate) use impl_consumer_id_queue;
 
 macro_rules! impl_consume_queue {
-    // Non optionnal, Single consumer
-    (false, false, $p:ty) => {
+    // Non optional, Single consumer
+    ("non-optional", "single-consumer", $p:ty) => {
         /// Try to consume an item from the queue
         ///
         /// # Safety
@@ -221,8 +221,8 @@ macro_rules! impl_consume_queue {
             }
         }
     };
-    // Non optionnal, Multiple consumers
-    (false, true, $p:ty) => {
+    // Non optional, Multiple consumers
+    ("non-optional", "multi-consumers", $p:ty) => {
         /// Try to consume an item from the queue
         pub fn try_consume(&self) -> Result<Option<$p>, QueueError<T>> {
             let head = self.head.load(std::sync::atomic::Ordering::Acquire);
@@ -269,15 +269,15 @@ macro_rules! impl_consume_queue {
             }
         }
     };
-    // Optionnal
-    (true, false, $p:ty) => {};
-    (true, true, $p:ty) => {};
+    // Optional
+    ("optional", "single-consumer", $p:ty) => {};
+    ("optional", "multi-consumers", $p:ty) => {};
 }
 pub(crate) use impl_consume_queue;
 
 macro_rules! impl_consumer_queue {
-    // Single consumer, no optionnal
-    (false, false, $p:ty) => {
+    // Single consumer, non optional
+    ("single-consumer", "non-optional", $p:ty) => {
         /// Try to pull an item from the queue.
         ///
         /// For a single consumer, it return a `Full` error if the queue was full to notify that item can be push again in the queue.
@@ -353,8 +353,8 @@ macro_rules! impl_consumer_queue {
             }
         }
     };
-    // Multiple consumers, no optionnal
-    (true, false, $p:ty) => {
+    // Multiple consumers, non optional
+    ("multi-consumers", "non-optional", $p:ty) => {
         /// Try to pull an item from the queue.
         pub fn try_pull(&self) -> Result<Option<T>, QueueError<T>> {
             let head = self.head.load(std::sync::atomic::Ordering::Acquire);
@@ -425,8 +425,8 @@ macro_rules! impl_consumer_queue {
             }
         }
     };
-    // Multiple consumers, optionnal
-    (true, true, $p:ty) => {
+    // Multiple consumers, optional
+    ("multi-consumers", "optional", $p:ty) => {
         /// Try to pull an item from the queue.
         pub fn try_pull(&self) -> Result<Option<T>, QueueError<T>> {
             let head = self.head.load(std::sync::atomic::Ordering::Acquire);
@@ -508,7 +508,7 @@ pub(crate) use impl_consumer_queue;
 
 /// Macro to define lockfree queue
 macro_rules! impl_lockfree_queue {
-    ( $queue:ident, $p:ty, $atomic:ty, $atomic_ptr_data:ty, $mp:tt, $mc:tt, $opt:tt ) => {
+    ( $queue:ident, $p:ty, $atomic:ty, $atomic_ptr_data:ty, $producer:tt, $consumer:tt, $optional:tt ) => {
         /// Implementation of an Atomic queue
         pub struct $queue<T, const N: usize> {
             /// Items of the queue
@@ -529,10 +529,10 @@ macro_rules! impl_lockfree_queue {
                 self.tail.load(std::sync::atomic::Ordering::Relaxed)
             }
 
-            crate::queue::lockfree::impl_consumer_id_queue!($opt, $p);
-            crate::queue::lockfree::impl_consume_queue!($opt, $mc, $p);
-            crate::queue::lockfree::impl_producer_queue!($mp, $opt, $p, N);
-            crate::queue::lockfree::impl_consumer_queue!($mc, $opt, $p);
+            crate::queue::lockfree::impl_consumer_id_queue!($optional, $p);
+            crate::queue::lockfree::impl_consume_queue!($optional, $consumer, $p);
+            crate::queue::lockfree::impl_producer_queue!($producer, $optional, $p, N);
+            crate::queue::lockfree::impl_consumer_queue!($consumer, $optional, $p);
         }
 
         impl<T, const N: usize> Drop for $queue<T, N> {

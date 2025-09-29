@@ -5,9 +5,9 @@ crate::queue::lockfree::impl_lockfree_queue!(
     u16,
     std::sync::atomic::AtomicU16,
     Option<T>,
-    false,
-    true,
-    true
+    "single-producer",
+    "multi-consumers",
+    "optional"
 );
 
 crate::queue::lockfree::impl_lockfree_queue!(
@@ -15,9 +15,9 @@ crate::queue::lockfree::impl_lockfree_queue!(
     u32,
     std::sync::atomic::AtomicU32,
     Option<T>,
-    false,
-    true,
-    true
+    "single-producer",
+    "multi-consumers",
+    "optional"
 );
 
 #[cfg(test)]
