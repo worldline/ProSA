@@ -293,7 +293,7 @@ impl Default for TelemetryData {
     }
 }
 
-/// Open telemetry settings of an ProSA
+/// Open telemetry settings of a ProSA
 ///
 /// See [`TelemetryFilter`] to configure a specific filter for ProSA processors.
 ///

@@ -22,7 +22,7 @@ include = [
 ]
 
 [workspace.dependencies]
-prosa-utils = { version = "0.3.2", path = "prosa_utils", default-features = false }
+prosa-utils = { version = "0.3.3", path = "prosa_utils", default-features = false }
 prosa-macros = { version = "0.3.2", path = "prosa_macros" }
 thiserror = "2"
 aquamarine = "0.6"
@@ -32,7 +32,7 @@ serde = { version = "1", features = ["derive"] }
 url = { version = "2", features = ["serde"] }
 tokio = { version = "1", features = ["fs", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time"] }
 config = { version = "0.15", default-features = false, features = ["toml", "json", "yaml", "json5", "convert-case", "async"] }
-toml = "0.8"
+toml = "0.9"
 
 # Config Observability
 log = "0.4"

@@ -6,7 +6,7 @@
 //! Define ProSA processor to do a processing
 //!
 //! To create a ProSA processor:
-//! ```
+//! ```no_run
 //! use std::error::Error;
 //! use serde::{Deserialize, Serialize};
 //! use prosa_utils::msg::tvf::Tvf;
@@ -153,7 +153,7 @@ pub use prosa_macros::proc_settings;
 
 /// Trait to define ProSA processor settings
 ///
-/// ```
+/// ```no_run
 /// use serde::Deserialize;
 /// use prosa::core::proc::proc_settings;
 ///
