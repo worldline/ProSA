@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use super::msg::InternalMsg;
-use prosa_utils::msg::tvf::{Tvf, TvfError};
+use prosa_utils::{
+    config::ConfigError,
+    msg::tvf::{Tvf, TvfError},
+};
 use tokio::sync::mpsc;
 
 /// Processor error
@@ -23,6 +26,14 @@ impl<'a, E: ProcError + 'a> From<E> for Box<dyn ProcError + 'a> {
 impl<'a, E: ProcError + Send + Sync + 'a> From<E> for Box<dyn ProcError + Send + Sync + 'a> {
     fn from(err: E) -> Box<dyn ProcError + Send + Sync + 'a> {
         Box::new(err)
+    }
+}
+
+/// For a ProSA `ConfigError`, no recovery is possible.
+/// The configuration need to be valid
+impl ProcError for ConfigError {
+    fn recoverable(&self) -> bool {
+        false
     }
 }
 
