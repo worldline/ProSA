@@ -269,6 +269,30 @@ It can be useful if you have a contract with a maximum number of parallel transa
 </ul>
 <p>To check if you can send the next transaction, call <a href="https://docs.rs/prosa/latest/prosa/event/speed/struct.Regulator.html#method.tick"><code>tick()</code></a>.
 This method blocks if you need to wait, and lets you continue if you are within the allowed threshold.</p>
+<h2 id="timed-queue"><a class="header" href="#timed-queue">Timed Queue</a></h2>
+<p>ProSA introduced a queue system to enhance its functionality.
+While this book does not cover the standard queue (for which you can find more details in the <a href="https://docs.rs/prosa/latest/prosa/event/queue/index.html">ProSA documentation</a>), it focuses on the <a href="file:///Users/jht/ProSA-queue/target/doc/prosa/event/queue/timed/index.html"><code>Timed Queue</code></a>. This is a novel queuing concept designed for time-sensitive operations.</p>
+<p>The <code>TimedQueue</code> follows an <strong>SPMC</strong> (<strong>S</strong>ingle <strong>P</strong>roducer, <strong>M</strong>ultiple <strong>C</strong>onsumers) model, where only the sender can enforce timeouts.
+It ensures a regular message flow, as illustrated below:</p>
+<pre class="mermaid">flowchart LR
+    send[Sender]
+    queue[(Timed Queue)]
+    recv1[Receiver 1]
+    recvn[Receiver N]
+    send --&gt; queue
+    queue --&gt; recv1
+    queue --&gt; recvn
+</pre>
+<p>However, if a message in the queue expires (because a receiver failed to consume it in time), the sender retrieves the message:</p>
+<pre class="mermaid">flowchart LR
+    send[Sender]
+    queue[(Timed Queue)]
+    send --&gt; queue
+    queue -- timeout --&gt; send
+</pre>
+<p>This is the key advantage of the <code>TimedQueue</code>.
+Unlike a standard queue, where a message is only returned if explicitly pulled, the <code>TimedQueue</code> allows messages to expire even if they are in the middle of the queue.
+In real-time systems, this ensures that every message receives a response within a specified timeframe—even if that response is simply an acknowledgment of a missed deadline.</p>
 
                     </main>
 
