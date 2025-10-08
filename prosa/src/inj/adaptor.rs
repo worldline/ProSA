@@ -1,5 +1,5 @@
 use super::proc::InjProc;
-use crate::core::{adaptor::Adaptor, error::ProcError};
+use crate::core::{adaptor::Adaptor, error::ProcError, msg::Tvf};
 extern crate self as prosa;
 
 /// Adaptator trait for the inj processor
@@ -10,6 +10,7 @@ extern crate self as prosa;
 /// use prosa::core::adaptor::Adaptor;
 /// use prosa::inj::adaptor::InjAdaptor;
 /// use prosa::core::error::ProcError;
+/// use prosa::core::msg::Tvf;
 ///
 /// #[derive(Adaptor)]
 /// pub struct MyInjAdaptor { }
@@ -22,7 +23,7 @@ extern crate self as prosa;
 ///         + std::marker::Sized
 ///         + std::clone::Clone
 ///         + std::fmt::Debug
-///         + prosa_utils::msg::tvf::Tvf
+///         + Tvf
 ///         + std::default::Default,
 /// {
 ///     fn new(_proc: &InjProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
@@ -43,7 +44,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + Tvf
         + std::default::Default,
 {
     /// Method called when the processor spawns
@@ -77,7 +78,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + Tvf
         + std::default::Default,
 {
     fn new(_proc: &InjProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {

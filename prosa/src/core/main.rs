@@ -7,23 +7,27 @@
 //!
 //! Main can be consider as a service bus that routing processor messages.
 
-use super::error::{BusError, ProcError};
-use super::msg::{InternalMainMsg, InternalMsg};
-use super::proc::ProcBusParam;
-use super::service::{ProcService, ServiceTable};
-use super::settings::Settings;
+use crate::core::queue::SendError;
+
+use super::{
+    error::{BusError, ProcError},
+    msg::{InternalMainMsg, InternalMsg, Tvf},
+    proc::ProcBusParam,
+    service::{ProcService, ServiceTable},
+    settings::Settings,
+};
 use opentelemetry::logs::LoggerProvider as _;
 use opentelemetry::metrics::{Meter, MeterProvider as _};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::{InstrumentationScope, KeyValue};
 use opentelemetry_appender_log::OpenTelemetryLogBridge;
-use prosa_utils::msg::tvf::Tvf;
 use std::borrow::Cow;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::{collections::HashMap, fmt::Debug};
-use tokio::signal;
-use tokio::sync::mpsc;
+use tokio::{signal, sync::mpsc};
 use tracing::{debug, info, warn};
 
 /// Trait to define a ProSA main processor that is runnable
@@ -134,17 +138,14 @@ where
     }
 
     /// Method to declare a new processor on the main bus
-    pub async fn add_proc_queue(&self, proc: ProcService<M>) -> Result<(), BusError> {
-        self.internal_tx_queue
+    pub async fn add_proc_queue(
+        &self,
+        proc: ProcService<M>,
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::NewProcQueue(proc.clone()))
-            .await
-            .map_err(|e| {
-                BusError::InternalMainQueue(
-                    "NewProcQueue".into(),
-                    proc.get_proc_id(),
-                    e.to_string(),
-                )
-            })
+            .await?)
     }
 
     /// Method to remove an entire processor from the main bus
@@ -152,31 +153,35 @@ where
         &self,
         proc_id: u32,
         proc_err: Option<Box<dyn ProcError + Send + Sync>>,
-    ) -> Result<(), BusError> {
-        self.internal_tx_queue
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::DeleteProc(proc_id, proc_err))
-            .await
-            .map_err(|e| BusError::InternalMainQueue("DeleteProc".into(), proc_id, e.to_string()))
+            .await?)
     }
 
     /// Method to declare a new processor on the main bus
-    pub async fn remove_proc_queue(&self, proc_id: u32, queue_id: u32) -> Result<(), BusError> {
-        self.internal_tx_queue
+    pub async fn remove_proc_queue(
+        &self,
+        proc_id: u32,
+        queue_id: u32,
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::DeleteProcQueue(proc_id, queue_id))
-            .await
-            .map_err(|e| {
-                BusError::InternalMainQueue("DeleteProcQueue".into(), proc_id, e.to_string())
-            })
+            .await?)
     }
 
     /// Method to declare a new service for a whole processor on the main bus
-    pub async fn add_service_proc(&self, names: Vec<String>, proc_id: u32) -> Result<(), BusError> {
-        self.internal_tx_queue
+    pub async fn add_service_proc(
+        &self,
+        names: Vec<String>,
+        proc_id: u32,
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::NewProcService(names, proc_id))
-            .await
-            .map_err(|e| {
-                BusError::InternalMainQueue("NewProcService".into(), proc_id, e.to_string())
-            })
+            .await?)
     }
 
     /// Method to declare a new service for a processor queue on the main bus
@@ -185,11 +190,11 @@ where
         names: Vec<String>,
         proc_id: u32,
         queue_id: u32,
-    ) -> Result<(), BusError> {
-        self.internal_tx_queue
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::NewService(names, proc_id, queue_id))
-            .await
-            .map_err(|e| BusError::InternalMainQueue("NewService".into(), proc_id, e.to_string()))
+            .await?)
     }
 
     /// Method to remove a service for a whole processor from the main bus
@@ -197,13 +202,11 @@ where
         &self,
         names: Vec<String>,
         proc_id: u32,
-    ) -> Result<(), BusError> {
-        self.internal_tx_queue
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::DeleteProcService(names, proc_id))
-            .await
-            .map_err(|e| {
-                BusError::InternalMainQueue("DeleteProcService".into(), proc_id, e.to_string())
-            })
+            .await?)
     }
 
     /// Method to remove a service from the main bus
@@ -212,13 +215,11 @@ where
         names: Vec<String>,
         proc_id: u32,
         queue_id: u32,
-    ) -> Result<(), BusError> {
-        self.internal_tx_queue
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::DeleteService(names, proc_id, queue_id))
-            .await
-            .map_err(|e| {
-                BusError::InternalMainQueue("DeleteService".into(), proc_id, e.to_string())
-            })
+            .await?)
     }
 
     /// Indicates whether ProSA is stopping
@@ -227,12 +228,12 @@ where
     }
 
     /// Method to stop all processors
-    pub async fn stop(&self, reason: String) -> Result<(), BusError> {
+    pub async fn stop(&self, reason: String) -> Result<(), SendError<InternalMainMsg<M>>> {
         self.stop.store(true, Ordering::Relaxed);
-        self.internal_tx_queue
+        Ok(self
+            .internal_tx_queue
             .send(InternalMainMsg::Shutdown(reason))
-            .await
-            .map_err(|e| BusError::InternalMainQueue("Shutdown".into(), 0, e.to_string()))
+            .await?)
     }
 
     /// Provide the ProSA name based on ProSA settings
