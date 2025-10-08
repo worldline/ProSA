@@ -6,8 +6,10 @@ use std::{
     path::Path,
 };
 
-pub use prosa_macros::io;
 use url::Url;
+
+pub use prosa_macros::io;
+pub use prosa_utils::config::ssl::SslConfig;
 
 pub mod listener;
 pub mod stream;

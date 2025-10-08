@@ -3,6 +3,7 @@ use crate::{
     core::{
         adaptor::{Adaptor, MaybeAsync},
         error::ProcError,
+        msg::Tvf,
         proc::ProcConfig,
         service::ServiceError,
     },
@@ -19,6 +20,7 @@ use opentelemetry::metrics::Meter;
 /// use prosa::core::adaptor::{Adaptor, MaybeAsync};
 /// use prosa::stub::adaptor::StubAdaptor;
 /// use prosa::core::error::ProcError;
+/// use prosa::core::msg::Tvf;
 /// use prosa::core::service::ServiceError;
 ///
 /// #[derive(Adaptor)]
@@ -32,7 +34,7 @@ use opentelemetry::metrics::Meter;
 ///         + std::marker::Sized
 ///         + std::clone::Clone
 ///         + std::fmt::Debug
-///         + prosa_utils::msg::tvf::Tvf
+///         + Tvf
 ///         + std::default::Default,
 /// {
 ///     fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
@@ -53,6 +55,7 @@ use opentelemetry::metrics::Meter;
 /// use prosa::core::adaptor::{Adaptor, MaybeAsync};
 /// use prosa::stub::adaptor::StubAdaptor;
 /// use prosa::core::error::ProcError;
+/// use prosa::core::msg::Tvf;
 /// use prosa::core::service::ServiceError;
 /// use prosa::maybe_async;
 ///
@@ -67,7 +70,7 @@ use opentelemetry::metrics::Meter;
 ///         + std::marker::Sized
 ///         + std::clone::Clone
 ///         + std::fmt::Debug
-///         + prosa_utils::msg::tvf::Tvf
+///         + Tvf
 ///         + std::default::Default,
 /// {
 ///     fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
@@ -93,7 +96,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + Tvf
         + std::default::Default,
 {
     /// Method called when the processor spawns
@@ -125,7 +128,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + Tvf
         + std::default::Default,
 {
     fn new(proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
@@ -155,7 +158,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + Tvf
         + std::default::Default,
 {
     fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {

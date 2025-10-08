@@ -44,7 +44,10 @@ pub use prosa_macros::Adaptor;
 ///
 /// If you have to use the message type in your adaptor
 /// ```
-/// use prosa::core::adaptor::Adaptor;
+/// use prosa::core::{
+///     adaptor::Adaptor,
+///     msg::Tvf,
+/// };
 ///
 /// #[derive(Adaptor)]
 /// struct MyAdaptor<M>
@@ -55,7 +58,7 @@ pub use prosa_macros::Adaptor;
 ///         + std::marker::Sized
 ///         + std::clone::Clone
 ///         + std::fmt::Debug
-///         + prosa_utils::msg::tvf::Tvf
+///         + Tvf
 ///         + std::default::Default,
 /// {
 ///     _phantom: std::marker::PhantomData<M>,
