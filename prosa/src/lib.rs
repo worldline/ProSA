@@ -7,7 +7,7 @@
 //! ProSA base library that define standard modules and include procedural macros
 #![warn(missing_docs)]
 #![deny(unreachable_pub)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod core;
 

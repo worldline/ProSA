@@ -7,7 +7,7 @@
 //! Utils for ProSA
 #![warn(missing_docs)]
 #![deny(unreachable_pub)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(feature = "msg")]
 pub mod msg;
