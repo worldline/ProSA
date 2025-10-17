@@ -98,8 +98,8 @@ where
                     tvf.put_unsigned(1, 42u64);
                     tvf.put_string(2, "test");
 
-                    // Return the message to the sender
-                    msg.return_to_sender(tvf).await.unwrap();
+                    // Return the message to the sender, but ignore error if the sender is not present anymore
+                    let _ = msg.return_to_sender(tvf);
                 },
             }
         }
