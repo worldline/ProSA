@@ -29,6 +29,7 @@ mod tests {
 
     use prosa::core::{
         main::{MainProc, MainRunnable as _},
+        msg::Tvf,
         proc::{Proc, ProcConfig as _},
     };
     use prosa::inj::{
@@ -80,7 +81,7 @@ mod tests {
             + std::marker::Sized
             + std::clone::Clone
             + std::fmt::Debug
-            + prosa_utils::msg::tvf::Tvf
+            + Tvf
             + std::default::Default,
     {
         fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {

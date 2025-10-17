@@ -97,12 +97,12 @@ where
                             MaybeAsync::Ready(Ok(resp)) => {
                                 debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
                                 drop(enter_span);
-                                msg.return_to_sender(resp).await?;
+                                let _ = msg.return_to_sender(resp);
                             }
                             MaybeAsync::Ready(Err(err)) => {
                                 debug!(name: "stub_proc_error", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{err}");
                                 drop(enter_span);
-                                msg.return_error_to_sender(None, err).await?;
+                                let _ = msg.return_error_to_sender(None, err);
                             }
                             MaybeAsync::Future(future_resp) => {
                                 drop(enter_span);
@@ -113,12 +113,12 @@ where
                                         Ok(data) => {
                                             debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{data:?}");
                                             drop(enter_span);
-                                            msg.return_to_sender(data).await.unwrap()
+                                            let _ = msg.return_to_sender(data);
                                         }
                                         Err(err) => {
                                             debug!(name: "stub_proc_error", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{err}");
                                             drop(enter_span);
-                                            msg.return_error_to_sender(None, err).await.unwrap();
+                                            let _ = msg.return_error_to_sender(None, err);
                                         }
                                     }
                                 });

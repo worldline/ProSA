@@ -1,11 +1,10 @@
 use std::time::Duration;
 
-use super::msg::InternalMsg;
+use super::{msg::InternalMsg, queue::SendError};
 use prosa_utils::{
     config::ConfigError,
     msg::tvf::{Tvf, TvfError},
 };
-use tokio::sync::mpsc;
 
 /// Processor error
 pub trait ProcError: std::error::Error {
@@ -94,8 +93,10 @@ impl ProcError for openssl::error::ErrorStack {
 #[derive(Debug, Eq, thiserror::Error, PartialEq)]
 pub enum BusError {
     /// Error that indicate the queue can't forward the internal main message
-    #[error("The Queue can't send the internal main message {0}, proc_id={1}, reason={2}")]
-    InternalMainQueue(String, u32, String),
+    #[error(
+        "The Queue can't send the internal main message {0}, proc_id={1}, queue_id={2}, reason={3}"
+    )]
+    InternalMainQueue(&'static str, u32, u32, String),
     /// Error that indicate the queue can't forward the internal message
     #[error("The Queue can't send the internal message: {0}")]
     InternalQueue(String),
@@ -112,15 +113,15 @@ pub enum BusError {
 
 impl ProcError for BusError {
     fn recoverable(&self) -> bool {
-        matches!(self, BusError::InternalMainQueue(_, _, _))
+        matches!(self, BusError::InternalMainQueue(..))
     }
 }
 
-impl<M> From<mpsc::error::SendError<InternalMsg<M>>> for BusError
+impl<M> From<SendError<InternalMsg<M>>> for BusError
 where
     M: Sized + Clone + Tvf,
 {
-    fn from(error: mpsc::error::SendError<InternalMsg<M>>) -> Self {
+    fn from(error: SendError<InternalMsg<M>>) -> Self {
         BusError::InternalQueue(error.to_string())
     }
 }

@@ -9,10 +9,9 @@
 //! ```no_run
 //! use std::error::Error;
 //! use serde::{Deserialize, Serialize};
-//! use prosa_utils::msg::tvf::Tvf;
 //! use prosa::core::proc::{proc_settings, proc, Proc, ProcBusParam};
 //! use prosa::core::adaptor::Adaptor;
-//! use prosa::core::msg::{Msg, InternalMsg};
+//! use prosa::core::msg::{Msg, InternalMsg, Tvf};
 //! use prosa::core::error::ProcError;
 //!
 //! pub trait MyAdaptorTrait<M>
@@ -23,7 +22,7 @@
 //!     + std::marker::Sized
 //!     + std::clone::Clone
 //!     + std::fmt::Debug
-//!     + prosa_utils::msg::tvf::Tvf
+//!     + Tvf
 //!     + std::default::Default,
 //! {
 //!     /// Method called when the processor spawns
@@ -44,7 +43,7 @@
 //!     + std::marker::Sized
 //!     + std::clone::Clone
 //!     + std::fmt::Debug
-//!     + prosa_utils::msg::tvf::Tvf
+//!     + Tvf
 //!     + std::default::Default,
 //! {
 //!     fn new(proc: &MyProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
@@ -80,7 +79,7 @@
 //! //    + std::marker::Sized
 //! //    + std::clone::Clone
 //! //    + std::fmt::Debug
-//! //    + prosa_utils::msg::tvf::Tvf
+//! //    + Tvf
 //! //    + std::default::Default,
 //! //{
 //! //    fn internal_func() {
@@ -133,11 +132,14 @@
 
 use super::adaptor::Adaptor;
 use super::error::{BusError, ProcError};
-use super::{main::Main, msg::InternalMsg, service::ProcService};
+use super::{
+    main::Main,
+    msg::{InternalMsg, Tvf},
+    service::ProcService,
+};
 use config::{Config, ConfigError, File};
 use glob::glob;
 use log::{error, info, warn};
-use prosa_utils::msg::tvf::Tvf;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::time::Duration;
@@ -281,8 +283,10 @@ where
     pub async fn add_proc(&self) -> Result<(), BusError> {
         self.main
             .add_proc_queue(ProcService::new_proc(self, 0))
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue("add_proc", self.get_proc_id(), 0, e.to_string())
+            })
     }
 
     /// Method to remove the processor with a signal queue to the main task
@@ -292,8 +296,9 @@ where
         &self,
         err: Option<Box<dyn ProcError + Send + Sync>>,
     ) -> Result<(), BusError> {
-        self.main.remove_proc(self.id, err).await?;
-        Ok(())
+        self.main.remove_proc(self.id, err).await.map_err(|e| {
+            BusError::InternalMainQueue("remove_proc", self.get_proc_id(), 0, e.to_string())
+        })
     }
 
     /// Method to declare the processor with multiple queue identify with a queue id to the main task
@@ -307,48 +312,92 @@ where
     ) -> Result<(), BusError> {
         self.main
             .add_proc_queue(ProcService::new(self, queue, queue_id))
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue(
+                    "add_proc_queue",
+                    self.get_proc_id(),
+                    queue_id,
+                    e.to_string(),
+                )
+            })
     }
 
     /// Method to remove the processor queue identify with a queue id to the main task
     ///
     /// Once the processor queue is removed, all its associated service will be remove
     pub async fn remove_proc_queue(&self, queue_id: u32) -> Result<(), BusError> {
-        self.main.remove_proc_queue(self.id, queue_id).await?;
-        Ok(())
+        self.main
+            .remove_proc_queue(self.id, queue_id)
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue(
+                    "remove_proc_queue",
+                    self.get_proc_id(),
+                    queue_id,
+                    e.to_string(),
+                )
+            })
     }
 
     /// Method to declare a new service for a whole processor to the main bus to receive corresponding messages
     pub async fn add_service_proc(&self, names: Vec<String>) -> Result<(), BusError> {
         self.main
             .add_service_proc(names, self.get_proc_id())
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue(
+                    "add_service_proc",
+                    self.get_proc_id(),
+                    0,
+                    e.to_string(),
+                )
+            })
     }
 
     /// Method to declare a new service to the main bus to receive corresponding messages
     pub async fn add_service(&self, names: Vec<String>, queue_id: u32) -> Result<(), BusError> {
         self.main
             .add_service(names, self.get_proc_id(), queue_id)
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue(
+                    "add_service",
+                    self.get_proc_id(),
+                    queue_id,
+                    e.to_string(),
+                )
+            })
     }
 
     /// Method to remove a service for a whole processor from the main bus. The processor will no longuer receive those corresponding messages
     pub async fn remove_service_proc(&self, names: Vec<String>) -> Result<(), BusError> {
         self.main
             .remove_service_proc(names, self.get_proc_id())
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue(
+                    "remove_service_proc",
+                    self.get_proc_id(),
+                    0,
+                    e.to_string(),
+                )
+            })
     }
 
     /// Method to remove a service from the main bus. The processor will no longuer receive those corresponding messages
     pub async fn remove_service(&self, names: Vec<String>, queue_id: u32) -> Result<(), BusError> {
         self.main
             .remove_service(names, self.get_proc_id(), queue_id)
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| {
+                BusError::InternalMainQueue(
+                    "remove_service",
+                    self.get_proc_id(),
+                    queue_id,
+                    e.to_string(),
+                )
+            })
     }
 
     /// Indicates whether ProSA is stopping
@@ -388,7 +437,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + Tvf
         + std::default::Default,
 {
     /// Settings use for the ProSA processor
