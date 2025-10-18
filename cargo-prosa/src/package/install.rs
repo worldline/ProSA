@@ -245,15 +245,15 @@ impl InstanceInstall {
     /// - Copy ProSA binary
     /// - Generate configuration
     pub fn install(&self, release: bool) -> io::Result<u64> {
-        print!("Creating service ");
-        self.create_service_file()
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        println!("OK");
         print!("Copying binary ");
         let mut file_size = self.copy_binary(release)?;
         println!("OK");
         print!("Generating configuration ");
         file_size += self.gen_config()?;
+        println!("OK");
+        print!("Creating service ");
+        self.create_service_file()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         println!("OK");
         Ok(file_size)
     }
