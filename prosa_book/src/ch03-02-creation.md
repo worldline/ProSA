@@ -39,7 +39,7 @@ impl<A> Proc<A> for MyProc
 where
     A: Adaptor + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // TODO: Initialize your adaptor here
 
         // Register the processor if ready to run
@@ -86,7 +86,7 @@ impl<A> Proc<A> for MyProc<SimpleStringTvf>
 where
     A: Adaptor + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Custom handling for SimpleStringTvf
     }
 }

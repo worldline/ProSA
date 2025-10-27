@@ -20,7 +20,7 @@ To start listening to a specific service, call [`add_service_proc()`](https://do
 # where
 #     A: Adaptor + std::marker::Send + std::marker::Sync,
 # {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Declare the processor
         self.proc.add_proc().await?;
 
@@ -70,7 +70,7 @@ In this case, you can declare multiple listener subtasks, each of which subscrib
 # where
 #     A: Adaptor + std::marker::Send + std::marker::Sync,
 # {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Declare the processor
         self.proc.add_proc().await?;
 
@@ -161,7 +161,7 @@ After that, you are free to call any services.
 # where
 #     A: Adaptor + std::marker::Send + std::marker::Sync,
 # {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Register the processor
         self.proc.add_proc().await?;
 
@@ -218,7 +218,7 @@ The logic is similar to single senders, but you specify the queue when sending m
 # where
 #     A: Adaptor + std::marker::Send + std::marker::Sync,
 # {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Register the processor
         self.proc.add_proc().await?;
 

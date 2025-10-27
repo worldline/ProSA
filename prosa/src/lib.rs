@@ -112,12 +112,22 @@ mod tests {
         let main_task = tokio::spawn(main.run());
 
         // Launch a stub processor
-        let stub_proc = StubProc::<SimpleStringTvf>::create(1, bus.clone(), test_settings.stub);
-        Proc::<TestStubAdaptor>::run(stub_proc, String::from("STUB_PROC"));
+        let stub_proc = StubProc::<SimpleStringTvf>::create(
+            1,
+            String::from("STUB_PROC"),
+            bus.clone(),
+            test_settings.stub,
+        );
+        Proc::<TestStubAdaptor>::run(stub_proc);
 
         // Launch an inj processor
-        let inj_proc = InjProc::<SimpleStringTvf>::create(2, bus.clone(), test_settings.inj);
-        Proc::<InjDummyAdaptor>::run(inj_proc, String::from("INJ_PROC"));
+        let inj_proc = InjProc::<SimpleStringTvf>::create(
+            2,
+            String::from("INJ_PROC"),
+            bus.clone(),
+            test_settings.inj,
+        );
+        Proc::<InjDummyAdaptor>::run(inj_proc);
 
         // Wait before stopping prosa
         tokio::time::sleep(WAIT_TIME).await;
