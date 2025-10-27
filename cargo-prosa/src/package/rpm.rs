@@ -5,7 +5,7 @@ use std::{
 
 use tera::Tera;
 
-use crate::cargo::CargoMetadata;
+use crate::{cargo::CargoMetadata, package::ASSETS_SYSTEMD_J2};
 
 /// Struct to handle Container file creation
 pub struct RpmPkg {
@@ -151,10 +151,7 @@ impl RpmPkg {
         // Write systemd file
         let mut tera_build = Tera::default();
         tera_build
-            .add_raw_template(
-                "prosa.service",
-                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/systemd.j2")),
-            )
+            .add_raw_template("prosa.service", ASSETS_SYSTEMD_J2)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let main_file = fs::File::create(pkg_data_path.join("service"))?;
