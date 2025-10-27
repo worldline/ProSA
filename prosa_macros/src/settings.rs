@@ -84,7 +84,10 @@ fn generate_proc_settings_struct(
         // Adaptor config path
         fields.named.push(
             syn::Field::parse_named
-                .parse2(quote! { adaptor_config_path: std::option::Option<std::string::String> })
+                .parse2(quote! {
+                    #[doc = "Path to the adaptor configuration file (if needed by the custom adaptor)"]
+                    adaptor_config_path: std::option::Option<std::string::String>
+                })
                 .unwrap(),
         );
 
@@ -93,6 +96,7 @@ fn generate_proc_settings_struct(
             syn::Field::parse_named
                 .parse2(quote! {
                     #[serde(skip_serializing)]
+                    #[doc = "Duration period between two processor restart (in ms)"]
                     proc_restart_duration_period: std::option::Option<std::time::Duration>
                 })
                 .unwrap(),
@@ -103,6 +107,7 @@ fn generate_proc_settings_struct(
             syn::Field::parse_named
                 .parse2(quote! {
                     #[serde(skip_serializing)]
+                    #[doc = "Maximum number of restart in the given duration period"]
                     proc_max_restart_period: std::option::Option<std::primitive::u32>
                 })
                 .unwrap(),
@@ -142,24 +147,50 @@ pub(crate) fn proc_settings_impl(item: syn::Item) -> syn::parse::Result<proc_mac
             })
         }
         syn::Item::Impl(item_impl) => Ok(add_default_member(item_impl, |x| {
-            x.fields.push_value(
-                syn::FieldValue::parse
-                    .parse2(quote! { adaptor_config_path: None })
-                    .unwrap(),
-            );
-            x.fields.push_punct(syn::token::Comma::default());
-            x.fields.push_value(
-                syn::FieldValue::parse
-                    .parse2(quote! { proc_restart_duration_period: None })
-                    .unwrap(),
-            );
-            x.fields.push_punct(syn::token::Comma::default());
-            x.fields.push_value(
-                syn::FieldValue::parse
-                    .parse2(quote! { proc_max_restart_period: None })
-                    .unwrap(),
-            );
-            x.fields.push_punct(syn::token::Comma::default());
+            if !x.fields.iter().any(|f| {
+                if let syn::Member::Named(ident) = &f.member {
+                    ident == "adaptor_config_path"
+                } else {
+                    false
+                }
+            }) {
+                x.fields.push_value(
+                    syn::FieldValue::parse
+                        .parse2(quote! { adaptor_config_path: None })
+                        .unwrap(),
+                );
+                x.fields.push_punct(syn::token::Comma::default());
+            }
+
+            if !x.fields.iter().any(|f| {
+                if let syn::Member::Named(ident) = &f.member {
+                    ident == "proc_restart_duration_period"
+                } else {
+                    false
+                }
+            }) {
+                x.fields.push_value(
+                    syn::FieldValue::parse
+                        .parse2(quote! { proc_restart_duration_period: None })
+                        .unwrap(),
+                );
+                x.fields.push_punct(syn::token::Comma::default());
+            }
+
+            if !x.fields.iter().any(|f| {
+                if let syn::Member::Named(ident) = &f.member {
+                    ident == "proc_max_restart_period"
+                } else {
+                    false
+                }
+            }) {
+                x.fields.push_value(
+                    syn::FieldValue::parse
+                        .parse2(quote! { proc_max_restart_period: None })
+                        .unwrap(),
+                );
+                x.fields.push_punct(syn::token::Comma::default());
+            }
         })?
         .into_token_stream()),
         _ => Err(syn::Error::new(

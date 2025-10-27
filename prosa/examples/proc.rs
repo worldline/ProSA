@@ -28,10 +28,7 @@ impl<A> Proc<A> for MyProcClass
 where
     A: Default + Adaptor + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(
-        &mut self,
-        _name: String,
-    ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         let adaptor = A::default();
         self.proc.add_proc().await?;
         self.proc
@@ -136,19 +133,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Launch a stub processor
     let stub_settings = StubSettings::new(vec![String::from("STUB_TEST")]);
-    let stub_proc = StubProc::<SimpleStringTvf>::create(1, bus.clone(), stub_settings);
-    Proc::<StubParotAdaptor>::run(stub_proc, String::from("STUB_PROC"));
+    let stub_proc = StubProc::<SimpleStringTvf>::create(
+        1,
+        String::from("STUB_PROC"),
+        bus.clone(),
+        stub_settings,
+    );
+    Proc::<StubParotAdaptor>::run(stub_proc);
 
     // Launch the test processor
-    let proc = MyProcClass::<SimpleStringTvf>::create_raw(2, bus.clone());
-    Proc::<MyAdaptor>::run(proc, String::from("proc_1"));
+    let proc = MyProcClass::<SimpleStringTvf>::create_raw(2, String::from("proc_1"), bus.clone());
+    Proc::<MyAdaptor>::run(proc);
 
     // Wait before launch the second processor
     std::thread::sleep(time::Duration::from_secs(2));
 
     // Launch the second test processor
-    let proc2 = MyProcClass::<SimpleStringTvf>::create_raw(3, bus.clone());
-    Proc::<MyAdaptor>::run(proc2, String::from("proc_2"));
+    let proc2 = MyProcClass::<SimpleStringTvf>::create_raw(3, String::from("proc_2"), bus.clone());
+    Proc::<MyAdaptor>::run(proc2);
 
     // Wait on main task
     main.run().await;

@@ -93,7 +93,7 @@
 //! where
 //!     A: Adaptor + MyAdaptorTrait<M> + std::marker::Send + std::marker::Sync,
 //! {
-//!     async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+//!     async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
 //!         // Initiate an adaptor
 //!         let mut adaptor = A::new(self)?;
 //!
@@ -210,7 +210,7 @@ pub trait ProcBusParam {
     /// Getter of the processor id
     fn get_proc_id(&self) -> u32;
 
-    /// Provide the ProSA name based on ProSA settings
+    /// Provide the processor name
     fn name(&self) -> &str;
 }
 
@@ -238,13 +238,14 @@ pub trait ProcEpilogue {
     fn is_stopping(&self) -> bool;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 /// Parameters embeded in a ProSA processor
 pub struct ProcParam<M>
 where
     M: Sized + Clone + Tvf,
 {
     id: u32,
+    name: String,
     queue: mpsc::Sender<InternalMsg<M>>,
     main: Main<M>,
 }
@@ -258,7 +259,7 @@ where
     }
 
     fn name(&self) -> &str {
-        self.main.name()
+        self.name.as_str()
     }
 }
 
@@ -267,8 +268,18 @@ where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
     /// Method to create a processor parameter
-    pub fn new(id: u32, queue: mpsc::Sender<InternalMsg<M>>, main: Main<M>) -> ProcParam<M> {
-        ProcParam { id, queue, main }
+    pub fn new(
+        id: u32,
+        name: String,
+        queue: mpsc::Sender<InternalMsg<M>>,
+        main: Main<M>,
+    ) -> ProcParam<M> {
+        ProcParam {
+            id,
+            name,
+            queue,
+            main,
+        }
     }
 
     /// Getter of the processor service queue to send internal messages
@@ -444,15 +455,15 @@ where
     type Settings;
 
     /// Method to create a processor out of it's configuration
-    fn create(proc_id: u32, main: Main<M>, settings: Self::Settings) -> Self;
+    fn create(proc_id: u32, proc_name: String, main: Main<M>, settings: Self::Settings) -> Self;
 
     /// Method to create a processor with not specific configuration
-    fn create_raw(proc_id: u32, main: Main<M>) -> Self
+    fn create_raw(proc_id: u32, proc_name: String, main: Main<M>) -> Self
     where
         Self: Sized,
         Self::Settings: Default,
     {
-        Self::create(proc_id, main, Self::Settings::default())
+        Self::create(proc_id, proc_name, main, Self::Settings::default())
     }
 
     /// Getter of the processor parameters
@@ -460,17 +471,18 @@ where
 }
 
 macro_rules! proc_run {
-    ( $self:ident, $proc_name:ident ) => {
+    ( $self:ident ) => {
         info!(
-            "Run processor {} on {} threads",
-            $proc_name,
+            "Run processor[{}] {} on {} threads",
+            $self.get_proc_id(),
+            $self.name(),
             $self.get_proc_threads()
         );
 
         let proc_restart_delay = $self.get_proc_restart_delay();
         let mut wait_time = proc_restart_delay.0;
         loop {
-            if let Err(proc_err) = $self.internal_run($proc_name.clone()).await {
+            if let Err(proc_err) = $self.internal_run().await {
                 // Stop the processor immediately if ProSA is shutting down
                 if $self.is_stopping() {
                     // Remove the proc from main
@@ -483,8 +495,9 @@ macro_rules! proc_run {
                 // Log and restart if needed
                 if proc_err.recoverable() {
                     warn!(
-                        "Processor {} encounter an error `{}`. Will restart after {}ms",
-                        $proc_name,
+                        "Processor[{}] {} encounter an error `{}`. Will restart after {}ms",
+                        $self.get_proc_id(),
+                        $self.name(),
                         proc_err,
                         (wait_time + recovery_duration).as_millis()
                     );
@@ -495,8 +508,10 @@ macro_rules! proc_run {
                     }
                 } else {
                     error!(
-                        "Processor {} encounter a fatal error `{}`",
-                        $proc_name, proc_err
+                        "Processor[{}] {} encounter a fatal error `{}`",
+                        $self.get_proc_id(),
+                        $self.name(),
+                        proc_err
                     );
 
                     // Notify the main task of the error
@@ -539,14 +554,13 @@ macro_rules! proc_run {
 ///     adaptor <--> task
 ///     end
 /// ```
-pub trait Proc<A>: ProcEpilogue
+pub trait Proc<A>: ProcBusParam + ProcEpilogue
 where
     A: Adaptor,
 {
     /// Main loop of the processor to implement
     fn internal_run(
         &mut self,
-        name: String,
     ) -> impl std::future::Future<Output = Result<(), Box<dyn ProcError + Send + Sync>>> + Send;
 
     /// Get the number of processor threads the Processors's `Runtime` will use.
@@ -573,10 +587,10 @@ where
     ///     A: Adaptor,
     ///     P: Proc<A> + std::marker::Send + 'static,
     /// {
-    ///     Proc::<A>::run(proc, String::from("processor_name"));
+    ///     Proc::<A>::run(proc);
     /// }
     /// ```
-    fn run(mut self, proc_name: String)
+    fn run(mut self)
     where
         Self: Sized + 'static + std::marker::Send,
     {
@@ -584,21 +598,21 @@ where
             // Spawn the processor on the current Tokio runtime
             0 => {
                 spawn(async move {
-                    proc_run!(self, proc_name);
+                    proc_run!(self);
                 });
             }
             // Start a Tokio runtime on a single thread [default]
             1 => {
                 std::thread::Builder::new()
-                    .name(proc_name.clone())
+                    .name(self.name().to_string())
                     .spawn(move || {
                         runtime::Builder::new_current_thread()
                             .enable_all()
-                            .thread_name(proc_name.clone())
+                            .thread_name(self.name())
                             .build()
                             .unwrap()
                             .block_on(async {
-                                proc_run!(self, proc_name);
+                                proc_run!(self);
                             })
                     })
                     .unwrap();
@@ -606,16 +620,16 @@ where
             // Start a Tokio runtime on multiple threads
             n => {
                 std::thread::Builder::new()
-                    .name(proc_name.clone())
+                    .name(self.name().to_string())
                     .spawn(move || {
                         runtime::Builder::new_multi_thread()
                             .worker_threads(n)
                             .enable_all()
-                            .thread_name(proc_name.clone())
+                            .thread_name(self.name())
                             .build()
                             .unwrap()
                             .block_on(async {
-                                proc_run!(self, proc_name);
+                                proc_run!(self);
                             })
                     })
                     .unwrap();

@@ -199,9 +199,9 @@ fn generate_struct_impl_config(
         {
             type Settings = #settings;
 
-            fn create(proc_id: u32, main: prosa::core::main::Main<M>, settings: Self::Settings) -> Self {
+            fn create(proc_id: u32, proc_name: String, main: prosa::core::main::Main<M>, settings: Self::Settings) -> Self {
                 let (internal_tx_queue, internal_rx_queue) = tokio::sync::mpsc::channel(#queue_size);
-                let proc = prosa::core::proc::ProcParam::new(proc_id, internal_tx_queue, main);
+                let proc = prosa::core::proc::ProcParam::new(proc_id, proc_name, internal_tx_queue, main);
                 #item_ident {
                     proc,
                     service: std::default::Default::default(),

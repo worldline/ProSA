@@ -120,8 +120,8 @@ impl Default for InjSettings {
 ///
 /// // Launch an injector processor
 /// let inj_settings = InjSettings::new("INJ_TEST".into());
-/// let inj_proc = InjProc::<SimpleStringTvf>::create(1, bus.clone(), inj_settings);
-/// Proc::<InjDummyAdaptor>::run(inj_proc, String::from("INJ_PROC"));
+/// let inj_proc = InjProc::<SimpleStringTvf>::create(1, "INJ_PROC".to_string(), bus.clone(), inj_settings);
+/// Proc::<InjDummyAdaptor>::run(inj_proc);
 ///
 /// // Wait on main task
 /// //main.run().await;
@@ -133,7 +133,6 @@ pub struct InjProc {}
 impl InjProc {
     async fn process_internal<A>(
         &mut self,
-        name: &str,
         msg: InternalMsg<M>,
         adaptor: &mut A,
         regulator: &mut Regulator,
@@ -155,13 +154,13 @@ impl InjProc {
                 meter_trans_duration.record(
                     msg.elapsed().as_secs_f64(),
                     &[
-                        KeyValue::new("proc", name.to_string()),
+                        KeyValue::new("proc", self.name().to_string()),
                         KeyValue::new("service", msg.get_service().clone()),
                     ],
                 );
 
                 if let Some(response) = response_data {
-                    debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = name, service = msg.get_service(), response = format!("{:?}", response));
+                    debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = msg.get_service(), response = format!("{:?}", response));
                     adaptor.process_response(response, msg.get_service())?;
 
                     regulator.notify_receive_transaction(msg.elapsed());
@@ -194,7 +193,7 @@ impl<A> Proc<A> for InjProc
 where
     A: Adaptor + InjAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Initiate an adaptor for the inj processor
         let mut adaptor = A::new(self)?;
 
@@ -217,7 +216,6 @@ where
         while !self.service.exist_proc_service(&self.settings.service_name) {
             if let Some(msg) = self.internal_rx_queue.recv().await {
                 self.process_internal(
-                    name.as_str(),
                     msg,
                     &mut adaptor,
                     &mut regulator,
@@ -244,7 +242,7 @@ where
         loop {
             tokio::select! {
                 Some(msg) = self.internal_rx_queue.recv() => {
-                    self.process_internal(name.as_str(), msg, &mut adaptor, &mut regulator, &mut next_transaction, &meter_trans_duration).await?;
+                    self.process_internal(msg, &mut adaptor, &mut regulator, &mut next_transaction, &meter_trans_duration).await?;
                 }
                 _ = regulator.tick() => {
                     if let Some(service) = self.service.get_proc_service(&self.settings.service_name) {
@@ -254,7 +252,7 @@ where
                             RequestMsg::new(self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_service_queue())
                         };
 
-                        debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = name, service = self.settings.service_name, request = format!("{:?}", trans.get_data()));
+                        debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = self.name(), service = self.settings.service_name, request = format!("{:?}", trans.get_data()));
                         service.proc_queue.send(InternalMsg::Request(trans)).await?;
 
                         regulator.notify_send_transaction();
