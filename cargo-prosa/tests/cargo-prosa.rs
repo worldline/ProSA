@@ -1,11 +1,8 @@
-use std::path::PathBuf;
-use std::{env, fs};
+use std::{env, fs, path::PathBuf};
 
-use assert_cmd::cargo::cargo_bin_cmd;
-use assert_cmd::Command;
+use assert_cmd::{Command, cargo::cargo_bin_cmd};
 use cargo_prosa::CONFIGURATION_FILENAME;
-use predicates::Predicate;
-use predicates::prelude::predicate;
+use predicates::{Predicate, prelude::predicate};
 
 /// Getter of a ProSA cargo command to test
 fn cargo_prosa_command() -> Command {
