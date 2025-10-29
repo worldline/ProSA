@@ -10,8 +10,10 @@ license.workspace = true
 include.workspace = true
 
 [features]
-default = ["full"]
+default = ["serde", "dict", "full"]
 msg = []
+dict = []
+serde = ["dep:serde", "dep:regex", "chrono/serde", "bytes/serde"]
 config = ["dep:glob","dep:serde","dep:serde_yaml"]
 config-openssl = ["config", "dep:openssl", "dep:openssl-sys"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored", "openssl-sys/vendored"]
@@ -60,6 +62,9 @@ tokio = { workspace = true, optional = true }
 hyper = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
+
+# Dictionary
+regex = { version = "1", optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
