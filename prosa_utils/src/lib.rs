@@ -17,3 +17,6 @@ pub mod config;
 
 #[cfg(feature = "queue")]
 pub mod queue;
+
+#[cfg(feature = "dict")]
+pub mod dict;
