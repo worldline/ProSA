@@ -1,16 +1,17 @@
 use std::path::PathBuf;
 use std::{env, fs};
 
-use assert_cmd::{Command, cargo};
+use assert_cmd::cargo::cargo_bin_cmd;
+use assert_cmd::Command;
 use cargo_prosa::CONFIGURATION_FILENAME;
 use predicates::Predicate;
 use predicates::prelude::predicate;
 
 /// Getter of a ProSA cargo command to test
-fn cargo_prosa_command() -> Result<Command, cargo::CargoError> {
-    let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+fn cargo_prosa_command() -> Command {
+    let mut cmd = cargo_bin_cmd!(env!("CARGO_PKG_NAME"));
     cmd.arg("prosa");
-    Ok(cmd)
+    cmd
 }
 
 /// To test the dummy ProSA, we need to change the dependencies to take the local one
@@ -37,7 +38,7 @@ fn replace_prosa_dependencies(prosa_path: &PathBuf) {
 #[test]
 fn errors() -> Result<(), Box<dyn std::error::Error>> {
     // Try unknown command
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.arg("dummy");
     cmd.assert().failure().code(2).stderr("error: unrecognized subcommand 'dummy'\n\nUsage: cargo prosa <COMMAND>\n\nFor more information, try '--help'.\n");
 
@@ -55,7 +56,7 @@ fn project() -> Result<(), Box<dyn std::error::Error>> {
     let _ = fs::remove_dir_all(&prosa_path);
 
     // Generate a dummy project
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&temp_dir);
     cmd.args(["new", "--deb", PROSA_NAME]);
     cmd.assert()
@@ -66,7 +67,7 @@ fn project() -> Result<(), Box<dyn std::error::Error>> {
     replace_prosa_dependencies(&prosa_path);
 
     // List all component available for ProSA
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.arg("list");
     cmd.assert().success().stdout(predicate::str::is_match(
@@ -89,7 +90,7 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     )?);
 
     // Add a stub processor (dry_run)
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args([
         "add",
@@ -108,14 +109,14 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     assert!(!predicate_stub_proc.eval(fs::read_to_string(&prosa_toml_path)?.as_str()));
 
     // Add a stub processor
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["add", "-n", "stub-1", "-a", "StubParotAdaptor", "stub"]);
     cmd.assert().success();
     assert!(predicate_stub_proc.eval(fs::read_to_string(&prosa_toml_path)?.as_str()));
 
     // Change the main task processor (dry_run)
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["main", "--dry_run", "MainProc"]);
     cmd.assert()
@@ -123,13 +124,13 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
         .stdout("Will replace main proc with prosa::core::main::MainProc\n");
 
     // Change the main task processor
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["main", "MainProc"]);
     cmd.assert().success();
 
     // Change the tvf use for ProSA (dry_run)
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["tvf", "--dry_run", "SimpleStringTvf"]);
     cmd.assert().success().stdout(
@@ -137,7 +138,7 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     );
 
     // Change the tvf use for ProSA
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["tvf", "SimpleStringTvf"]);
     cmd.assert().success();
@@ -161,7 +162,7 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     let build_path = prosa_path.join("build.rs");
     let _ = fs::remove_file(&build_path);
     assert!(!build_path.exists());
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.arg("update");
     cmd.assert().success();
@@ -175,7 +176,7 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     let _ = fs::remove_file(&containerfile_path);
     let _ = fs::remove_file(&dockerfile_path);
     assert!(!containerfile_path.exists() && !dockerfile_path.exists());
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["container", containerfile_path.to_str().unwrap()]);
     cmd.assert().success().stdout(predicate::str::is_match(
@@ -183,7 +184,7 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
   `podman build -f .*/dummy-test-prosa/Containerfile -t dummy-test-prosa:0\.1\.0 \.`",
     )?);
     assert!(containerfile_path.exists());
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args([
         "container",
@@ -200,14 +201,14 @@ If you have an external git dependency, specify your ssh agent with:
     assert!(dockerfile_path.exists());
 
     // Remove a stub processor (dry_run)
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["remove", "--dry_run", "stub-1"]);
     cmd.assert().success().stdout("Will remove stub-1\n");
     assert!(predicate_stub_proc.eval(fs::read_to_string(&prosa_toml_path)?.as_str()));
 
     // Remove a stub processor
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["remove", "stub-1"]);
     cmd.assert().success();
@@ -217,7 +218,7 @@ If you have an external git dependency, specify your ssh agent with:
     let _ = fs::remove_file(&build_path);
     let _ = fs::remove_file(prosa_path.join("Cargo.toml"));
     assert!(!build_path.exists());
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.arg("init");
     cmd.assert().success();
@@ -225,7 +226,7 @@ If you have an external git dependency, specify your ssh agent with:
     replace_prosa_dependencies(&prosa_path);
 
     // Get Bash command completion
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["completion", "bash"]);
     cmd.assert()
@@ -233,7 +234,7 @@ If you have an external git dependency, specify your ssh agent with:
         .stdout(predicate::str::contains("cargo__prosa"));
 
     // Get Zsh command completion
-    let mut cmd = cargo_prosa_command()?;
+    let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
     cmd.args(["completion", "zsh"]);
     cmd.assert()
