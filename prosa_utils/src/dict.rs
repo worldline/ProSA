@@ -20,7 +20,7 @@ pub mod deserialize;
 use crate::dict::field_type::TvfType;
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
-/// Binding between a TVF message and a dictionary
+/// Binding between a TVF message and a dictionary.
 pub struct LabeledTvf<'dict, 'tvf, P, T>
 where
     P: Clone,

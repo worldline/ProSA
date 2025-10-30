@@ -28,6 +28,7 @@ where
 }
 
 /// Helper struct for serializing a TVF message with an associated dictionary
+#[doc(hidden)]
 struct SerialTvf<'dict, 'tvf, P, T>
 where
     T: Tvf + Clone,
@@ -43,6 +44,7 @@ where
 }
 
 /// Helper struct for serializing a TVF representing a list
+#[doc(hidden)]
 struct SerialListTvf<'dict, 'tvf, P, T>
 where
     T: Tvf + Clone,
