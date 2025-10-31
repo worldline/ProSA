@@ -68,7 +68,7 @@ pub trait Tvf {
     /// Get a sub buffer from a TVF
     fn get_buffer(&self, id: usize) -> Result<Cow<'_, Self>, TvfError>
     where
-        Self: Tvf + Default + Debug + Clone;
+        Self: Tvf + Clone;
     /// Get an unsigned value from a TVF
     fn get_unsigned(&self, id: usize) -> Result<u64, TvfError>;
     /// Get a signed value from a TVF
@@ -83,14 +83,14 @@ pub trait Tvf {
     fn get_bytes(&self, id: usize) -> Result<Cow<'_, Bytes>, TvfError>;
     /// Get a date field from a TVF
     fn get_date(&self, id: usize) -> Result<NaiveDate, TvfError>;
-    /// Get a datetime field from  a TVF.  
+    /// Get a datetime field from  a TVF.
     /// The timestamp is considered to be UTC.
     fn get_datetime(&self, id: usize) -> Result<NaiveDateTime, TvfError>;
 
     /// Put a buffer as sub field into a TVF
     fn put_buffer(&mut self, id: usize, buffer: Self)
     where
-        Self: Tvf + Default + Debug + Clone;
+        Self: Tvf;
     /// Put an unsigned value to a TVF
     fn put_unsigned(&mut self, id: usize, unsigned: u64);
     /// Put a signed value to a TVF
@@ -105,7 +105,7 @@ pub trait Tvf {
     fn put_bytes(&mut self, id: usize, buffer: Bytes);
     /// Put a date into a TVF
     fn put_date(&mut self, id: usize, date: NaiveDate);
-    /// Put a datetime into a TVF.  
+    /// Put a datetime into a TVF.
     /// The timestamp is considered to be UTC.
     fn put_datetime(&mut self, id: usize, datetime: NaiveDateTime);
 }

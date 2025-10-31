@@ -6,13 +6,18 @@ use serde::{
     Serialize, Serializer,
     ser::{self, SerializeMap, SerializeSeq},
 };
-use std::fmt::Debug;
+
+#[derive(Clone)]
+pub struct SerializeConfig {
+    /// If an entry is not known in the dictionary, simply ignore it
+    pub ignore_unknown: bool,
+}
 
 /// Serialize a labeled TVF message with serde
 impl<P, T> Serialize for LabeledTvf<'_, '_, P, T>
 where
     P: Clone,
-    T: Clone + Tvf + Default + Debug + Serialize,
+    T: Clone + Tvf + Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -62,7 +67,7 @@ where
 impl<P, T> Serialize for SerialTvf<'_, '_, P, T>
 where
     P: Clone,
-    T: Clone + Tvf + Default + Debug + Serialize,
+    T: Clone + Tvf + Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -131,7 +136,7 @@ where
 impl<P, T> Serialize for SerialListTvf<'_, '_, P, T>
 where
     P: Clone,
-    T: Clone + Tvf + Default + Debug + Serialize,
+    T: Clone + Tvf + Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -181,7 +186,7 @@ where
 /// Serialize the TVF value
 impl<T> Serialize for TvfValue<'_, T>
 where
-    T: Tvf + Clone + Default + Debug + Serialize,
+    T: Tvf + Clone + Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
