@@ -1,4 +1,4 @@
-use super::{Dictionary, Entry};
+use super::Dictionary;
 use crate::{
     dict::{
         EntryType,
@@ -15,10 +15,16 @@ use serde::{
 };
 use std::{
     borrow::Cow,
-    fmt::{self, Debug},
+    fmt::{self},
     marker::PhantomData,
     sync::{Arc, LazyLock},
 };
+
+#[derive(Clone)]
+pub struct DeserializeConfig {
+    /// If an entry is not known in the dictionary, simply ignore it
+    pub ignore_unknown: bool,
+}
 
 /// Bind a dictionary to this deserializer to convert a serde compatible payload into a TVF message.
 pub struct DictDeserializer<P, T>
@@ -52,7 +58,7 @@ where
 impl<'de, P, T> DeserializeSeed<'de> for DictDeserializer<P, T>
 where
     P: Clone + 'de,
-    T: Default + Tvf + Clone + Debug + Deserialize<'de>,
+    T: Clone + Tvf + Default + Deserialize<'de>,
 {
     type Value = T;
 
@@ -75,7 +81,7 @@ where
         impl<'de, 'dict, P, T> de::Visitor<'de> for __Visitor<'de, 'dict, P, T>
         where
             P: Clone + 'de,
-            T: Default + Tvf + Clone + Debug + Deserialize<'de>,
+            T: Clone + Tvf + Default + Deserialize<'de>,
         {
             type Value = T;
 
@@ -222,6 +228,8 @@ where
 {
     ignore_unknown: bool,
 
+    is_repeatable: bool,
+
     ///
     entry_type: &'dict EntryType<P>,
 
@@ -234,9 +242,10 @@ impl<'dict, 'tvf, P, T> SeedValue<'dict, 'tvf, P, T>
 where
     P: Clone,
 {
-    fn new(ignore_unknown: bool, entry_type: &'dict EntryType<P>) -> Self {
+    fn new(ignore_unknown: bool, is_repeatable: bool, entry_type: &'dict EntryType<P>) -> Self {
         Self {
             ignore_unknown,
+            is_repeatable,
             entry_type,
             marker: PhantomData,
             lifetime: PhantomData,
@@ -247,7 +256,7 @@ where
 impl<'de, 'dict, 'tvf, P, T> de::DeserializeSeed<'de> for SeedValue<'dict, 'tvf, P, T>
 where
     P: Clone,
-    T: 'tvf + Tvf + Clone,
+    T: Clone + Tvf + Default + 'tvf,
 {
     type Value = TvfValue<'tvf, T>;
 
@@ -291,9 +300,22 @@ where
         struct __VisitorBuffer<'de, 'dict, 'tvf, P, T>
         where
             P: Clone,
+            T: Tvf + Default,
         {
             ignore_unknown: bool,
             dictionary: &'dict Dictionary<P>,
+            lifetime: PhantomData<&'de ()>,
+            marker: PhantomData<&'tvf T>,
+        }
+
+        #[doc(hidden)]
+        struct __VisitorList<'de, 'dict, 'tvf, P, T>
+        where
+            P: Clone,
+            T: Tvf + Default,
+        {
+            ignore_unknown: bool,
+            entry_type: &'dict EntryType<P>,
             lifetime: PhantomData<&'de ()>,
             marker: PhantomData<&'tvf T>,
         }
@@ -522,41 +544,129 @@ where
             }
         }
 
+        impl<'de, 'dict, 'tvf, P, T> de::Visitor<'de> for __VisitorBuffer<'de, 'dict, 'tvf, P, T>
+        where
+            P: Clone,
+            T: Clone + Tvf + Default,
+        {
+            type Value = T;
+
+            #[inline]
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write![formatter, "TVF Buffer"]
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut message = T::default();
+
+                while let Some(field) =
+                    map.next_key_seed(SeedTag::new(self.ignore_unknown, self.dictionary))?
+                {
+                    // If option ignore_unknown is set, we may simply skip unknown nodes
+                    if let FieldTagged::Identified {
+                        tag,
+                        is_repeatable,
+                        entry_type,
+                    } = field
+                    {
+                        let value = map.next_value_seed(SeedValue::new(
+                            self.ignore_unknown,
+                            is_repeatable,
+                            entry_type,
+                        ))?;
+                        value.insert_in(&mut message, tag);
+                    }
+                }
+
+                Ok(message)
+            }
+        }
+
+        impl<'de, 'dict, 'tvf, P, T> de::Visitor<'de> for __VisitorList<'de, 'dict, 'tvf, P, T>
+        where
+            P: Clone,
+            T: Clone + Tvf + Default,
+        {
+            type Value = T;
+
+            #[inline]
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write![formatter, "TVF Buffer representing a List"]
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut message = T::default();
+                let mut index = 1;
+
+                while let Some(value) = seq.next_element_seed(SeedValue::new(
+                    self.ignore_unknown,
+                    false,
+                    self.entry_type,
+                ))? {
+                    value.insert_in(&mut message, index);
+                    index += 1;
+                }
+
+                Ok(message)
+            }
+        }
+
         // Given expected type for this entry, use the appropriate visitor
-        let value = match self.entry_type {
-            EntryType::Leaf(TvfType::Byte) => {
-                TvfValue::Byte(deserializer.deserialize_u8(__VisitorByte::default())?)
-            }
-            EntryType::Leaf(TvfType::Unsigned) => {
-                TvfValue::Unsigned(deserializer.deserialize_u64(__VisitorUnsigned::default())?)
-            }
-            EntryType::Leaf(TvfType::Signed) => {
-                TvfValue::Signed(deserializer.deserialize_i64(__VisitorSigned::default())?)
-            }
-            EntryType::Leaf(TvfType::Float) => {
-                TvfValue::Float(deserializer.deserialize_f64(__VisitorFloat::default())?)
-            }
-            EntryType::Leaf(TvfType::String) => TvfValue::String(Cow::Owned(
-                deserializer.deserialize_string(__VisitorString::default())?,
-            )),
-            EntryType::Leaf(TvfType::Bytes) => TvfValue::Bytes(Cow::Owned(
-                deserializer.deserialize_byte_buf(__VisitorBytes::default())?,
-            )),
-            EntryType::Leaf(TvfType::Date) => {
-                TvfValue::Date(deserializer.deserialize_any(__VisitorDate::default())?)
-            }
-            EntryType::Leaf(TvfType::DateTime) => {
-                TvfValue::DateTime(deserializer.deserialize_any(__VisitorDateTime::default())?)
-            }
-            EntryType::Leaf(TvfType::Buffer) => {
-                //TvfValue::Buffer(deserializer.deserialize_any(__VisitorBuffer::default())?)
-                todo!()
-            }
-            EntryType::Node(dict) => {
-                //TvfValue::Buffer(deserializer.deserialize_any(__VisitorBuffer::default())?)
-                todo!()
-            }
-        };
-        Ok(value)
+        if self.is_repeatable {
+            let value =
+                TvfValue::Buffer(Cow::Owned(deserializer.deserialize_seq(__VisitorList {
+                    ignore_unknown: self.ignore_unknown,
+                    entry_type: self.entry_type,
+                    lifetime: PhantomData,
+                    marker: PhantomData,
+                })?));
+            Ok(value)
+        } else {
+            let value = match self.entry_type {
+                EntryType::Leaf(TvfType::Byte) => {
+                    TvfValue::Byte(deserializer.deserialize_u8(__VisitorByte::default())?)
+                }
+                EntryType::Leaf(TvfType::Unsigned) => {
+                    TvfValue::Unsigned(deserializer.deserialize_u64(__VisitorUnsigned::default())?)
+                }
+                EntryType::Leaf(TvfType::Signed) => {
+                    TvfValue::Signed(deserializer.deserialize_i64(__VisitorSigned::default())?)
+                }
+                EntryType::Leaf(TvfType::Float) => {
+                    TvfValue::Float(deserializer.deserialize_f64(__VisitorFloat::default())?)
+                }
+                EntryType::Leaf(TvfType::String) => TvfValue::String(Cow::Owned(
+                    deserializer.deserialize_string(__VisitorString::default())?,
+                )),
+                EntryType::Leaf(TvfType::Bytes) => TvfValue::Bytes(Cow::Owned(
+                    deserializer.deserialize_byte_buf(__VisitorBytes::default())?,
+                )),
+                EntryType::Leaf(TvfType::Date) => {
+                    TvfValue::Date(deserializer.deserialize_any(__VisitorDate::default())?)
+                }
+                EntryType::Leaf(TvfType::DateTime) => {
+                    TvfValue::DateTime(deserializer.deserialize_any(__VisitorDateTime::default())?)
+                }
+                EntryType::Leaf(TvfType::Buffer) => {
+                    //TvfValue::Buffer(deserializer.deserialize_any(__VisitorBuffer::default())?)
+                    todo!()
+                }
+                EntryType::Node(dict) => TvfValue::Buffer(Cow::Owned(
+                    deserializer.deserialize_map(__VisitorBuffer {
+                        ignore_unknown: self.ignore_unknown,
+                        dictionary: dict.as_ref(),
+                        lifetime: PhantomData,
+                        marker: PhantomData,
+                    })?,
+                )),
+            };
+            Ok(value)
+        }
     }
 }
