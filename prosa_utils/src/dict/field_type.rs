@@ -132,7 +132,7 @@ impl<T: Tvf + Clone> From<T> for TvfValue<'_, T> {
 
 impl<'v, T> TvfValue<'v, T>
 where
-    T: Tvf + Clone + Default + Debug,
+    T: Tvf + Clone,
 {
     /// Extract a TVF value from a message with an expected type
     pub fn from_message_with_type(
