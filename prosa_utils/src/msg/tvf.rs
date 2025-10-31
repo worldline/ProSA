@@ -83,7 +83,7 @@ pub trait Tvf {
     fn get_bytes(&self, id: usize) -> Result<Cow<'_, Bytes>, TvfError>;
     /// Get a date field from a TVF
     fn get_date(&self, id: usize) -> Result<NaiveDate, TvfError>;
-    /// Get a datetime field from  a TVF.  
+    /// Get a datetime field from  a TVF.
     /// The timestamp is considered to be UTC.
     fn get_datetime(&self, id: usize) -> Result<NaiveDateTime, TvfError>;
 
@@ -105,7 +105,7 @@ pub trait Tvf {
     fn put_bytes(&mut self, id: usize, buffer: Bytes);
     /// Put a date into a TVF
     fn put_date(&mut self, id: usize, date: NaiveDate);
-    /// Put a datetime into a TVF.  
+    /// Put a datetime into a TVF.
     /// The timestamp is considered to be UTC.
     fn put_datetime(&mut self, id: usize, datetime: NaiveDateTime);
 }
