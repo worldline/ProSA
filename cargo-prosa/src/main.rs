@@ -117,7 +117,7 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
         "-F",
         "toml,json,yaml,json5,convert-case,async"
     );
-    let cargo_add_tracing = cargo!("add", Some(path), "tracing");
+    let cargo_add_log = cargo!("add", Some(path), "log");
 
     // Add build dependencies
     let cargo_add_build_cargo_prosa = cargo!("add", Some(path), "--build", "cargo-prosa");
@@ -133,7 +133,7 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
         && cargo_add_tokio.status.success()
         && cargo_add_serde.status.success()
         && cargo_add_config.status.success()
-        && cargo_add_tracing.status.success()
+        && cargo_add_log.status.success()
         && cargo_add_build_cargo_prosa.status.success()
         && cargo_add_build_toml.status.success()
     {
