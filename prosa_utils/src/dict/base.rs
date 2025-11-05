@@ -68,4 +68,10 @@ impl<P> Entry<P> {
             _ => None,
         }
     }
+
+    /// Get the payload of the entry
+    #[inline]
+    pub fn get_payload(&self) -> &P {
+        &self.payload
+    }
 }
