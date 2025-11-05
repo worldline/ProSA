@@ -7,12 +7,6 @@ use serde::{
     ser::{self, SerializeMap, SerializeSeq},
 };
 
-#[derive(Clone)]
-pub struct SerializeConfig {
-    /// If an entry is not known in the dictionary, simply ignore it
-    pub ignore_unknown: bool,
-}
-
 /// Serialize a labeled TVF message with serde
 impl<P, T> Serialize for LabeledTvf<'_, '_, P, T>
 where
@@ -23,7 +17,7 @@ where
     where
         S: serde::Serializer,
     {
-        let serial = SerialTvf {
+        let serial = __SerialTvf {
             ignore_unknown: self.ignore_unknown,
             dictionary: self.dictionary.as_ref(),
             message: self.message.as_ref(),
@@ -34,7 +28,7 @@ where
 
 /// Helper struct for serializing a TVF message with an associated dictionary
 #[doc(hidden)]
-struct SerialTvf<'dict, 'tvf, P, T>
+struct __SerialTvf<'dict, 'tvf, P, T>
 where
     T: Tvf + Clone,
 {
@@ -50,7 +44,7 @@ where
 
 /// Helper struct for serializing a TVF representing a list
 #[doc(hidden)]
-struct SerialListTvf<'dict, 'tvf, P, T>
+struct __SerialListTvf<'dict, 'tvf, P, T>
 where
     T: Tvf + Clone,
 {
@@ -64,7 +58,7 @@ where
     message: &'tvf T,
 }
 
-impl<P, T> Serialize for SerialTvf<'_, '_, P, T>
+impl<P, T> Serialize for __SerialTvf<'_, '_, P, T>
 where
     P: Clone,
     T: Clone + Tvf + Serialize,
@@ -93,7 +87,7 @@ where
                         Ok(list) => list,
                         Err(err) => return Err(convert_error(&err)),
                     };
-                    let sub_serial = SerialListTvf {
+                    let sub_serial = __SerialListTvf {
                         ignore_unknown: self.ignore_unknown,
                         entry_type: &entry.entry_type,
                         message: sub_list.as_ref(),
@@ -116,7 +110,7 @@ where
                                 Ok(sub_msg) => sub_msg,
                                 Err(err) => return Err(convert_error(&err)),
                             };
-                            let sub_serial = SerialTvf {
+                            let sub_serial = __SerialTvf {
                                 ignore_unknown: self.ignore_unknown,
                                 dictionary: sub_dict.as_ref(),
                                 message: sub_msg.as_ref(),
@@ -133,7 +127,7 @@ where
     }
 }
 
-impl<P, T> Serialize for SerialListTvf<'_, '_, P, T>
+impl<P, T> Serialize for __SerialListTvf<'_, '_, P, T>
 where
     P: Clone,
     T: Clone + Tvf + Serialize,
@@ -168,7 +162,7 @@ where
                         Ok(sub_msg) => sub_msg,
                         Err(err) => return Err(convert_error(&err)),
                     };
-                    let sub_serial = SerialTvf {
+                    let sub_serial = __SerialTvf {
                         ignore_unknown: self.ignore_unknown,
                         dictionary: sub_dict.as_ref(),
                         message: sub_msg.as_ref(),

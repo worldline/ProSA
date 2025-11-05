@@ -20,12 +20,6 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-#[derive(Clone)]
-pub struct DeserializeConfig {
-    /// If an entry is not known in the dictionary, simply ignore it
-    pub ignore_unknown: bool,
-}
-
 /// Bind a dictionary to this deserializer to convert a serde compatible payload into a TVF message.
 pub struct DictDeserializer<P, T>
 where
@@ -66,67 +60,16 @@ where
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
-        // visitor over the sequence or map
-        #[doc(hidden)]
-        struct __Visitor<'de, 'dict, P, T>
-        where
-            P: Clone,
-        {
-            ignore_unknown: bool,
-            dictionary: &'dict Dictionary<P>,
-            lifetime: PhantomData<&'de ()>,
-            marker: PhantomData<T>,
-        }
-
-        impl<'de, 'dict, P, T> de::Visitor<'de> for __Visitor<'de, 'dict, P, T>
-        where
-            P: Clone + 'de,
-            T: Clone + Tvf + Default + Deserialize<'de>,
-        {
-            type Value = T;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write![formatter, "TVF message"]
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                let mut message = T::default();
-
-                while let Some(field) =
-                    map.next_key_seed(SeedTag::new(self.ignore_unknown, self.dictionary))?
-                {
-                    // If option ignore_unknown is set, we may simply skip unknown nodes
-                    if let FieldTagged::Identified {
-                        tag,
-                        is_repeatable,
-                        entry_type,
-                    } = field
-                    {
-                        if is_repeatable {
-                        } else {
-                        }
-                    }
-                }
-
-                Ok(message)
-            }
-        }
-
-        deserializer.deserialize_any(__Visitor {
-            ignore_unknown: self.ignore_unknown,
-            dictionary: self.dictionary.as_ref(),
-            lifetime: PhantomData,
-            marker: PhantomData,
-        })
+        deserializer.deserialize_map(__VisitorBuffer::new(
+            self.ignore_unknown,
+            self.dictionary.as_ref(),
+        ))
     }
 }
 
 // Seed for identifying tags based on label
 #[doc(hidden)]
-struct SeedTag<'dict, P>
+struct __SeedTag<'dict, P>
 where
     P: Clone,
 {
@@ -135,26 +78,28 @@ where
 }
 
 #[doc(hidden)]
-enum FieldTagged<'dict, P> {
+enum __FieldTagged<'dict, P> {
     /// The field could not be identified from the label
     Unknown,
 
     /// The field has been identified
     Identified {
-        ///
+        /// Tag of the field
         tag: usize,
 
+        /// Does the field depict a list of entries
         is_repeatable: bool,
 
-        ///
+        /// Type of the one or multiple entries
         entry_type: &'dict EntryType<P>,
     },
 }
 
-impl<'dict, P> SeedTag<'dict, P>
+impl<'dict, P> __SeedTag<'dict, P>
 where
     P: Clone,
 {
+    /// Construct a new seed for deserializing a TVF tag
     fn new(ignore_unknown: bool, dictionary: &'dict Dictionary<P>) -> Self {
         Self {
             ignore_unknown,
@@ -163,11 +108,11 @@ where
     }
 }
 
-impl<'de, 'dict, P> de::DeserializeSeed<'de> for SeedTag<'dict, P>
+impl<'de, 'dict, P> de::DeserializeSeed<'de> for __SeedTag<'dict, P>
 where
     P: Clone,
 {
-    type Value = FieldTagged<'dict, P>;
+    type Value = __FieldTagged<'dict, P>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
     where
@@ -188,7 +133,7 @@ where
         where
             P: Clone,
         {
-            type Value = FieldTagged<'dict, P>;
+            type Value = __FieldTagged<'dict, P>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 write![formatter, "TVF identifier"]
@@ -197,13 +142,13 @@ where
             fn visit_str<E: de::Error>(self, label: &str) -> Result<Self::Value, E> {
                 if let Some((tag, entry)) = self.dictionary.label_to_tag.get(label) {
                     let entry = entry.as_ref();
-                    Ok(FieldTagged::Identified {
+                    Ok(__FieldTagged::Identified {
                         tag: *tag,
                         is_repeatable: entry.is_repeatable,
                         entry_type: &entry.entry_type,
                     })
                 } else if self.ignore_unknown {
-                    Ok(FieldTagged::Unknown)
+                    Ok(__FieldTagged::Unknown)
                 } else {
                     Err(de::Error::unknown_field(
                         label,
@@ -222,38 +167,39 @@ where
 }
 
 #[doc(hidden)]
-struct SeedValue<'dict, 'tvf, P, T>
+struct __SeedValue<'dict, 'tvf, P, T>
 where
     P: Clone,
 {
+    /// Ignore unknown fields instead of raising an error
     ignore_unknown: bool,
 
+    /// Is the field a list or a single value
     is_repeatable: bool,
 
-    ///
+    /// The type of value we expect to deserialize
     entry_type: &'dict EntryType<P>,
 
-    marker: PhantomData<T>,
-
-    lifetime: PhantomData<&'tvf ()>,
+    /// Bind lifetime and type of TVF message to generate
+    marker: PhantomData<&'tvf T>,
 }
 
-impl<'dict, 'tvf, P, T> SeedValue<'dict, 'tvf, P, T>
+impl<'dict, 'tvf, P, T> __SeedValue<'dict, 'tvf, P, T>
 where
     P: Clone,
 {
+    /// Construct a new seed for deserializing a TVF value
     fn new(ignore_unknown: bool, is_repeatable: bool, entry_type: &'dict EntryType<P>) -> Self {
         Self {
             ignore_unknown,
             is_repeatable,
             entry_type,
             marker: PhantomData,
-            lifetime: PhantomData,
         }
     }
 }
 
-impl<'de, 'dict, 'tvf, P, T> de::DeserializeSeed<'de> for SeedValue<'dict, 'tvf, P, T>
+impl<'de, 'dict, 'tvf, P, T> de::DeserializeSeed<'de> for __SeedValue<'dict, 'tvf, P, T>
 where
     P: Clone,
     T: Clone + Tvf + Default + 'tvf,
@@ -295,18 +241,6 @@ where
         #[doc(hidden)]
         #[derive(Default)]
         struct __VisitorDateTime<'de>(PhantomData<&'de ()>);
-
-        #[doc(hidden)]
-        struct __VisitorBuffer<'de, 'dict, 'tvf, P, T>
-        where
-            P: Clone,
-            T: Tvf + Default,
-        {
-            ignore_unknown: bool,
-            dictionary: &'dict Dictionary<P>,
-            lifetime: PhantomData<&'de ()>,
-            marker: PhantomData<&'tvf T>,
-        }
 
         #[doc(hidden)]
         struct __VisitorList<'de, 'dict, 'tvf, P, T>
@@ -544,47 +478,6 @@ where
             }
         }
 
-        impl<'de, 'dict, 'tvf, P, T> de::Visitor<'de> for __VisitorBuffer<'de, 'dict, 'tvf, P, T>
-        where
-            P: Clone,
-            T: Clone + Tvf + Default,
-        {
-            type Value = T;
-
-            #[inline]
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write![formatter, "TVF Buffer"]
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                let mut message = T::default();
-
-                while let Some(field) =
-                    map.next_key_seed(SeedTag::new(self.ignore_unknown, self.dictionary))?
-                {
-                    // If option ignore_unknown is set, we may simply skip unknown nodes
-                    if let FieldTagged::Identified {
-                        tag,
-                        is_repeatable,
-                        entry_type,
-                    } = field
-                    {
-                        let value = map.next_value_seed(SeedValue::new(
-                            self.ignore_unknown,
-                            is_repeatable,
-                            entry_type,
-                        ))?;
-                        value.insert_in(&mut message, tag);
-                    }
-                }
-
-                Ok(message)
-            }
-        }
-
         impl<'de, 'dict, 'tvf, P, T> de::Visitor<'de> for __VisitorList<'de, 'dict, 'tvf, P, T>
         where
             P: Clone,
@@ -604,7 +497,7 @@ where
                 let mut message = T::default();
                 let mut index = 1;
 
-                while let Some(value) = seq.next_element_seed(SeedValue::new(
+                while let Some(value) = seq.next_element_seed(__SeedValue::new(
                     self.ignore_unknown,
                     false,
                     self.entry_type,
@@ -654,19 +547,87 @@ where
                     TvfValue::DateTime(deserializer.deserialize_any(__VisitorDateTime::default())?)
                 }
                 EntryType::Leaf(TvfType::Buffer) => {
-                    //TvfValue::Buffer(deserializer.deserialize_any(__VisitorBuffer::default())?)
-                    todo!()
+                    // If the buffer is not backed by a dictionary, we raise an error
+                    return Err(de::Error::custom(
+                        "entry is of type TVF buffer but no dictionary is associated",
+                    ));
                 }
-                EntryType::Node(dict) => TvfValue::Buffer(Cow::Owned(
-                    deserializer.deserialize_map(__VisitorBuffer {
-                        ignore_unknown: self.ignore_unknown,
-                        dictionary: dict.as_ref(),
-                        lifetime: PhantomData,
-                        marker: PhantomData,
-                    })?,
-                )),
+                EntryType::Node(dict) => {
+                    TvfValue::Buffer(Cow::Owned(deserializer.deserialize_map(
+                        __VisitorBuffer::new(self.ignore_unknown, dict.as_ref()),
+                    )?))
+                }
             };
             Ok(value)
         }
+    }
+}
+
+#[doc(hidden)]
+struct __VisitorBuffer<'de, 'dict, 'tvf, P, T>
+where
+    P: Clone,
+    T: Tvf + Default,
+{
+    ignore_unknown: bool,
+    dictionary: &'dict Dictionary<P>,
+    lifetime: PhantomData<&'de ()>,
+    marker: PhantomData<&'tvf T>,
+}
+
+impl<'de, 'dict, 'tvf, P, T> __VisitorBuffer<'de, 'dict, 'tvf, P, T>
+where
+    P: Clone,
+    T: Tvf + Default,
+{
+    /// Construct a new visitor for deserializing a TVF buffer
+    fn new(ignore_unknown: bool, dictionary: &'dict Dictionary<P>) -> Self {
+        Self {
+            ignore_unknown,
+            dictionary,
+            lifetime: PhantomData,
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<'de, 'dict, 'tvf, P, T> de::Visitor<'de> for __VisitorBuffer<'de, 'dict, 'tvf, P, T>
+where
+    P: Clone,
+    T: Clone + Tvf + Default,
+{
+    type Value = T;
+
+    #[inline]
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write![formatter, "TVF Buffer"]
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut message = T::default();
+
+        while let Some(field) =
+            map.next_key_seed(__SeedTag::new(self.ignore_unknown, self.dictionary))?
+        {
+            // If option ignore_unknown is set, we may simply skip unknown nodes
+            if let __FieldTagged::Identified {
+                tag,
+                is_repeatable,
+                entry_type,
+            } = field
+            {
+                let value = map.next_value_seed(__SeedValue::new(
+                    self.ignore_unknown,
+                    is_repeatable,
+                    entry_type,
+                ))?;
+                value.insert_in(&mut message, tag);
+            }
+        }
+
+        Ok(message)
     }
 }
