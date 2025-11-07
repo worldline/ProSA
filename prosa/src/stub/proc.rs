@@ -58,8 +58,8 @@ impl StubSettings {
 ///
 /// // Launch a stub processor
 /// let stub_settings = StubSettings::new(vec![String::from("STUB_TEST")]);
-/// let stub_proc = StubProc::<SimpleStringTvf>::create(1, bus.clone(), stub_settings);
-/// Proc::<StubParotAdaptor>::run(stub_proc, String::from("STUB_PROC"));
+/// let stub_proc = StubProc::<SimpleStringTvf>::create(1, "STUB_PROC".to_string(), bus.clone(), stub_settings);
+/// Proc::<StubParotAdaptor>::run(stub_proc);
 ///
 /// // Wait on main task
 /// //main_task.await;
@@ -72,7 +72,7 @@ impl<A> Proc<A> for StubProc
 where
     A: 'static + Adaptor + StubAdaptor<M> + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&mut self, name: String) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         // Initiate an adaptor for the stub processor
         let adaptor = Arc::new(A::new(self)?);
 
@@ -91,7 +91,7 @@ where
                         let request_data = msg.take_data().ok_or(BusError::NoData)?;
                         let enter_span = msg.enter_span();
 
-                        debug!(name: "stub_proc_request", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = name, stub_service = msg.get_service(), "{:?}", msg.get_data());
+                        debug!(name: "stub_proc_request", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = self.name(), stub_service = msg.get_service(), "{:?}", msg.get_data());
 
                         match adaptor.process_request(msg.get_service(), request_data) {
                             MaybeAsync::Ready(Ok(resp)) => {

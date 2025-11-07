@@ -482,14 +482,14 @@ mod tests {
         // Launch the test processor
         assert_eq!(
             Ok(()),
-            TestProc::<SimpleStringTvf>::create_raw(1, bus.clone())
+            TestProc::<SimpleStringTvf>::create_raw(1, "test1".to_string(), bus.clone())
                 .timers_timeout_run()
                 .await
         );
 
         assert_eq!(
             Ok(()),
-            TestProc::<SimpleStringTvf>::create_raw(2, bus.clone())
+            TestProc::<SimpleStringTvf>::create_raw(2, "test2".to_string(), bus.clone())
                 .pending_msgs_timeout_run()
                 .await
         );

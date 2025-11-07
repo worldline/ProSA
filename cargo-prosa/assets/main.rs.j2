@@ -1,16 +1,16 @@
 //! Main ProSA file binary
-
-use serde::{{ '{' }}Deserialize, Serialize{{ '}' }};
-
-use tracing::{{ '{' }}debug, info{{ '}' }};
+{% raw %}
+use serde::{Deserialize, Serialize};
 
 use tokio::runtime;
 
 use prosa_utils::config::tracing::TelemetryFilter;
-use prosa::core::main::MainRunnable;
-use prosa::core::settings::Settings;
-use prosa::core::proc::ProcConfig;
-
+use prosa::core::{
+    main::MainRunnable,
+    proc::ProcConfig,
+    settings::Settings
+};
+{% endraw %}
 // Include settings
 include!(concat!(env!("OUT_DIR"), "/settings.rs"));
 
@@ -73,7 +73,7 @@ async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
             .tracing_init(&filter)?;
 
         // Create bus and main processor
-        info!("Starting ProSA {} - {}", env!("CARGO_PKG_NAME"), PROSA_VERSIONS);
+        log::info!("Starting ProSA {} - {}", env!("CARGO_PKG_NAME"), PROSA_VERSIONS);
         let (bus, main) = new_main(&prosa_settings);
 
         // Launch the main task
