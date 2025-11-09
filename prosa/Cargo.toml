@@ -40,9 +40,8 @@ adaptor = ["stub::adaptor::StubParotAdaptor"]
 [dependencies]
 prosa-utils = { workspace = true, features = ["msg", "config", "config-observability", "config-observability-prometheus"] }
 prosa-macros.workspace = true
-bytes.workspace = true
+log.workspace = true
 tracing = "0.1"
-tracing-subscriber = {version = "0.3", features = ["std", "env-filter"]}
 thiserror.workspace = true
 base64 = "0.22"
 url = { version = "2", features = ["serde"] }
@@ -61,14 +60,8 @@ glob = { version = "0.3" }
 toml.workspace = true
 serde_yaml = "0.9"
 
-log.workspace = true
-tracing-opentelemetry.workspace = true
-
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
-opentelemetry-stdout.workspace = true
-opentelemetry-otlp.workspace = true
-opentelemetry-appender-log.workspace = true
 prometheus.workspace = true
 memory-stats = "1"
 
