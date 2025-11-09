@@ -8,6 +8,3 @@ observability:
   traces:
     stdout:
       level: debug
-  logs:
-    stdout:
-      level: debug

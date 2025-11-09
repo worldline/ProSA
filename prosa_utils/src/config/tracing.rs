@@ -47,19 +47,6 @@ impl From<TelemetryLevel> for filter::LevelFilter {
     }
 }
 
-impl From<TelemetryLevel> for log::LevelFilter {
-    fn from(val: TelemetryLevel) -> Self {
-        match val {
-            TelemetryLevel::OFF => log::LevelFilter::Off,
-            TelemetryLevel::ERROR => log::LevelFilter::Error,
-            TelemetryLevel::WARN => log::LevelFilter::Warn,
-            TelemetryLevel::INFO => log::LevelFilter::Info,
-            TelemetryLevel::DEBUG => log::LevelFilter::Debug,
-            TelemetryLevel::TRACE => log::LevelFilter::Trace,
-        }
-    }
-}
-
 impl From<TelemetryLevel> for &str {
     fn from(val: TelemetryLevel) -> Self {
         match val {
@@ -259,10 +246,6 @@ mod tests {
         assert_eq!(
             filter::LevelFilter::DEBUG,
             filter::LevelFilter::from(TelemetryLevel::DEBUG)
-        );
-        assert_eq!(
-            log::LevelFilter::Error,
-            log::LevelFilter::from(TelemetryLevel::ERROR)
         );
     }
 }
