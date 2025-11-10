@@ -1,4 +1,4 @@
-use super::Dictionary;
+use super::{Dictionary, Entry, EntryType};
 use crate::msg::tvf::TvfError;
 use std::fmt;
 
@@ -111,7 +111,7 @@ impl<P> Dictionary<P> {
                     {
                         // Access the entry definition corresponding to this tag.
                         if let Some((_, entry)) = dict.tag_to_label.get(tag) {
-                            current = entry.get_sub_dict();
+                            current = entry.sub_dict_ref();
                         } else {
                             // If there is no further sub dictionary, the remaining path can only be composed of numeric tags.
                             current = None;
@@ -127,7 +127,7 @@ impl<P> Dictionary<P> {
                     {
                         // Access the entry definition corresponding to this label.
                         if let Some((tag, entry)) = dict.label_to_tag.get(label.as_str()) {
-                            current = entry.get_sub_dict();
+                            current = entry.sub_dict_ref();
                             output.push(*tag);
                         } else {
                             // The label is unknown in the dictionary
@@ -141,5 +141,59 @@ impl<P> Dictionary<P> {
             }
         }
         Ok(output)
+    }
+}
+
+impl<P> Entry<P> {
+    /// Helper function to extract a sub dictionary from this entry.
+    fn sub_dict_ref(&self) -> Option<&Dictionary<P>> {
+        match &self.entry_type {
+            EntryType::Node(sub_dict) => Some(sub_dict.as_ref()),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dict::*;
+    use std::sync::LazyLock;
+
+    /// A sample dictionary for testing
+    static DICT: LazyLock<Dictionary<()>> = LazyLock::new(|| {
+        // Create a sub-directory to insert into the main one
+        let mut sub_dict = Dictionary::with_capacity(3);
+        sub_dict.add_entry(10, "name", Entry::new(TvfType::String, ()));
+        sub_dict.add_entry(20, "birth", Entry::new(TvfType::Date, ()));
+        sub_dict.add_entry(30, "address", Entry::new(TvfType::String, ()));
+        let sub_dict = Arc::new(sub_dict);
+
+        // Create the main dictionary
+        let mut dict = Dictionary::with_capacity(6);
+        dict.add_entry(1, "first", Entry::new(TvfType::Signed, ()));
+        dict.add_entry(2, "second", Entry::new(TvfType::Float, ()));
+        dict.add_entry(3, "third", Entry::new(TvfType::Bytes, ()));
+        dict.add_entry(4, "fourth", Entry::new_sub_dict(sub_dict.clone(), ()));
+        dict.add_entry(5, "fifth", Entry::new_list(TvfType::DateTime, ()));
+        dict.add_entry(6, "sixth", Entry::new_list_sub_dict(sub_dict.clone(), ()));
+
+        dict
+    });
+
+    #[test]
+    fn dict_resolve_path() {
+        assert_eq!(vec![1], DICT.resolve_path_str::<'.'>("first").unwrap());
+        assert_eq!(vec![2], DICT.resolve_path_str::<'.'>("2").unwrap());
+        assert_eq!(
+            vec![4, 10],
+            DICT.resolve_path_str::<'.'>("fourth.name").unwrap()
+        );
+        assert_eq!(vec![5, 1], DICT.resolve_path_str::<'.'>("fifth.1").unwrap());
+        /*
+        assert_eq!(
+            vec![6, 1, 10],
+            DICT.resolve_path_str::<'.'>("sixth.2.name").unwrap()
+        );
+        */
     }
 }
