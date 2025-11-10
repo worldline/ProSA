@@ -37,7 +37,7 @@ where
 }
 
 /// A dictionary mapping TVF field tags with labels
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct Dictionary<P> {
     /// Given a numeric tag, find the associated label and access the extra data
     tag_to_label: HashMap<usize, (Arc<str>, Arc<Entry<P>>)>,
@@ -47,7 +47,7 @@ pub struct Dictionary<P> {
 }
 
 /// Definition entry associated with a field
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Entry<P> {
     /// Specify if this entry is a repeatable field
     is_repeatable: bool,
@@ -60,7 +60,7 @@ pub struct Entry<P> {
 }
 
 /// Specify if the entry contains a sub dictionary or not
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum EntryType<P> {
     /// There are sub nodes in the dictionary
     Node(Arc<Dictionary<P>>),
