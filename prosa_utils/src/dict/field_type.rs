@@ -7,7 +7,7 @@ use std::{borrow::Cow, fmt::Debug};
 
 /// Enumerate all possible TVF types
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TvfType {
     /// single byte
     Byte,
