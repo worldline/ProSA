@@ -1,4 +1,4 @@
-use super::{Dictionary, Entry, EntryType};
+use super::{Dictionary, EntryType};
 use crate::msg::tvf::TvfError;
 use std::fmt;
 
@@ -29,7 +29,7 @@ pub enum PathError {
 
     /// Reached the end of dictionary before the end of the path
     #[error("Reached the end of the dictionary before the end of the path \"{0}\".")]
-    EndOfDict(Path),
+    EndOfDict(String),
 
     /// Reached the end of the path before the end of the dictionary
     #[error("Reached the end of the path before the end of the dictionary.")]
@@ -101,56 +101,58 @@ impl<P> Dictionary<P> {
 
         // iterate over each element of the path
         for element in path.0.iter() {
-            // An element can be either a numeric tag or a text label
-            match element {
-                // If it is a numeric tag, the path element is already resolved.
-                // Just pick the corresponding dictionary entry and keep going.
-                PathElement::Tag(tag) => {
-                    if let Some(dict) = current
-                        && !repeatable
-                    {
-                        // Access the entry definition corresponding to this tag.
-                        if let Some((_, entry)) = dict.tag_to_label.get(tag) {
-                            current = entry.sub_dict_ref();
-                        } else {
-                            // If there is no further sub dictionary, the remaining path can only be composed of numeric tags.
-                            current = None;
+            if repeatable {
+                // Currently processing a repeatable entry, we only expect numeric tags here
+                match element {
+                    PathElement::Tag(tag) => {
+                        output.push(*tag);
+                    }
+                    PathElement::Label(label) => {
+                        // The label is unknown in the dictionary
+                        return Err(PathError::UnknownLabel(label.clone()));
+                    }
+                }
+                repeatable = false;
+            } else if let Some(dict) = current {
+                // We currently have a reference to a dictionary
+                match element {
+                    // If it is a numeric tag, the path element is already resolved.
+                    // Just pick the corresponding dictionary entry and keep going.
+                    PathElement::Tag(tag) => {
+                        output.push(*tag);
+                        if let Some((_, entry)) = dict.get_label_and_entry(*tag)
+                            && let EntryType::Node(sub_dict) = &entry.entry_type
+                        {
+                            current = Some(sub_dict.as_ref());
+                            repeatable = entry.is_repeatable;
                         }
                     }
-                    repeatable = false;
-                    output.push(*tag);
-                }
-                // If it is a text label, we need to find the corresponding numeric tag using the dictionary.
-                PathElement::Label(label) => {
-                    if let Some(dict) = current
-                        && !repeatable
-                    {
-                        // Access the entry definition corresponding to this label.
-                        if let Some((tag, entry)) = dict.label_to_tag.get(label.as_str()) {
-                            current = entry.sub_dict_ref();
-                            output.push(*tag);
+                    // If it is a text label, we need to find the corresponding numeric tag using the dictionary.
+                    PathElement::Label(label) => {
+                        if let Some((tag, entry)) = dict.get_id_and_entry(label) {
+                            output.push(tag);
+                            if let EntryType::Node(sub_dict) = &entry.entry_type {
+                                current = Some(sub_dict.as_ref());
+                                repeatable = entry.is_repeatable;
+                            }
                         } else {
-                            // The label is unknown in the dictionary
                             return Err(PathError::UnknownLabel(label.clone()));
                         }
-                    } else {
-                        // We no longer have a dictionary, we cannot evaluate labels anymore.
-                        return Err(PathError::EndOfDict(Path::<'.'>(path.0.clone())));
+                    }
+                }
+            } else {
+                // We no longer have a dictionary, we can only process numeric tags now
+                match element {
+                    PathElement::Tag(tag) => {
+                        output.push(*tag);
+                    }
+                    PathElement::Label(label) => {
+                        return Err(PathError::EndOfDict(label.clone()));
                     }
                 }
             }
         }
         Ok(output)
-    }
-}
-
-impl<P> Entry<P> {
-    /// Helper function to extract a sub dictionary from this entry.
-    fn sub_dict_ref(&self) -> Option<&Dictionary<P>> {
-        match &self.entry_type {
-            EntryType::Node(sub_dict) => Some(sub_dict.as_ref()),
-            _ => None,
-        }
     }
 }
 
@@ -189,11 +191,9 @@ mod tests {
             DICT.resolve_path_str::<'.'>("fourth.name").unwrap()
         );
         assert_eq!(vec![5, 1], DICT.resolve_path_str::<'.'>("fifth.1").unwrap());
-        /*
         assert_eq!(
-            vec![6, 1, 10],
+            vec![6, 2, 10],
             DICT.resolve_path_str::<'.'>("sixth.2.name").unwrap()
         );
-        */
     }
 }
