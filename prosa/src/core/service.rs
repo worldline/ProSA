@@ -1,4 +1,4 @@
-use crate::core::msg;
+use crate::core::{error::ProcError, msg};
 
 use super::{
     msg::InternalMsg,
@@ -250,6 +250,13 @@ impl ServiceError {
             ServiceError::Timeout(_, _) => 2,
             ServiceError::ProtocolError(_) => 3,
         }
+    }
+}
+
+/// A service error should not stop a processor
+impl ProcError for ServiceError {
+    fn recoverable(&self) -> bool {
+        true
     }
 }
 

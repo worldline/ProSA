@@ -1,5 +1,9 @@
 use super::proc::InjProc;
-use crate::core::{adaptor::Adaptor, error::ProcError, msg::Tvf};
+use crate::core::{
+    adaptor::Adaptor,
+    error::ProcError,
+    msg::{ErrorMsg, Tvf},
+};
 extern crate self as prosa;
 
 /// Adaptator trait for the inj processor
@@ -55,7 +59,6 @@ where
     /// Method to build a transaction to inject
     fn build_transaction(&mut self) -> M;
     /// Method to process transaction response of the injection (to check the return code for example)
-    /// if an error is trigger, the injection and the processor will stop
     /// By default response are ignored
     fn process_response(
         &mut self,
@@ -63,6 +66,16 @@ where
         _service_name: &str,
     ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         Ok(())
+    }
+
+    /// Method to process error transaction response of the injection
+    /// By default the injection and the processor will stop if an error is trigger
+    /// But this method can be override to continue the injection
+    fn process_error(
+        &mut self,
+        error: ErrorMsg<M>,
+    ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+        Err(Box::new(error.into_err()))
     }
 }
 

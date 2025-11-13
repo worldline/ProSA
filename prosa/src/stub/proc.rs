@@ -17,7 +17,8 @@ extern crate self as prosa;
 #[proc_settings]
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 pub struct StubSettings {
-    service_names: Vec<String>,
+    /// Services to respond to
+    pub service_names: Vec<String>,
 }
 
 impl StubSettings {
