@@ -11,6 +11,7 @@ use crate::{
         error::ProcError,
         msg::{InternalMsg, Msg, RequestMsg},
         proc::{Proc, ProcBusParam as _},
+        service::ServiceError,
     },
     event::speed::Regulator,
 };
@@ -182,11 +183,21 @@ impl InjProc {
                 );
 
                 debug!(name: "resp_err_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = err_msg.get_service(), "{:?}", err_msg.get_err());
-                let response_time = err_msg.elapsed();
-                drop(enter_span);
-                adaptor.process_error(err_msg)?;
 
-                regulator.notify_receive_transaction(response_time);
+                match err_msg.get_err() {
+                    ServiceError::Timeout(_, overhead) => {
+                        regulator.add_tick_overhead(Duration::from_millis(*overhead));
+                    }
+                    ServiceError::UnableToReachService(_) => {
+                        regulator.add_tick_overhead(self.settings.timeout_threshold);
+                    }
+                    _ => {
+                        drop(enter_span);
+                        return Err(Box::new(err_msg.into_err()));
+                    }
+                }
+
+                regulator.notify_receive_transaction(err_msg.elapsed());
 
                 // Build the next transaction
                 let _ = next_transaction.get_or_insert(adaptor.build_transaction());
@@ -261,7 +272,7 @@ where
                 Some(msg) = self.internal_rx_queue.recv() => {
                     self.process_internal(msg, &mut adaptor, &mut regulator, &mut next_transaction, &meter_trans_duration).await?;
                 }
-                _ = regulator.tick() => {
+                _ = regulator.tick(), if self.service.exist_proc_service(&self.settings.service_name) => {
                     if let Some(service) = self.service.get_proc_service(&self.settings.service_name) {
                         let trans = if let Some(transaction) = next_transaction.take() {
                             RequestMsg::new(self.settings.service_name.clone(), transaction, self.proc.get_service_queue())
