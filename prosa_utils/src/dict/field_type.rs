@@ -38,7 +38,7 @@ pub enum TvfType {
 }
 
 /// A TVF value stored in the field of a TVF message
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum TvfValue<'v, T>
 where
     T: Tvf + Clone,
@@ -69,6 +69,32 @@ where
 
     /// A TVF sub buffer
     Buffer(Cow<'v, T>),
+}
+
+impl<'v, T> ToOwned for TvfValue<'v, T>
+where
+    T: Tvf + Clone,
+{
+    type Owned = TvfValue<'v, T>;
+
+    fn to_owned(&self) -> Self::Owned {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        match &self {
+            Self::Byte    (value) => Self::Byte    (*value),
+            Self::Unsigned(value) => Self::Unsigned(*value),
+            Self::Signed  (value) => Self::Signed  (*value),
+            Self::Float   (value) => Self::Float   (*value),
+            Self::String  (value) => Self::String  (value.to_owned()),
+            Self::Bytes   (value) => Self::Bytes   (value.to_owned()),
+            Self::Date    (value) => Self::Date    (*value),
+            Self::DateTime(value) => Self::DateTime(*value),
+            Self::Buffer  (value) => Self::Buffer  (value.to_owned()),
+        }
+    }
+
+    fn clone_into(&self, target: &mut Self::Owned) {
+        *target = self.to_owned();
+    }
 }
 
 macro_rules! impl_from {
@@ -135,12 +161,11 @@ where
     T: Tvf + Clone,
 {
     /// Extract a TVF value from a message with an expected type
-    pub fn from_message_with_type(
+    pub fn from_message(
         message: &'v T,
         id: usize,
         expected_type: TvfType,
     ) -> Result<Self, TvfError> {
-        // If an expected type was provided, try to deserialize using it
         #[cfg_attr(rustfmt, rustfmt_skip)]
         match expected_type {
             TvfType::Byte     => Ok(Self::Byte    (message.get_byte    (id)?)),
@@ -155,44 +180,19 @@ where
         }
     }
 
-    /// Extract a TVF value from a buffer without expecting any particular type
-    pub fn from_message(message: &'v T, id: usize) -> Result<Self, TvfError> {
-        // No prefered type was provided try different types until a valid one is found
-        if let Ok(value) = message.get_byte(id) {
-            Ok(Self::Byte(value))
-        } else if let Ok(value) = message.get_unsigned(id) {
-            Ok(Self::Unsigned(value))
-        } else if let Ok(value) = message.get_signed(id) {
-            Ok(Self::Signed(value))
-        } else if let Ok(value) = message.get_float(id) {
-            Ok(Self::Float(value))
-        } else if let Ok(value) = message.get_date(id) {
-            Ok(Self::Date(value))
-        } else if let Ok(value) = message.get_datetime(id) {
-            Ok(Self::DateTime(value))
-        } else if let Ok(value) = message.get_buffer(id) {
-            Ok(Self::Buffer(value))
-        } else if let Ok(value) = message.get_string(id) {
-            Ok(Self::String(value))
-        } else if let Ok(value) = message.get_bytes(id) {
-            Ok(Self::Bytes(value))
-        } else {
-            Err(TvfError::TypeMismatch)
-        }
-    }
-
     /// Insert the TVF value in the specified buffer
     pub fn insert_in(&self, message: &mut T, id: usize) {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         match self {
-            Self::Byte(value) => message.put_byte(id, *value),
+            Self::Byte    (value) => message.put_byte    (id, *value),
             Self::Unsigned(value) => message.put_unsigned(id, *value),
-            Self::Signed(value) => message.put_signed(id, *value),
-            Self::Float(value) => message.put_float(id, *value),
-            Self::String(value) => message.put_string(id, value.as_str()),
-            Self::Bytes(value) => message.put_bytes(id, value.clone().into_owned()),
-            Self::Date(value) => message.put_date(id, *value),
+            Self::Signed  (value) => message.put_signed  (id, *value),
+            Self::Float   (value) => message.put_float   (id, *value),
+            Self::String  (value) => message.put_string  (id, value.as_str()),
+            Self::Bytes   (value) => message.put_bytes   (id, value.clone().into_owned()),
+            Self::Date    (value) => message.put_date    (id, *value),
             Self::DateTime(value) => message.put_datetime(id, *value),
-            Self::Buffer(value) => message.put_buffer(id, value.clone().into_owned()),
+            Self::Buffer  (value) => message.put_buffer  (id, value.clone().into_owned()),
         }
     }
 }

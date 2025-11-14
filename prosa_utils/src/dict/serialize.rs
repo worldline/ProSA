@@ -97,9 +97,8 @@ where
                     match &entry.entry_type {
                         EntryType::Leaf(expected_type) => {
                             // Try to extract the expected type
-                            let value =
-                                TvfValue::from_message_with_type(self.message, tag, *expected_type)
-                                    .map_err(|err| convert_error(&err))?;
+                            let value = TvfValue::from_message(self.message, tag, *expected_type)
+                                .map_err(|err| convert_error(&err))?;
 
                             // serialize the field
                             let _ = map.serialize_entry(label.as_ref(), &value)?;
@@ -148,7 +147,7 @@ where
             EntryType::Leaf(expected_type) => {
                 for tag in tags {
                     // Try to extract the expected type
-                    let value = TvfValue::from_message_with_type(self.message, tag, *expected_type)
+                    let value = TvfValue::from_message(self.message, tag, *expected_type)
                         .map_err(|err| convert_error(&err))?;
 
                     // serialize the field
