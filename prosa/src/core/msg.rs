@@ -272,6 +272,18 @@ where
                 })
             })
     }
+
+    /// Method to return a result to the called processor
+    /// If Ok, return the response data, else return the error
+    pub fn return_result_to_sender(
+        self,
+        result: Result<M, ServiceError>,
+    ) -> Result<(), SendError<Option<M>>> {
+        match result {
+            Ok(resp) => self.return_to_sender(resp).map_err(|e| e.map(|m| Some(m))),
+            Err(err) => self.return_error_to_sender(None, err),
+        }
+    }
 }
 
 /// ProSA request message that define a data message that need to be process by a processor
@@ -384,6 +396,11 @@ where
     /// Getter of the service error
     pub fn get_err(&self) -> &ServiceError {
         &self.err
+    }
+
+    /// Consume the message and return the service error
+    pub fn into_err(self) -> ServiceError {
+        self.err
     }
 }
 

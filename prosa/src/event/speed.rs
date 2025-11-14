@@ -275,6 +275,13 @@ impl Regulator {
         self.concurent_notify.notify_one();
     }
 
+    /// Add an overhead to the tick duration if the tick need to be delayed
+    pub fn add_tick_overhead(&mut self, overhead: Duration) {
+        if self.tick_overhead.is_none_or(|d| d < overhead) {
+            self.tick_overhead = Some(overhead);
+        }
+    }
+
     /// Getter of the current speed of transaction flow
     pub fn get_speed(&self) -> f64 {
         self.speed.get_speed()

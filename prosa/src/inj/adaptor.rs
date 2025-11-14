@@ -55,7 +55,7 @@ where
     /// Method to build a transaction to inject
     fn build_transaction(&mut self) -> M;
     /// Method to process transaction response of the injection (to check the return code for example)
-    /// if an error is trigger, the injection and the processor will stop
+    /// if an error (other than a timeout or closed service) is trigger, the injection and the processor will stop
     /// By default response are ignored
     fn process_response(
         &mut self,

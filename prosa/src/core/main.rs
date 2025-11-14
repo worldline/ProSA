@@ -144,7 +144,7 @@ where
     ) -> Result<(), SendError<InternalMainMsg<M>>> {
         Ok(self
             .internal_tx_queue
-            .send(InternalMainMsg::NewProcQueue(proc.clone()))
+            .send(InternalMainMsg::NewProcQueue(proc))
             .await?)
     }
 
@@ -586,8 +586,8 @@ where
                         InternalMainMsg::NewService(names, proc_id, queue_id) => {
                             if let Some(proc_queue) = self.processors.get(&proc_id).and_then(|p| p.get(&queue_id)) {
                                 let mut new_services = (*self.services).clone();
-                                for name in names {
-                                    new_services.add_service(&name, proc_queue.clone());
+                                for name in &names {
+                                    new_services.add_service(name, proc_queue.clone());
                                 }
                                 self.services = Arc::new(new_services);
                                 prosa_main_record_services!();
