@@ -64,7 +64,10 @@ where
     /// Can be call only by the main task to modify the service table
     pub fn add_service(&mut self, name: &str, proc_service: ProcService<M>) {
         if let Some((services, _)) = self.table.get_mut(name) {
-            if !services.iter().any(|s| s.proc_id == proc_service.proc_id) {
+            if !services
+                .iter()
+                .any(|s| s.proc_id == proc_service.proc_id && s.queue_id == proc_service.queue_id)
+            {
                 services.push(proc_service);
             }
         } else {
