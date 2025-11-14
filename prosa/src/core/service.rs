@@ -266,6 +266,7 @@ impl From<TvfError> for ServiceError {
             TvfError::SerializationError(str) => {
                 ServiceError::ProtocolError(format!("on TVF serialization {str}"))
             }
+            TvfError::Custom(str) => ServiceError::ProtocolError(format!("unexpected error {str}")),
         }
     }
 }
