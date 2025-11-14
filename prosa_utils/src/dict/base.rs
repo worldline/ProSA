@@ -1,4 +1,5 @@
 use super::*;
+use crate::{dict::field_type::TvfValue, msg::tvf::Tvf};
 
 impl<P> Dictionary<P> {
     /// Create a new empty dictionary
@@ -105,11 +106,8 @@ impl<P> Entry<P> {
 
     /// Get the TVF type of the entry
     #[inline]
-    pub fn get_tvf_type(&self) -> TvfType {
-        match self.entry_type {
-            EntryType::Leaf(tvf_type) => tvf_type,
-            EntryType::Node(_) => TvfType::Buffer,
-        }
+    pub fn get_type(&self) -> TvfType {
+        self.entry_type.get_type()
     }
 
     /// Get the sub-dictionary of this entry if any
@@ -118,6 +116,45 @@ impl<P> Entry<P> {
         match &self.entry_type {
             EntryType::Leaf(_) => None,
             EntryType::Node(dict) => Some(dict.clone()),
+        }
+    }
+}
+
+impl<P> EntryType<P> {
+    /// Get the type expected for this entry
+    #[inline]
+    pub fn get_type(&self) -> TvfType {
+        match self {
+            Self::Leaf(tvf_type) => *tvf_type,
+            Self::Node(_) => TvfType::Buffer,
+        }
+    }
+}
+
+impl<'dict, 'tvf, P, T> LabeledTvf<'dict, 'tvf, P, T>
+where
+    P: Clone,
+    T: Clone + Tvf,
+{
+    /// Get a field using a numeric tag
+    pub fn get_with_id(&'tvf self, id: usize) -> Option<TvfValue<'tvf, T>> {
+        if let Some((_, entry)) = self.dictionary.tag_to_label.get(&id)
+            && let Ok(value) = TvfValue::from_message(self.message.as_ref(), id, entry.get_type())
+        {
+            Some(value)
+        } else {
+            None
+        }
+    }
+
+    /// Get a field using a label
+    pub fn get_with_label(&'tvf self, label: &str) -> Option<TvfValue<'tvf, T>> {
+        if let Some((id, entry)) = self.dictionary.label_to_tag.get(label)
+            && let Ok(value) = TvfValue::from_message(self.message.as_ref(), *id, entry.get_type())
+        {
+            Some(value)
+        } else {
+            None
         }
     }
 }
@@ -213,11 +250,11 @@ mod tests {
 
         let (label, entry) = DICT.get_label_and_entry(3).unwrap();
         assert_eq!("third", label);
-        assert_eq!(TvfType::Bytes, entry.get_tvf_type());
+        assert_eq!(TvfType::Bytes, entry.get_type());
 
         let (label, entry) = DICT.get_label_and_entry(4).unwrap();
         assert_eq!("fourth", label);
-        assert_eq!(TvfType::Buffer, entry.get_tvf_type());
+        assert_eq!(TvfType::Buffer, entry.get_type());
         if let Some(sub_dict) = entry.get_sub_dict() {
             assert_eq!("name", sub_dict.get_label(10).unwrap());
             assert_eq!("birth", sub_dict.get_label(20).unwrap());
@@ -234,11 +271,11 @@ mod tests {
 
         let (id, entry) = DICT.get_id_and_entry("third").unwrap();
         assert_eq!(3, id);
-        assert_eq!(TvfType::Bytes, entry.get_tvf_type());
+        assert_eq!(TvfType::Bytes, entry.get_type());
 
         let (id, entry) = DICT.get_id_and_entry("fourth").unwrap();
         assert_eq!(4, id);
-        assert_eq!(TvfType::Buffer, entry.get_tvf_type());
+        assert_eq!(TvfType::Buffer, entry.get_type());
         if let Some(sub_dict) = entry.get_sub_dict() {
             assert_eq!(10, sub_dict.get_id("name").unwrap());
             assert_eq!(20, sub_dict.get_id("birth").unwrap());

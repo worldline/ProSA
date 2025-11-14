@@ -29,6 +29,9 @@ pub enum TvfError {
     /// Error encountered during serialization or deserializarion process
     #[error("Serialization error: {0}")]
     SerializationError(String),
+    /// Uncommon custom error
+    #[error("Uncommon error: {0}")]
+    Custom(String),
 }
 
 /// Trait that define a TVF[^tvfnote]
