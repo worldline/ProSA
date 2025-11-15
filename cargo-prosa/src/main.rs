@@ -101,7 +101,6 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
     let cargo_add_prosa = cargo!("add", Some(path), "prosa");
     let cargo_add_prosa_utils = cargo!("add", Some(path), "prosa-utils");
     let cargo_add_clap = cargo!("add", Some(path), "clap");
-    let cargo_add_daemonize = cargo!("add", Some(path), "daemonize");
     let cargo_add_tokio = cargo!(
         "add",
         Some(path),
@@ -129,7 +128,6 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
     if cargo_add_prosa.status.success()
         && cargo_add_prosa_utils.status.success()
         && cargo_add_clap.status.success()
-        && cargo_add_daemonize.status.success()
         && cargo_add_tokio.status.success()
         && cargo_add_serde.status.success()
         && cargo_add_config.status.success()
