@@ -95,33 +95,19 @@ where
                         debug!(name: "stub_proc_request", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = self.name(), stub_service = msg.get_service(), "{:?}", msg.get_data());
 
                         match adaptor.process_request(msg.get_service(), request_data) {
-                            MaybeAsync::Ready(Ok(resp)) => {
+                            MaybeAsync::Ready(resp) => {
                                 debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
                                 drop(enter_span);
-                                let _ = msg.return_to_sender(resp);
-                            }
-                            MaybeAsync::Ready(Err(err)) => {
-                                debug!(name: "stub_proc_error", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{err}");
-                                drop(enter_span);
-                                let _ = msg.return_error_to_sender(None, err);
+                                let _ = msg.return_result_to_sender(resp);
                             }
                             MaybeAsync::Future(future_resp) => {
                                 drop(enter_span);
                                 tokio::spawn(async move {
                                     let enter_span = msg.enter_span();
-                                    let resp_data = future_resp.await;
-                                    match resp_data {
-                                        Ok(data) => {
-                                            debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{data:?}");
-                                            drop(enter_span);
-                                            let _ = msg.return_to_sender(data);
-                                        }
-                                        Err(err) => {
-                                            debug!(name: "stub_proc_error", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{err}");
-                                            drop(enter_span);
-                                            let _ = msg.return_error_to_sender(None, err);
-                                        }
-                                    }
+                                    let resp = future_resp.await;
+                                    debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
+                                    drop(enter_span);
+                                    let _ = msg.return_result_to_sender(resp);
                                 });
                             }
                         }

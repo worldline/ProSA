@@ -307,23 +307,36 @@ impl Default for Regulator {
     }
 }
 
+impl fmt::Debug for Regulator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Regulator")
+            .field("max_speed", &self.max_speed)
+            .field("timeout_threshold", &self.timeout_threshold)
+            .field("current_concurrents_send", &self.current_concurrents_send)
+            .field("max_concurrents_send", &self.max_concurrents_send)
+            .field("speed", &self.speed)
+            .field("tick_overhead", &self.tick_overhead)
+            .finish()
+    }
+}
+
 impl fmt::Display for Regulator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
-            " - Tps                            : {} / {}",
+            " - Tps                    : {} / {}",
             self.speed.get_speed(),
             self.max_speed
         )?;
         writeln!(
             f,
-            " - Timeout Threshold              : {} ms",
-            self.timeout_threshold.as_millis()
+            " - Concurents transactions: {} / {}",
+            self.current_concurrents_send, self.max_concurrents_send
         )?;
         writeln!(
             f,
-            " - Maximum concurents transactions: {}",
-            self.max_concurrents_send
+            " - Timeout Threshold      : {} ms",
+            self.timeout_threshold.as_millis()
         )
     }
 }
@@ -391,11 +404,11 @@ mod tests {
         let mut regulator = Regulator::new(TPS, Duration::from_secs(3), 1, 5);
         assert_eq!(0f64, regulator.get_speed());
         assert_eq!(
-            " - Tps                            : 0 / 5\n - Timeout Threshold              : 5000 ms\n - Maximum concurents transactions: 1\n",
+            " - Tps                    : 0 / 5\n - Concurents transactions: 0 / 1\n - Timeout Threshold      : 5000 ms\n",
             Regulator::default().to_string().as_str()
         );
         assert_eq!(
-            " - Tps                            : 0 / 25\n - Timeout Threshold              : 3000 ms\n - Maximum concurents transactions: 1\n",
+            " - Tps                    : 0 / 25\n - Concurents transactions: 0 / 1\n - Timeout Threshold      : 3000 ms\n",
             regulator.to_string().as_str()
         );
 
