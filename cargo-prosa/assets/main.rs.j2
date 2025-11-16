@@ -23,11 +23,6 @@ include!(concat!(env!("OUT_DIR"), "/run.rs"));
 fn main() -> Result<(), Box<dyn std::error::Error>> {{ '{' }}
     let matches = cli().get_matches();
 
-    // Deamonize the program if needed
-    if matches.get_flag("daemon") {{ '{' }}
-        daemonize(&matches);
-    {{ '}' }}
-
     // Main runtime
     match matches.get_one::<u32>("worker_threads") {
         Some(1) | None => runtime::Builder::new_current_thread()
