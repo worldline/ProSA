@@ -114,7 +114,7 @@ fn generate_struct(
         // Parameter of the processor
         fields.named.push(
             syn::Field::parse_named
-                .parse2(quote! { proc: prosa::core::proc::ProcParam<M> })
+                .parse2(quote! { proc: std::sync::Arc<prosa::core::proc::ProcParam<M>> })
                 .unwrap(),
         );
 
@@ -201,7 +201,7 @@ fn generate_struct_impl_config(
 
             fn create(proc_id: u32, proc_name: String, main: prosa::core::main::Main<M>, settings: Self::Settings) -> Self {
                 let (internal_tx_queue, internal_rx_queue) = tokio::sync::mpsc::channel(#queue_size);
-                let proc = prosa::core::proc::ProcParam::new(proc_id, proc_name, internal_tx_queue, main);
+                let proc = std::sync::Arc::new(prosa::core::proc::ProcParam::new(proc_id, proc_name, internal_tx_queue, main));
                 #item_ident {
                     proc,
                     service: std::default::Default::default(),

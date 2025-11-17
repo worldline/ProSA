@@ -11,6 +11,7 @@ use crate::{
         error::ProcError,
         msg::{InternalMsg, Msg, RequestMsg},
         proc::{Proc, ProcBusParam as _},
+        service::ServiceError,
     },
     event::speed::Regulator,
 };
@@ -24,19 +25,19 @@ extern crate self as prosa;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct InjSettings {
     /// Service to inject to
-    service_name: String,
+    pub service_name: String,
     /// Max TPS speed
     #[serde(default = "InjSettings::default_max_speed")]
-    max_speed: f64,
+    pub max_speed: f64,
     /// Timeout for cooldown when a service don't respond well
     #[serde(default = "InjSettings::default_timeout_threshold")]
-    timeout_threshold: Duration,
+    pub timeout_threshold: Duration,
     /// Max parallel transaction running at the same time
     #[serde(default = "InjSettings::default_max_concurrents_send")]
-    max_concurrents_send: u32,
+    pub max_concurrents_send: u32,
     /// Number of value keep to calculate the injection speed
     #[serde(default = "InjSettings::default_speed_interval")]
-    speed_interval: u16,
+    pub speed_interval: u16,
 }
 
 impl InjSettings {
@@ -156,11 +157,12 @@ impl InjProc {
                     &[
                         KeyValue::new("proc", self.name().to_string()),
                         KeyValue::new("service", msg.get_service().clone()),
+                        KeyValue::new("err_code", "0".to_string()),
                     ],
                 );
 
                 if let Some(response) = response_data {
-                    debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = msg.get_service(), response = format!("{:?}", response));
+                    debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = msg.get_service(), "{:?}", response);
                     adaptor.process_response(response, msg.get_service())?;
 
                     regulator.notify_receive_transaction(msg.elapsed());
@@ -169,11 +171,37 @@ impl InjProc {
                     let _ = next_transaction.get_or_insert(adaptor.build_transaction());
                 }
             }
-            InternalMsg::Error(err) => panic!(
-                "The inj processor {} receive an error {:?}",
-                self.get_proc_id(),
-                err
-            ),
+            InternalMsg::Error(err_msg) => {
+                let enter_span = err_msg.enter_span();
+                meter_trans_duration.record(
+                    err_msg.elapsed().as_secs_f64(),
+                    &[
+                        KeyValue::new("proc", self.name().to_string()),
+                        KeyValue::new("service", err_msg.get_service().clone()),
+                        KeyValue::new("err_code", err_msg.get_err().get_code().to_string()),
+                    ],
+                );
+
+                debug!(name: "resp_err_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = err_msg.get_service(), "{:?}", err_msg.get_err());
+
+                match err_msg.get_err() {
+                    ServiceError::Timeout(_, overhead) => {
+                        regulator.add_tick_overhead(Duration::from_millis(*overhead));
+                    }
+                    ServiceError::UnableToReachService(_) => {
+                        regulator.add_tick_overhead(self.settings.timeout_threshold);
+                    }
+                    _ => {
+                        drop(enter_span);
+                        return Err(Box::new(err_msg.into_err()));
+                    }
+                }
+
+                regulator.notify_receive_transaction(err_msg.elapsed());
+
+                // Build the next transaction
+                let _ = next_transaction.get_or_insert(adaptor.build_transaction());
+            }
             InternalMsg::Command(_) => todo!(),
             InternalMsg::Config => todo!(),
             InternalMsg::Service(table) => self.service = table,
@@ -244,7 +272,7 @@ where
                 Some(msg) = self.internal_rx_queue.recv() => {
                     self.process_internal(msg, &mut adaptor, &mut regulator, &mut next_transaction, &meter_trans_duration).await?;
                 }
-                _ = regulator.tick() => {
+                _ = regulator.tick(), if self.service.exist_proc_service(&self.settings.service_name) => {
                     if let Some(service) = self.service.get_proc_service(&self.settings.service_name) {
                         let trans = if let Some(transaction) = next_transaction.take() {
                             RequestMsg::new(self.settings.service_name.clone(), transaction, self.proc.get_service_queue())
@@ -252,7 +280,7 @@ where
                             RequestMsg::new(self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_service_queue())
                         };
 
-                        debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = self.name(), service = self.settings.service_name, request = format!("{:?}", trans.get_data()));
+                        debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = self.name(), service = self.settings.service_name, "{:?}", trans.get_data());
                         service.proc_queue.send(InternalMsg::Request(trans)).await?;
 
                         regulator.notify_send_transaction();

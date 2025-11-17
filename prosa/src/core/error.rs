@@ -36,6 +36,12 @@ impl ProcError for ConfigError {
     }
 }
 
+impl ProcError for tokio::task::JoinError {
+    fn recoverable(&self) -> bool {
+        self.is_cancelled()
+    }
+}
+
 impl<M> ProcError for tokio::sync::mpsc::error::SendError<InternalMsg<M>>
 where
     M: Sized + Clone + Tvf,

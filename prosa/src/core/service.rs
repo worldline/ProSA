@@ -1,4 +1,4 @@
-use crate::core::msg;
+use crate::core::error::ProcError;
 
 use super::{
     msg::InternalMsg,
@@ -14,12 +14,13 @@ use thiserror::Error;
 use tokio::sync::mpsc;
 
 /// Strucure that define the service table which contain information to how contact a processor for a given service name
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct ServiceTable<M>
 where
     M: Sized + Clone + Tvf,
 {
-    table: HashMap<String, Vec<ProcService<M>>>,
+    /// HashMap that contain the service name as key and a vector of processor services with a round robin information
+    table: HashMap<String, (Vec<ProcService<M>>, atomic::AtomicU64)>,
 }
 
 impl<M> ServiceTable<M>
@@ -40,7 +41,7 @@ where
     ///
     /// Call by the processor to know if a service is available (service test)
     pub fn exist_proc_service(&self, name: &str) -> bool {
-        if let Some(services) = self.table.get(name) {
+        if let Some((services, _)) = self.table.get(name) {
             !services.is_empty()
         } else {
             false
@@ -51,30 +52,29 @@ where
     ///
     /// Call by the processor to send a transaction to a processor that give the corresponding service
     pub fn get_proc_service(&self, name: &str) -> Option<&ProcService<M>> {
-        if let Some(services) = self.table.get(name) {
-            match services.len() {
-                2.. => services.get(
-                    msg::ATOMIC_INTERNAL_MSG_ID.load(atomic::Ordering::Relaxed) as usize
-                        % services.len(),
-                ),
-                1 => services.first(),
-                _ => None,
-            }
-        } else {
-            None
-        }
+        self.table.get(name).and_then(|(s, rr)| match s.len() {
+            2.. => s.get(rr.fetch_add(1, atomic::Ordering::Relaxed) as usize % s.len()),
+            1 => s.first(),
+            _ => None,
+        })
     }
 
     /// Method to add a service to the table
     ///
     /// Can be call only by the main task to modify the service table
     pub fn add_service(&mut self, name: &str, proc_service: ProcService<M>) {
-        if let Some(services) = self.table.get_mut(name) {
-            if !services.iter().any(|s| s.proc_id == proc_service.proc_id) {
+        if let Some((services, _)) = self.table.get_mut(name) {
+            if !services
+                .iter()
+                .any(|s| s.proc_id == proc_service.proc_id && s.queue_id == proc_service.queue_id)
+            {
                 services.push(proc_service);
             }
         } else {
-            self.table.insert(name.to_string(), vec![proc_service]);
+            self.table.insert(
+                name.to_string(),
+                (vec![proc_service], atomic::AtomicU64::new(0)),
+            );
         }
     }
 
@@ -82,7 +82,7 @@ where
     ///
     /// Can be call only by the main task to modify the service table
     pub fn remove_service_proc(&mut self, name: &str, proc_id: u32) {
-        if let Some(services) = self.table.get_mut(name) {
+        if let Some((services, _)) = self.table.get_mut(name) {
             services.retain(|s| s.proc_id != proc_id);
         }
     }
@@ -91,7 +91,7 @@ where
     ///
     /// Can be call only by the main task to modify the service table
     pub fn remove_service(&mut self, name: &str, proc_id: u32, queue_id: u32) {
-        if let Some(services) = self.table.get_mut(name) {
+        if let Some((services, _)) = self.table.get_mut(name) {
             services.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);
         }
     }
@@ -101,15 +101,9 @@ where
     /// Can be call only by the main task to modify the service table
     pub fn remove_proc_services(&mut self, proc_id: u32) {
         // This will let service with empty processors
-        for service in self.table.values_mut() {
-            service.retain(|s| s.proc_id != proc_id);
+        for (services, _) in self.table.values_mut() {
+            services.retain(|s| s.proc_id != proc_id);
         }
-
-        // FIXME When the API will not be unstable anymore:
-        /*self.table.drain_filter(|k, v| {
-            v.retain(|&s| s.proc_id != proc_id);
-            v.is_empty()
-        });*/
     }
 
     /// Method to remove all services from a given processor queue from the table
@@ -117,15 +111,31 @@ where
     /// Can be call only by the main task to modify the service table
     pub fn remove_proc_queue_services(&mut self, proc_id: u32, queue_id: u32) {
         // This will let service with empty processors
-        for service in self.table.values_mut() {
-            service.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);
+        for (services, _) in self.table.values_mut() {
+            services.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);
         }
+    }
+}
 
-        // FIXME When the API will not be unstable anymore:
-        /*self.table.drain_filter(|k, v| {
-            v.retain(|&s| s.proc_id != proc_id && s.queue_id != queue_id);
-            v.is_empty()
-        });*/
+impl<M> Clone for ServiceTable<M>
+where
+    M: Sized + Clone + Tvf,
+{
+    fn clone(&self) -> Self {
+        Self {
+            table: self
+                .table
+                .iter()
+                .map(|(k, (s, rr))| {
+                    let rr = atomic::AtomicU64::new(if !s.is_empty() {
+                        rr.load(atomic::Ordering::Relaxed) % s.len() as u64
+                    } else {
+                        0
+                    });
+                    (k.clone(), (s.clone(), rr))
+                })
+                .collect(),
+        }
     }
 }
 
@@ -134,7 +144,7 @@ where
     M: Sized + Clone + Tvf,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (name, services) in self.table.iter() {
+        for (name, (services, _)) in self.table.iter() {
             writeln!(f, "Service name: {name}")?;
             for service in services {
                 writeln!(f, "\tProcessor ID: {}", service.proc_id)?;
@@ -250,6 +260,13 @@ impl ServiceError {
             ServiceError::Timeout(_, _) => 2,
             ServiceError::ProtocolError(_) => 3,
         }
+    }
+}
+
+/// A service error should not stop a processor
+impl ProcError for ServiceError {
+    fn recoverable(&self) -> bool {
+        true
     }
 }
 
