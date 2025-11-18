@@ -110,13 +110,13 @@ impl PrometheusExporterCfg {
                                     )
                                     .await
                                 {
-                                    log::debug!("Error serving prometheus connection: {err:?}");
+                                    log::debug!(target: "prosa::observability::prometheus_server", "Error serving prometheus connection: {err:?}");
                                 }
                             });
                         }
                     },
                     Err(e) => {
-                        log::error!("Failed to bind Prometheus metrics server: {e}");
+                        log::error!(target: "prosa::observability::prometheus_server", "Failed to bind Prometheus metrics server: {e}");
                     }
                 }
             });
@@ -218,8 +218,10 @@ impl TelemetryData {
     }
 
     /// Build a logger provider based on the self configuration
-    fn build_logger_provider(&self) -> Result<SdkLoggerProvider, ExporterBuildError> {
-        let mut logs_provider = SdkLoggerProvider::builder();
+    fn build_logger_provider(
+        &self,
+    ) -> Result<(SdkLoggerProvider, TelemetryLevel), ExporterBuildError> {
+        let logs_provider = SdkLoggerProvider::builder();
         if let Some(s) = &self.otlp {
             let exporter = if s.get_protocol() == Protocol::Grpc {
                 opentelemetry_otlp::LogExporter::builder()
@@ -232,10 +234,20 @@ impl TelemetryData {
                     .with_export_config(s.clone().into())
                     .build()
             }?;
-            logs_provider = logs_provider.with_batch_exporter(exporter);
+            Ok((
+                logs_provider.with_batch_exporter(exporter).build(),
+                s.level.unwrap_or_default(),
+            ))
+        } else if let Some(stdout) = &self.stdout {
+            Ok((
+                logs_provider
+                    .with_simple_exporter(opentelemetry_stdout::LogExporter::default())
+                    .build(),
+                stdout.level.unwrap_or_default(),
+            ))
+        } else {
+            Ok((logs_provider.build(), TelemetryLevel::OFF))
         }
-
-        Ok(logs_provider.build())
     }
 
     /// Build a tracer provider based on the self configuration
@@ -359,14 +371,20 @@ impl Observability {
     }
 
     /// Logger provider builder
-    pub fn build_logger_provider(&self) -> SdkLoggerProvider {
+    pub fn build_logger_provider(&self) -> (SdkLoggerProvider, TelemetryLevel) {
         if let Some(settings) = &self.logs {
             match settings.build_logger_provider() {
                 Ok(m) => m,
-                Err(_) => SdkLoggerProvider::builder().build(),
+                Err(_) => (
+                    SdkLoggerProvider::builder().build(),
+                    TelemetryLevel::default(),
+                ),
             }
         } else {
-            SdkLoggerProvider::builder().build()
+            (
+                SdkLoggerProvider::builder().build(),
+                TelemetryLevel::default(),
+            )
         }
     }
 
@@ -410,7 +428,7 @@ impl Observability {
         }
     }
 
-    /// Method to init tracing traces
+    /// Method to init `tracing`
     pub fn tracing_init(&self, filter: &TelemetryFilter) -> Result<(), TryInitError> {
         let global_level: filter::LevelFilter = self.level.into();
         let subscriber = tracing_subscriber::registry().with(global_level);
@@ -442,6 +460,19 @@ impl Observability {
             } else {
                 subscriber.try_init()
             }
+        } else if let Some(logs) = &self.logs
+            && let Ok((logger_provider, level)) = logs.build_logger_provider()
+            && level > TelemetryLevel::OFF
+        {
+            let logger_filter = filter.clone_with_level(level);
+            subscriber
+                .with(
+                    opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(
+                        &logger_provider,
+                    )
+                    .with_filter(logger_filter),
+                )
+                .try_init()
         } else {
             subscriber.try_init()
         }
