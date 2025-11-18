@@ -114,7 +114,7 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
         Some(path),
         "config",
         "-F",
-        "toml,json,yaml,json5,convert-case,async"
+        "toml,yaml,json,convert-case"
     );
     let cargo_add_log = cargo!("add", Some(path), "log");
 
