@@ -120,5 +120,5 @@ Like tracing, logging is provisioned automatically with ProSA.
 log::info!("Generate an info log (will not be attached to a trace)");
 ```
 
-Pay attention that if you set traces from the configuration, your logs will automatically consider as traces.
-It's an internal thing of tracing.
+If you configure traces, your logs will automatically be included as part of the traces.
+This behavior is inherent to how OpenTelemetry tracing works.
