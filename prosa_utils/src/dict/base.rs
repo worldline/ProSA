@@ -136,8 +136,18 @@ where
     P: Clone,
     T: Clone + Tvf,
 {
-    /// Get a field using a numeric tag
-    pub fn get_with_id(&'tvf self, id: usize) -> Option<TvfValue<'tvf, T>> {
+    /// Build a new labeled TVF object from a dictionary and a TVF message
+    #[inline]
+    pub fn new(dict: &'dict Dictionary<P>, msg: &'tvf T) -> Self {
+        Self {
+            ignore_unknown: false,
+            dictionary: Cow::Borrowed(dict),
+            message: Cow::Borrowed(msg),
+        }
+    }
+
+    /// Get a field label, entry and value using a numeric tag
+    pub fn from_id(&self, id: usize) -> Option<TvfValue<'_, T>> {
         if let Some((_, entry)) = self.dictionary.tag_to_label.get(&id)
             && let Ok(value) = TvfValue::from_message(self.message.as_ref(), id, entry.get_type())
         {
@@ -147,12 +157,34 @@ where
         }
     }
 
-    /// Get a field using a label
-    pub fn get_with_label(&'tvf self, label: &str) -> Option<TvfValue<'tvf, T>> {
+    /// Get a field id, entry and value using a label
+    pub fn from_label(&self, label: &str) -> Option<TvfValue<'_, T>> {
         if let Some((id, entry)) = self.dictionary.label_to_tag.get(label)
             && let Ok(value) = TvfValue::from_message(self.message.as_ref(), *id, entry.get_type())
         {
             Some(value)
+        } else {
+            None
+        }
+    }
+
+    /// Get a field label, entry and value using a numeric tag
+    pub fn get_label_and_value(&self, id: usize) -> Option<(&str, &Entry<P>, TvfValue<'_, T>)> {
+        if let Some((label, entry)) = self.dictionary.tag_to_label.get(&id)
+            && let Ok(value) = TvfValue::from_message(self.message.as_ref(), id, entry.get_type())
+        {
+            Some((label, entry, value))
+        } else {
+            None
+        }
+    }
+
+    /// Get a field id, entry and value using a label
+    pub fn get_id_and_value(&self, label: &str) -> Option<(usize, &Entry<P>, TvfValue<'_, T>)> {
+        if let Some((id, entry)) = self.dictionary.label_to_tag.get(label)
+            && let Ok(value) = TvfValue::from_message(self.message.as_ref(), *id, entry.get_type())
+        {
+            Some((*id, entry, value))
         } else {
             None
         }
@@ -166,8 +198,15 @@ mod tests {
         msg::{simple_string_tvf::SimpleStringTvf, tvf::Tvf},
     };
     use bytes::Bytes;
-    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+    use chrono::{NaiveDate, NaiveDateTime};
     use std::sync::LazyLock;
+
+    /// Simple helper for generating datetime
+    macro_rules! datetime {
+        ($datetime:literal) => {
+            NaiveDateTime::parse_from_str($datetime, "%Y-%m-%dT%H:%M:%S").unwrap()
+        };
+    }
 
     #[derive(Debug, Clone, Copy)]
     enum SomePayload {
@@ -219,26 +258,22 @@ mod tests {
 
         // Create a list of timestamps
         let mut list = SimpleStringTvf::default();
+        list.put_datetime(1, datetime!("2025-11-10T10:40:00"));
+        list.put_datetime(2, datetime!("2025-12-25T18:30:00"));
+        list.put_datetime(3, datetime!("2026-01-01T00:00:00"));
 
-        // helper for writing timestamps
-        macro_rules! datetime {
-            ($year:literal - $month:literal - $day:literal $hour:literal : $minute:literal : $second:literal , $millis:literal) => {
-                NaiveDateTime::new(
-                    NaiveDate::from_ymd_opt($year, $month, $day).unwrap(),
-                    NaiveTime::from_hms_milli_opt($hour, $minute, $second, $millis).unwrap(),
-                )
-            };
-        }
-        list.put_datetime(1, datetime!(2025-11-10 10:40:00,000));
-        list.put_datetime(2, datetime!(2025-12-25 18:30:00,000));
-        list.put_datetime(3, datetime!(2026-01-01 00:00:00,000));
+        let mut list2 = SimpleStringTvf::default();
+        list2.put_buffer(1, sub_tvf.clone());
+        list2.put_buffer(2, sub_tvf.clone());
+        list2.put_buffer(3, sub_tvf.clone());
 
         // Create the main message
         let mut tvf = SimpleStringTvf::default();
         tvf.put_signed(1, 100);
         tvf.put_float(2, 0.5);
         tvf.put_bytes(3, Bytes::from_static(&[0xff, 0x01, 0x02, 0x03]));
-        tvf.put_buffer(4, sub_tvf.clone());
+        tvf.put_buffer(4, sub_tvf);
+        tvf.put_buffer(5, list);
 
         tvf
     });
@@ -283,5 +318,40 @@ mod tests {
         } else {
             panic!("Expected a sub-dictionary");
         }
+    }
+
+    #[test]
+    fn labeled_from_id() {
+        let labeled = LabeledTvf::<SomePayload, SimpleStringTvf>::new(&DICT, &MSG);
+
+        assert_eq!(100, labeled.from_id(1).unwrap().to_signed().unwrap());
+        assert_eq!(0.5, labeled.from_id(2).unwrap().to_float().unwrap());
+        assert_eq!(
+            Bytes::from_static(&[0xff, 0x01, 0x02, 0x03]),
+            labeled.from_id(3).unwrap().to_bytes().unwrap().as_ref()
+        );
+    }
+
+    #[test]
+    fn labeled_from_label() {
+        let labeled = LabeledTvf::<SomePayload, SimpleStringTvf>::new(&DICT, &MSG);
+
+        assert_eq!(
+            100,
+            labeled.from_label("first").unwrap().to_signed().unwrap()
+        );
+        assert_eq!(
+            0.5,
+            labeled.from_label("second").unwrap().to_float().unwrap()
+        );
+        assert_eq!(
+            Bytes::from_static(&[0xff, 0x01, 0x02, 0x03]),
+            labeled
+                .from_label("third")
+                .unwrap()
+                .to_bytes()
+                .unwrap()
+                .as_ref()
+        );
     }
 }
