@@ -40,9 +40,8 @@ adaptor = ["stub::adaptor::StubParotAdaptor"]
 [dependencies]
 prosa-utils = { workspace = true, features = ["msg", "config", "config-observability", "config-observability-prometheus"] }
 prosa-macros.workspace = true
-bytes.workspace = true
+log.workspace = true
 tracing = "0.1"
-tracing-subscriber = {version = "0.3", features = ["std", "env-filter"]}
 thiserror.workspace = true
 base64 = "0.22"
 url = { version = "2", features = ["serde"] }
@@ -56,19 +55,13 @@ tokio-openssl = { version = "0.6", optional = true }
 async-http-proxy = { version = "1", optional = true, features = ["runtime-tokio","basic-auth"] }
 
 serde.workspace = true
-config.workspace = true
+config = { version = "0.15", default-features = false, features = ["toml", "yaml", "json", "convert-case"] }
 glob = { version = "0.3" }
 toml.workspace = true
 serde_yaml = "0.9"
 
-log.workspace = true
-tracing-opentelemetry.workspace = true
-
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
-opentelemetry-stdout.workspace = true
-opentelemetry-otlp.workspace = true
-opentelemetry-appender-log.workspace = true
 prometheus.workspace = true
 memory-stats = "1"
 
