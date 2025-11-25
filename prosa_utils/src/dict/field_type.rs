@@ -195,4 +195,94 @@ where
             Self::Buffer  (value) => message.put_buffer  (id, value.clone().into_owned()),
         }
     }
+
+    /// Try to get a Byte from this TVF Value
+    #[inline]
+    pub fn to_byte(&self) -> Option<u8> {
+        if let Self::Byte(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a Unsigned from this TVF Value
+    #[inline]
+    pub fn to_unsigned(&self) -> Option<u64> {
+        if let Self::Unsigned(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a Signed from this TVF Value
+    #[inline]
+    pub fn to_signed(&self) -> Option<i64> {
+        if let Self::Signed(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a Float from this TVF Value
+    #[inline]
+    pub fn to_float(&self) -> Option<f64> {
+        if let Self::Float(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a String from this TVF Value
+    #[inline]
+    pub fn to_string(&self) -> Option<Cow<'_, String>> {
+        if let Self::String(value) = self {
+            Some(value.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a Bytes from this TVF Value
+    #[inline]
+    pub fn to_bytes(&self) -> Option<Cow<'_, Bytes>> {
+        if let Self::Bytes(value) = self {
+            Some(value.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a Date from this TVF Value
+    #[inline]
+    pub fn to_date(&self) -> Option<NaiveDate> {
+        if let Self::Date(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a DateTime from this TVF Value
+    #[inline]
+    pub fn to_datetime(&self) -> Option<NaiveDateTime> {
+        if let Self::DateTime(value) = self {
+            Some(*value)
+        } else {
+            None
+        }
+    }
+
+    /// Try to get a Buffer from this TVF Value
+    #[inline]
+    pub fn to_buffer(&self) -> Option<Cow<'_, T>> {
+        if let Self::Buffer(value) = self {
+            Some(value.clone())
+        } else {
+            None
+        }
+    }
 }
