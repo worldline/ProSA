@@ -68,7 +68,7 @@ pub trait Tvf {
     /// Get a sub buffer from a TVF
     fn get_buffer(&self, id: usize) -> Result<Cow<'_, Self>, TvfError>
     where
-        Self: Tvf + Default + Debug + Clone;
+        Self: Tvf + Clone;
     /// Get an unsigned value from a TVF
     fn get_unsigned(&self, id: usize) -> Result<u64, TvfError>;
     /// Get a signed value from a TVF
@@ -90,7 +90,7 @@ pub trait Tvf {
     /// Put a buffer as sub field into a TVF
     fn put_buffer(&mut self, id: usize, buffer: Self)
     where
-        Self: Tvf + Default + Debug + Clone;
+        Self: Tvf;
     /// Put an unsigned value to a TVF
     fn put_unsigned(&mut self, id: usize, unsigned: u64);
     /// Put a signed value to a TVF

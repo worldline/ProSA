@@ -789,6 +789,7 @@ impl TargetSetting {
     /// Getter of the URL with masked inner credential
     pub fn get_safe_url(&self) -> Url {
         let mut url = self.url.clone();
+        url.set_query(None);
         if !url.username().is_empty() {
             let _ = url.set_username("***");
         }
@@ -1028,8 +1029,11 @@ mod tests {
 
     #[test]
     fn target_settings_test() {
-        let target_without_credential =
-            TargetSetting::new(Url::parse("https://localhost:4443/v1").unwrap(), None, None);
+        let target_without_credential = TargetSetting::new(
+            Url::parse("https://localhost:4443/v1?var=1").unwrap(),
+            None,
+            None,
+        );
         assert_eq!(
             "https://localhost:4443/v1",
             target_without_credential.to_string()
@@ -1040,7 +1044,7 @@ mod tests {
         );
 
         let target_with_user_password = TargetSetting::new(
-            Url::parse("https://admin:admin@localhost:4443/v1").unwrap(),
+            Url::parse("https://admin:admin@localhost:4443/v1?user=admin&password=admin").unwrap(),
             None,
             None,
         );
