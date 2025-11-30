@@ -474,7 +474,7 @@ mod tests {
         struct DummySettings {}
 
         // Create bus and main processor
-        let (bus, main) = MainProc::<SimpleStringTvf>::create(&DummySettings::default());
+        let (bus, main) = MainProc::<SimpleStringTvf>::create(&DummySettings::default(), Some(2));
 
         // Launch the main task
         let main_task = tokio::spawn(main.run());

@@ -36,7 +36,8 @@ where
     M: Sized + Clone + Tvf,
 {
     /// Method to create and run the main task (must be called before processor creation)
-    fn create<S: Settings>(settings: &S) -> (Main<M>, Self);
+    /// The processor capacity is an indicator to preallocate resources (can be None if not known)
+    fn create<S: Settings>(settings: &S, proc_capacity: Option<usize>) -> (Main<M>, Self);
 
     /// Method call to run the main task (should be called before processor creation)
     fn run(self) -> impl std::future::Future<Output = ()> + Send;
@@ -390,9 +391,10 @@ impl<M> MainRunnable<M> for MainProc<M>
 where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
-    fn create<S: Settings>(settings: &S) -> (Main<M>, MainProc<M>) {
+    fn create<S: Settings>(settings: &S, proc_capacity: Option<usize>) -> (Main<M>, MainProc<M>) {
         fn inner<M>(
             main: Main<M>,
+            processors: HashMap<u32, HashMap<u32, ProcService<M>>>,
             internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
         ) -> (Main<M>, MainProc<M>)
         where
@@ -412,7 +414,7 @@ where
                 main,
                 MainProc {
                     name,
-                    processors: Default::default(),
+                    processors,
                     services: Arc::new(ServiceTable::default()),
                     internal_rx_queue,
                     meter,
@@ -421,7 +423,16 @@ where
             )
         }
         let (internal_tx_queue, internal_rx_queue) = mpsc::channel(2048);
-        inner(Main::new(internal_tx_queue, settings), internal_rx_queue)
+        let processors = if let Some(capacity) = proc_capacity {
+            HashMap::with_capacity(capacity)
+        } else {
+            HashMap::new()
+        };
+        inner(
+            Main::new(internal_tx_queue, settings),
+            processors,
+            internal_rx_queue,
+        )
     }
 
     async fn run(mut self) {

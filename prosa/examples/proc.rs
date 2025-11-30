@@ -129,7 +129,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .tracing_init(&telemetry_filter)?;
 
     // Create bus and main processor
-    let (bus, main) = MainProc::<SimpleStringTvf>::create(&my_settings);
+    let (bus, main) = MainProc::<SimpleStringTvf>::create(&my_settings, Some(3));
 
     // Launch a stub processor
     let stub_settings = StubSettings::new(vec![String::from("STUB_TEST")]);
