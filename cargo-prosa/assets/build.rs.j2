@@ -109,7 +109,11 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
     let mut f = fs::File::create(Path::new(&out_dir).join("run.rs"))?;
 
     writeln!(f, "fn new_main(settings: &RunSettings) -> (prosa::core::main::Main<{{ '{}' }}>, {{ '{}' }}<{{ '{}' }}>) {{ '{{' }}", desc.prosa.tvf, desc.prosa.main, desc.prosa.tvf)?;
-    writeln!(f, "    {{ '{}' }}::<{{ '{}' }}>::create(settings)", desc.prosa.main, desc.prosa.tvf)?;
+    if let Some(procs) = &desc.proc {{ '{' }}
+        writeln!(f, "    {{ '{}::<{}>' }}::create(settings, Some({{ '{}' }}))", desc.prosa.main, desc.prosa.tvf, procs.len())?;
+    {{ '}' }} else {{ '{' }}
+        writeln!(f, "    {{ '{}::<{}>' }}::create(settings, None)", desc.prosa.main, desc.prosa.tvf)?;
+    {{ '}' }}
     writeln!(f, "{{ '}}' }}")?;
 
     writeln!(f, "\n/// Method to run all configured processors, return the number of processors runned")?;

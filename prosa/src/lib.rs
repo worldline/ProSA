@@ -106,7 +106,7 @@ mod tests {
         let test_settings = TestSettings::new(SERVICE_TEST);
 
         // Create bus and main processor
-        let (bus, main) = MainProc::<SimpleStringTvf>::create(&test_settings);
+        let (bus, main) = MainProc::<SimpleStringTvf>::create(&test_settings, Some(2));
 
         // Launch the main task
         let main_task = tokio::spawn(main.run());
