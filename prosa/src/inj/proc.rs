@@ -117,7 +117,7 @@ impl Default for InjSettings {
 ///
 /// // Create bus and main processor
 /// let settings = Settings::default();
-/// let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings);
+/// let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings, Some(1));
 ///
 /// // Launch an injector processor
 /// let inj_settings = InjSettings::new("INJ_TEST".into());

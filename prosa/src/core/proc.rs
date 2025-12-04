@@ -426,11 +426,6 @@ where
         self.main.meter(name)
     }
 
-    /// Provide the opentelemetry Logger based on ProSA settings
-    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::SdkLogger {
-        self.main.logger(name)
-    }
-
     /// Provide the opentelemetry Tracer based on ProSA settings
     pub fn tracer(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::trace::Tracer {
         self.main.tracer(name)
@@ -473,9 +468,8 @@ where
 macro_rules! proc_run {
     ( $self:ident ) => {
         info!(
-            "Run processor[{}] {} on {} threads",
-            $self.get_proc_id(),
-            $self.name(),
+            target: $self.name(),
+            "Run processor on {} threads",
             $self.get_proc_threads()
         );
 
@@ -495,9 +489,8 @@ macro_rules! proc_run {
                 // Log and restart if needed
                 if proc_err.recoverable() {
                     warn!(
-                        "Processor[{}] {} encounter an error `{}`. Will restart after {}ms",
-                        $self.get_proc_id(),
-                        $self.name(),
+                        target: $self.name(),
+                        "Processor encounter an error `{}`. Will restart after {}ms",
                         proc_err,
                         (wait_time + recovery_duration).as_millis()
                     );
@@ -508,9 +501,8 @@ macro_rules! proc_run {
                     }
                 } else {
                     error!(
-                        "Processor[{}] {} encounter a fatal error `{}`",
-                        $self.get_proc_id(),
-                        $self.name(),
+                        target: $self.name(),
+                        "Processor encounter a fatal error `{}`",
                         proc_err
                     );
 

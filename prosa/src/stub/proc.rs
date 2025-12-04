@@ -55,7 +55,7 @@ impl StubSettings {
 ///
 /// // Create bus and main processor
 /// let settings = Settings::default();
-/// let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings);
+/// let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings, Some(1));
 ///
 /// // Launch a stub processor
 /// let stub_settings = StubSettings::new(vec![String::from("STUB_TEST")]);
