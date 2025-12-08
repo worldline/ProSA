@@ -16,11 +16,9 @@ use super::{
     service::{ProcService, ServiceTable},
     settings::Settings,
 };
-use opentelemetry::logs::LoggerProvider as _;
 use opentelemetry::metrics::{Meter, MeterProvider as _};
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::{InstrumentationScope, KeyValue};
-use opentelemetry_appender_log::OpenTelemetryLogBridge;
 use std::borrow::Cow;
 use std::sync::{
     Arc,
@@ -80,7 +78,6 @@ where
     name: String,
     prometheus_registry: prometheus::Registry,
     meter_provider: opentelemetry_sdk::metrics::SdkMeterProvider,
-    logger_provider: opentelemetry_sdk::logs::SdkLoggerProvider,
     tracer_provider: opentelemetry_sdk::trace::SdkTracerProvider,
     stop: Arc<AtomicBool>,
 }
@@ -112,17 +109,12 @@ where
         let meter_provider = settings
             .get_observability()
             .build_meter_provider(&prometheus_registry);
-        let logger_provider = settings.get_observability().build_logger_provider();
-        let otel_log_appender = OpenTelemetryLogBridge::new(&logger_provider);
-        let _ = log::set_boxed_logger(Box::new(otel_log_appender));
-        log::set_max_level(settings.get_observability().get_logger_level().into());
 
         Main {
             internal_tx_queue,
             name: settings.get_prosa_name(),
             prometheus_registry,
             meter_provider,
-            logger_provider,
             tracer_provider: settings.get_observability().build_tracer_provider(),
             stop: Arc::new(AtomicBool::new(false)),
         }
@@ -245,11 +237,6 @@ where
     /// Provide the opentelemetry Meter based on ProSA settings
     pub fn meter(&self, name: &'static str) -> opentelemetry::metrics::Meter {
         self.meter_provider.meter(name)
-    }
-
-    /// Provide the opentelemetry Logger based on ProSA settings
-    pub fn logger(&self, name: impl Into<Cow<'static, str>>) -> opentelemetry_sdk::logs::SdkLogger {
-        self.logger_provider.logger(name)
     }
 
     /// Provide the opentelemetry Tracer based on ProSA settings

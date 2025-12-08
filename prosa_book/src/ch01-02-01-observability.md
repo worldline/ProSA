@@ -24,14 +24,27 @@ observability:
   traces:
     stdout:
       level: debug
+```
+
+If you use `tracing`, you will get richer log output compared to `log`:
+```yaml
+observability:
+  level: debug
+  metrics:
+    stdout:
+      level: info
   logs:
     stdout:
       level: debug
 ```
 
+If both _traces_ and _logs_ are configured, only the _traces_ configuration will be applied.
+
 ### OpenTelemetry
 
-You can also push your telemetry to a GRPC OpenTelemetry collector:
+#### gRPC
+
+You can also push your telemetry to a gRPC OpenTelemetry collector:
 ```yaml
 observability:
   level: debug
@@ -41,12 +54,24 @@ observability:
   traces:
     otlp:
       endpoint: "grpc://localhost:4317"
+```
+
+If you specify _traces_, only _traces_ (including _logs_) will be sent.
+To send _logs_ separately, use the **logs**:
+```yaml
+observability:
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "grpc://localhost:4317"
   logs:
     otlp:
       endpoint: "grpc://localhost:4317"
 ```
 
-Or an HTTP Opentelemetry collector:
+#### HTTP
+
+To use an HTTP OpenTelemetry collector:
 ```yaml
 observability:
   level: debug
@@ -56,6 +81,15 @@ observability:
   traces:
     otlp:
       endpoint: "http://localhost:4318/v1/traces"
+```
+
+To send _logs_ via HTTP, specify the **logs** (without the _traces_):
+```yaml
+observability:
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "http://localhost:4318/v1/metrics"
   logs:
     otlp:
       endpoint: "http://localhost:4318/v1/logs"

@@ -120,5 +120,5 @@ Like tracing, logging is provisioned automatically with ProSA.
 log::info!("Generate an info log (will not be attached to a trace)");
 ```
 
-If you prefer not to use `log`, you also have access to the [OpenTelemetry Logger](https://docs.rs/opentelemetry/0.29.0/opentelemetry/logs/trait.LoggerProvider.html#associatedtype.Logger) from the [main task](https://docs.rs/prosa/latest/prosa/core/main/struct.Main.html#method.logger) and [processors](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.logger).
-You can use this logger for full control over your observability logs.
+If you configure traces, your logs will automatically be included as part of the traces.
+This behavior is inherent to how OpenTelemetry tracing works.

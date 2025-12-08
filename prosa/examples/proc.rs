@@ -114,7 +114,7 @@ struct MySettings {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // load the configuration
     let config = Config::builder()
-        .add_source(config::File::with_name("./my_prosa_settings.yml"))
+        .add_source(config::File::with_name("examples/my_prosa_settings.yml"))
         .add_source(config::Environment::with_prefix("PROSA"))
         .build()
         .unwrap();
