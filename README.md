@@ -5,7 +5,7 @@ ProSA - **Pro**tocol **S**ervice **A**daptor
 [<img alt="crates-io" src="https://img.shields.io/badge/crates.io-ffeb78?style=for-the-badge&labelColor=555555&logo=rust" height="20">](https://crates.io/crates/prosa)
 [<img alt="docs-rs" src="https://img.shields.io/badge/docs.rs-41b4d2?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/prosa)
 [<img alt="mdbook" src="https://img.shields.io/badge/mdbook-005a8c?style=for-the-badge&labelColor=555555&logo=mdbook" height="20">](https://worldline.github.io/ProSA/)
-[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/worldline/ProSA/ci.yml?branch%3Amaster&style=for-the-badge" height="20">](https://github.com/worldline/ProSA/actions?query=branch%3Amaster)
+[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/worldline/ProSA/ci.yml?branch%3Amain&style=for-the-badge" height="20">](https://github.com/worldline/ProSA/actions?query=branch%3Amain)
 [<img alt="dependency status" src="https://img.shields.io/deps-rs/repo/github/worldline/ProSA?style=for-the-badge" height="20">](https://deps.rs/repo/github/worldline/ProSA)
 
 ProSA is a merge of multiple [Worldline](https://worldline.com/) internal product concepts caviarized to be released as a [🦀 Rust](https://www.rust-lang.org/) open-source.
