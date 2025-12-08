@@ -1,11 +1,18 @@
 ProSA - **Pro**tocol **S**ervice **A**daptor
 ==============================
 
-ProSA is a merge of multiple [Worldline](https://worldline.com/) internal product concepts caviarized to be released as a [Rust](https://www.rust-lang.org/) open-source.
+[<img alt="github" src="https://img.shields.io/badge/github-46beaa?style=for-the-badge&labelColor=555555&logo=github" height="20">](https://github.com/worldline/ProSA)
+[<img alt="crates-io" src="https://img.shields.io/badge/crates.io-ffeb78?style=for-the-badge&labelColor=555555&logo=rust" height="20">](https://crates.io/crates/prosa)
+[<img alt="docs-rs" src="https://img.shields.io/badge/docs.rs-41b4d2?style=for-the-badge&labelColor=555555&logo=docs.rs" height="20">](https://docs.rs/prosa)
+[<img alt="mdbook" src="https://img.shields.io/badge/mdbook-005a8c?style=for-the-badge&labelColor=555555&logo=mdbook" height="20">](https://worldline.github.io/ProSA/)
+[<img alt="build status" src="https://img.shields.io/github/actions/workflow/status/worldline/ProSA/ci.yml?branch%3Amaster&style=for-the-badge" height="20">](https://github.com/worldline/ProSA/actions?query=branch%3Amaster)
+[<img alt="dependency status" src="https://img.shields.io/deps-rs/repo/github/worldline/ProSA?style=for-the-badge" height="20">](https://deps.rs/repo/github/worldline/ProSA)
+
+ProSA is a merge of multiple [Worldline](https://worldline.com/) internal product concepts caviarized to be released as a [🦀 Rust](https://www.rust-lang.org/) open-source.
 The library aimed at providing a simple and lightweight protocol service adaptor for service oriented architectures.
 The goal of this project is to provide a flexible and scalable platform for developing and deploying microservices, allowing developers to focus on writing business logic while ProSA takes care of the underlying infrastructure concers.
 
-A [ProSA mdBook](https://worldline.github.io/ProSA/) is available if you want to learn everything about ProSA.
+A [📖 ProSA mdBook](https://worldline.github.io/ProSA/) is available if you want to learn everything about ProSA.
 
 ## Legend
 
@@ -15,7 +22,6 @@ ProSA components are illustrated:
  - Processor: [<img alt="processor" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/proc.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/proc/ "processor")
  - Settings: [<img alt="settings" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/settings.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/settings/ "settings")
  - Adaptor: [<img alt="adaptor" src="https://raw.githubusercontent.com/worldline/ProSA/main/assets/adaptor.svg" width="26">](https://docs.rs/prosa/latest/prosa/core/adaptor/ "adaptor")
-
 
 ## Service approach
 
@@ -47,7 +53,6 @@ flowchart LR
     proc -- internal service message --> bus
 ```
 
-
 ## Getting Started
 
 Everything you need to know about ProSA components is describe in the [Docs.rs](https://docs.rs/prosa/latest/prosa/) documentation.
@@ -72,7 +77,6 @@ flowchart LR
     settings --> Processor
 ```
 
-
 ## Deploying
 
 ProSA is not a full product that you can run.
@@ -80,7 +84,6 @@ It's intended to be a framework to run processors that offer/consume services.
 
 So ProSA needs to be built with a set of processors (internal or external) to work.
 To build one, please refer to [cargo-prosa](./cargo-prosa/README.md).
-
 
 ## Processor list
 
