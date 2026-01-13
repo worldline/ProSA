@@ -22,4 +22,4 @@ In fact, ProSA contains no direct references to Worldline's private properties.
 
 ## Version
 
-This book is intended for version 0.3.0 of ProSA.
+This book is intended for version 0.4.0 of ProSA.
