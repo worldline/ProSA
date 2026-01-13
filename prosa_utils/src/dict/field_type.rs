@@ -107,18 +107,18 @@ macro_rules! impl_from {
     };
 }
 
-impl_from!(u8 => Byte as u8);
-impl_from!(u16 => Unsigned as u64);
-impl_from!(u32 => Unsigned as u64);
-impl_from!(u64 => Unsigned as u64);
-impl_from!(usize => Unsigned as u64);
-impl_from!(i8 => Signed as i64);
-impl_from!(i16 => Signed as i64);
-impl_from!(i32 => Signed as i64);
-impl_from!(i64 => Signed as i64);
-impl_from!(isize => Signed as i64);
-impl_from!(f32 => Float as f64);
-impl_from!(f64 => Float as f64);
+impl_from! { u8    => Byte     as u8  }
+impl_from! { u16   => Unsigned as u64 }
+impl_from! { u32   => Unsigned as u64 }
+impl_from! { u64   => Unsigned as u64 }
+impl_from! { usize => Unsigned as u64 }
+impl_from! { i8    => Signed   as i64 }
+impl_from! { i16   => Signed   as i64 }
+impl_from! { i32   => Signed   as i64 }
+impl_from! { i64   => Signed   as i64 }
+impl_from! { isize => Signed   as i64 }
+impl_from! { f32   => Float    as f64 }
+impl_from! { f64   => Float    as f64 }
 
 impl<T: Tvf + Clone> From<&str> for TvfValue<'_, T> {
     fn from(value: &str) -> Self {

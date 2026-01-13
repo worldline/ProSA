@@ -1,5 +1,5 @@
 use super::{Dictionary, EntryType};
-use crate::msg::tvf::TvfError;
+use crate::msg::tvf::{Tvf, TvfError};
 use std::fmt;
 
 /// A path of unprocessed labels
@@ -156,10 +156,67 @@ impl<P> Dictionary<P> {
     }
 }
 
+/// Error encountered when following a path in a TVF buffer
+#[derive(Debug, Eq, thiserror::Error, PartialOrd, PartialEq)]
+#[error("Failed to access sub buffer {field} at level {level}: \"{source}\"")]
+pub struct FollowError {
+    /// Sub level we've reached in the initial TVF buffer
+    level: usize,
+
+    /// Field we've tried to access
+    field: usize,
+
+    /// Underlying TvfError
+    #[source]
+    source: TvfError,
+}
+
+/// Get a sub buffer from this buffer by following a path
+pub fn follow_path<T>(buffer: T, path: &[usize]) -> Result<T, FollowError>
+where
+    T: Tvf + Clone,
+{
+    let mut current = buffer;
+    for (level, &field) in path.iter().enumerate() {
+        match current.get_buffer(field) {
+            Ok(sub_buffer) => {
+                current = sub_buffer.into_owned();
+            }
+            Err(source) => {
+                return Err(FollowError {
+                    level,
+                    field,
+                    source,
+                });
+            }
+        }
+    }
+    Ok(current)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::dict::*;
+    use crate::{
+        dict::{path::follow_path, *},
+        msg::{simple_string_tvf::SimpleStringTvf, tvf::Tvf},
+    };
+    use bytes::Bytes;
+    use chrono::{NaiveDate, NaiveDateTime};
     use std::sync::LazyLock;
+
+    /// Simple helper for generating datetime
+    macro_rules! datetime {
+        ($datetime:literal) => {
+            NaiveDateTime::parse_from_str($datetime, "%Y-%m-%dT%H:%M:%S").unwrap()
+        };
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    enum SomePayload {
+        A,
+        B,
+        C,
+    }
 
     /// A sample dictionary for testing
     static DICT: LazyLock<Dictionary<()>> = LazyLock::new(|| {
@@ -182,6 +239,36 @@ mod tests {
         dict
     });
 
+    /// A sample message for testing
+    static MSG: LazyLock<SimpleStringTvf> = LazyLock::new(|| {
+        // Create a sub-message
+        let mut sub_tvf = SimpleStringTvf::default();
+        sub_tvf.put_string(10, "TinTin");
+        sub_tvf.put_date(20, NaiveDate::from_ymd_opt(1929, 1, 10).unwrap());
+        sub_tvf.put_string(30, "Moulinsart");
+
+        // Create a list of timestamps
+        let mut list = SimpleStringTvf::default();
+        list.put_datetime(1, datetime!("2025-11-10T10:40:00"));
+        list.put_datetime(2, datetime!("2025-12-25T18:30:00"));
+        list.put_datetime(3, datetime!("2026-01-01T00:00:00"));
+
+        let mut list2 = SimpleStringTvf::default();
+        list2.put_buffer(1, sub_tvf.clone());
+        list2.put_buffer(2, sub_tvf.clone());
+        list2.put_buffer(3, sub_tvf.clone());
+
+        // Create the main message
+        let mut tvf = SimpleStringTvf::default();
+        tvf.put_signed(1, 100);
+        tvf.put_float(2, 0.5);
+        tvf.put_bytes(3, Bytes::from_static(&[0xff, 0x01, 0x02, 0x03]));
+        tvf.put_buffer(4, sub_tvf);
+        tvf.put_buffer(5, list);
+
+        tvf
+    });
+
     #[test]
     fn dict_resolve_path() {
         assert_eq!(vec![1], DICT.resolve_path_str::<'.'>("first").unwrap());
@@ -195,5 +282,12 @@ mod tests {
             vec![6, 2, 10],
             DICT.resolve_path_str::<'.'>("sixth.2.name").unwrap()
         );
+    }
+
+    #[test]
+    fn dict_get_field_from_path() {
+        //let path = DICT.resolve_path_str::<'.'>("first").unwrap();
+
+        assert_eq!(MSG.clone(), follow_path(MSG.clone(), &[]).unwrap());
     }
 }
