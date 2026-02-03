@@ -9,9 +9,9 @@ use std::{
     time::Duration,
 };
 
-use prosa_utils::config::{ssl::SslConfig, url_authentication};
 #[cfg(feature = "openssl")]
 use prosa_utils::config::ssl::SslConfigContext;
+use prosa_utils::config::{ssl::SslConfig, url_authentication};
 
 use serde::{Deserialize, Serialize};
 use tokio::{

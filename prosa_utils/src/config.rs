@@ -6,9 +6,9 @@
 
 use std::{path::PathBuf, process::Command};
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use thiserror::Error;
 use url::Url;
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 // Feature openssl or rusttls,...
 pub mod ssl;
@@ -100,7 +100,7 @@ pub fn hostname() -> Option<String> {
 ///
 /// ```
 /// use url::Url;
-/// use prosa::io::stream::TargetSetting;
+/// use prosa_utils::config::url_authentication;
 ///
 /// let basic_auth_target = Url::parse("http://user:pass@localhost:8080").unwrap();
 /// assert_eq!(Some(String::from("Basic dXNlcjpwYXNz")), url_authentication(&basic_auth_target));
@@ -146,12 +146,18 @@ mod tests {
     #[test]
     fn test_url_authentication_basic() {
         let basic_auth_target = Url::parse("http://user:pass@localhost:8080").unwrap();
-        assert_eq!(Some(String::from("Basic dXNlcjpwYXNz")), url_authentication(&basic_auth_target));
+        assert_eq!(
+            Some(String::from("Basic dXNlcjpwYXNz")),
+            url_authentication(&basic_auth_target)
+        );
     }
 
     #[test]
     fn test_url_authentication_bearer() {
         let bearer_auth_target = Url::parse("http://:token@localhost:8080").unwrap();
-        assert_eq!(Some(String::from("Bearer token")), url_authentication(&bearer_auth_target));
+        assert_eq!(
+            Some(String::from("Bearer token")),
+            url_authentication(&bearer_auth_target)
+        );
     }
 }

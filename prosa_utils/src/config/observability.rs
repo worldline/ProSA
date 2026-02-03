@@ -1,7 +1,9 @@
 //! Definition of Opentelemetry configuration
 
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
-use opentelemetry_otlp::{ExportConfig, ExporterBuildError, Protocol, WithExportConfig, WithHttpConfig};
+use opentelemetry_otlp::{
+    ExportConfig, ExporterBuildError, Protocol, WithExportConfig, WithHttpConfig,
+};
 use opentelemetry_sdk::{
     logs::SdkLoggerProvider,
     metrics::SdkMeterProvider,
