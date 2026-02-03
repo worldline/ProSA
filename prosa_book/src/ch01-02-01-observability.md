@@ -12,6 +12,35 @@ You can also configure your processor to act as a server that exposes those metr
 
 Of course all configurations can be mixed. You can send your logs to an OpenTelemetry collector and to stdout simultaneously.
 
+### Attributes
+
+For each of your observability data, you can configure attribute that will add labels on your data.
+
+These attribute should follow the [OpenTelemetry resource conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md).
+
+Some of these attributtes are automaticcaly field from ProSA depending of your environment:
+- `service.name` took from _prosa name_
+- `host.arch` if detected from the compilation
+- `os.type` if the OS was detected
+- `service.version` the package version
+
+For your logs and traces (but not metrics to avoid overloading metrics indexes), you'll find:
+- `process.creation.time`
+- `process.pid`
+
+In the configuration you'll have:
+```yaml
+observability:
+  attributes:
+    # Override the service.name from ProSA
+    service.name: "my_service"
+    # Overried the version
+    service.version: "1.0.0"
+  metric: # metrics params
+  traces: # traces params
+  logs:   # logs params
+```
+
 ### Stdout
 
 If you want to direct all logs to stdout, you can do something like this:
@@ -117,3 +146,5 @@ observability:
     prometheus:
       endpoint: "0.0.0.0:9090"
 ```
+
+> You also need to enable the feature `prometheus` for ProSA.

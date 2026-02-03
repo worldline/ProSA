@@ -9,11 +9,10 @@ use std::{
     time::Duration,
 };
 
-use prosa_utils::config::ssl::SslConfig;
+use prosa_utils::config::{ssl::SslConfig, url_authentication};
 #[cfg(feature = "openssl")]
 use prosa_utils::config::ssl::SslConfigContext;
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -816,18 +815,7 @@ impl TargetSetting {
     /// assert_eq!(Some(String::from("Bearer token")), bearer_auth_target.get_authentication());
     /// ```
     pub fn get_authentication(&self) -> Option<String> {
-        if let Some(password) = self.url.password() {
-            if self.url.username().is_empty() {
-                Some(format!("Bearer {password}"))
-            } else {
-                Some(format!(
-                    "Basic {}",
-                    STANDARD.encode(format!("{}:{}", self.url.username(), password))
-                ))
-            }
-        } else {
-            None
-        }
+        url_authentication(&self.url)
     }
 
     /// Method to init the ssl context out of the ssl target configuration.
