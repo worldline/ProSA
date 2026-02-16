@@ -384,26 +384,21 @@ impl Observability {
         let mut scope_attributes = Vec::with_capacity(capacity + 3);
         scope_attributes.push(KeyValue::new("service.name", service_name));
 
-        if cfg!(target_arch = "x86_64") {
-            scope_attributes.push(KeyValue::new("host.arch", "amd64"));
-        } else if cfg!(target_arch = "aarch64") {
-            scope_attributes.push(KeyValue::new("host.arch", "arm64"));
-        } else if cfg!(target_arch = "arm") {
-            scope_attributes.push(KeyValue::new("host.arch", "arm32"));
+        match std::env::consts::ARCH {
+            "x86_64" => scope_attributes.push(KeyValue::new("host.arch", "amd64")),
+            "aarch64" => scope_attributes.push(KeyValue::new("host.arch", "arm64")),
+            "arm" => scope_attributes.push(KeyValue::new("host.arch", "arm32")),
+            _ => {}
         }
 
-        if cfg!(target_os = "linux") {
-            scope_attributes.push(KeyValue::new("os.type", "linux"));
-        } else if cfg!(target_os = "macos") {
-            scope_attributes.push(KeyValue::new("os.type", "darwin"));
-        } else if cfg!(target_os = "freebsd") {
-            scope_attributes.push(KeyValue::new("os.type", "freebsd"));
-        } else if cfg!(target_os = "openbsd") {
-            scope_attributes.push(KeyValue::new("os.type", "openbsd"));
-        } else if cfg!(target_os = "netbsd") {
-            scope_attributes.push(KeyValue::new("os.type", "netbsd"));
-        } else if cfg!(target_os = "windows") {
-            scope_attributes.push(KeyValue::new("os.type", "windows"));
+        match std::env::consts::OS {
+            "linux" => scope_attributes.push(KeyValue::new("os.type", "linux")),
+            "macos" => scope_attributes.push(KeyValue::new("os.type", "darwin")),
+            "freebsd" => scope_attributes.push(KeyValue::new("os.type", "freebsd")),
+            "openbsd" => scope_attributes.push(KeyValue::new("os.type", "openbsd")),
+            "netbsd" => scope_attributes.push(KeyValue::new("os.type", "netbsd")),
+            "windows" => scope_attributes.push(KeyValue::new("os.type", "windows")),
+            _ => {}
         }
 
         scope_attributes
