@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>SSL - ProSA - Protocol Service Adaptor</title>
+        <title>Monitoring - ProSA - Protocol Service Adaptor</title>
 
 
         <!-- Custom HTML head -->
@@ -178,114 +178,66 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ssl"><a class="header" href="#ssl">SSL</a></h1>
-<p>Configuring SSL is a complex task, but many options have been provided to make it accessible and flexible.</p>
-<h2 id="library-selection"><a class="header" href="#library-selection">Library selection</a></h2>
-<p>ProSA through traits:</p>
+                        <h1 id="monitoring"><a class="header" href="#monitoring">Monitoring</a></h1>
+<p>If you configured <a href="ch01-02-01-observability.html">Observability</a>, ProSA offers observability data out of the box.</p>
+<h2 id="metrics"><a class="header" href="#metrics">Metrics</a></h2>
+<p>Metrics are useful in processors.
+To know more, refer to the processor you use to know which metrics they expose.
+They should export <a href="ch02-04-observability.html#metrics">metrics</a>.</p>
+<p>But ProSA has also its own metrics to have a global view of what’s running.
+This generic dashboard will be available soon from Grafana if you want to import it.</p>
+<h3 id="graphical-representation"><a class="header" href="#graphical-representation">Graphical representation</a></h3>
+<p>Having a view of every processor and service is important to know if your processors are healthy and if your services are up and running.
+There is a node graph to view the entire state of ProSA:</p>
+<p><img src="ch01-03-monitoring-grafana_graph.png" alt="Grafana Graph"></p>
+<p>From this graph, you’ll see:</p>
 <ul>
-<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslStore.html"><code>SslStore</code></a> to handle specific library certificate Store.</li>
-<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslConfigContext.html"><code>SslConfigContext</code></a> to handle specific client/server SSL context for TLS negociation.</li>
-</ul>
-<p>allows the use of <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/openssl/index.html">OpenSSL</a> and later more SSL libraries.</p>
-<p>By default, ProSA will use OpenSSL, but if you want, you can use the following features to change it:</p>
+<li>Processors 🔄
 <ul>
-<li><code>openssl</code>: Use OpenSSL by default</li>
-<li><code>openssl-vendored</code>: <a href="https://docs.rs/openssl/latest/openssl/#vendored">Vendored</a> OpenSSL that compiles and statically links to the OpenSSL library</li>
+<li><font color="green">green</font> indicates that they are running</li>
+<li><font color="orange">orange</font> if they experienced at least one restart</li>
+<li><font color="grey">grey</font> if they are stopped</li>
+<li><font color="red">red</font> if they crashed</li>
 </ul>
-<h2 id="store"><a class="header" href="#store">Store</a></h2>
-<p>You have two options to configure an <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/enum.Store.html">SSL store</a>:</p>
+</li>
+<li>Services ⠶
 <ul>
-<li>Specify a store path that will include all certificates found within the folder and its subfolders</li>
-<li>Specify individual certificates directly in PEM format</li>
+<li><font color="green">green</font> if at least one processor exposes it</li>
+<li><font color="grey">grey</font> if they are not available</li>
 </ul>
-<h3 id="store-path"><a class="header" href="#store-path">Store path</a></h3>
-<p>When you declare a store path, the system scans the folder and subfolders to load all <code>.pem</code> and <code>.der</code> certificates it finds.</p>
-<p>To configure it, just specify the path:</p>
-<pre><code class="language-yaml">store:
-  path: "/etc/ssl/certs/"
-</code></pre>
-<h3 id="store-certificates"><a class="header" href="#store-certificates">Store certificates</a></h3>
-<p>If you prefer to include your certificates directly in the configuration (in PEM format), you can do so as follows:</p>
-<pre><code class="language-yaml">store:
-  certs:
-    - |
-        -----BEGIN CERTIFICATE-----
-        MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
-        CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
-        R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
-        MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
-        ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
-        EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
-        +1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
-        ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
-        AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
-        zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
-        tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
-        /q4AaOeMSQ+2b1tbFfLn
-        -----END CERTIFICATE-----
-</code></pre>
+</li>
+<li>Links between processors and services representing processors that expose a service</li>
+</ul>
+<p>From that graph, you have a complete view of your ProSA state.</p>
+<h3 id="system-metrics"><a class="header" href="#system-metrics">System metrics</a></h3>
+<p>ProSA provides RAM metrics in order to keep track of process allocation.
+This could be useful to know if on a VM ProSA is using the RAM, or it’s another process on the host.</p>
+<p>It provides 2 <code>type</code> of metrics:</p>
+<ul>
+<li><code>virtual</code> for virtual RAM used</li>
+<li><code>physical</code> for physical RAM used</li>
+</ul>
 <blockquote>
-<p>This method is primarily used for inline certificates embedded in the code.</p>
+<p>To have system metrics, you need to enable the feature <code>system-metrics</code> for ProSA.</p>
 </blockquote>
-<h2 id="sslconfig"><a class="header" href="#sslconfig">SslConfig</a></h2>
-<p><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/struct.SslConfig.html"><code>SslConfig</code></a> is the main configuration object for SSL.</p>
-<p>It allows configuring:</p>
-<ul>
-<li><a href="#store">Store</a></li>
-<li>Certificate, key, or PKCS#12 bundle</li>
-<li>ALPN (<em>A</em>pplication-<em>L</em>ayer <em>P</em>rotocol <em>N</em>egotiation)</li>
-<li>Modern security flag as per <a href="https://wiki.mozilla.org/Security/Server_Side_TLS">Mozilla guidelines</a></li>
-<li>SSL timeout for negociations</li>
-</ul>
-<h3 id="pkcs12"><a class="header" href="#pkcs12">PKCS#12</a></h3>
-<p>To configure SSL with a PKCS#12 bundle:</p>
-<pre><code class="language-yaml">ssl_config:
-  store:
-    path: "/etc/ssl/certs/"
-  pkcs12: "/opt/cert.p12"
-  passphrase: "p12_passphrase"
-</code></pre>
-<h3 id="pemder-certificates"><a class="header" href="#pemder-certificates">PEM/DER certificates</a></h3>
-<p>For traditional PEM certificates:</p>
-<pre><code class="language-yaml">ssl_config:
-  store:
-    path: "/etc/ssl/certs/"
-  cert: "/opt/cert.pem"
-  key: "/opt/cert.key"
-  passphrase: "key_passphrase"
-  alpn:
-    - "h2"
-    - "http/1.1"
-  modern_security: true
-  ssl_timeout: 3000
-</code></pre>
-<blockquote>
-<p>If you specify a certificate with a <code>.der</code> extention, it will be read as DER-encoded.</p>
-</blockquote>
-<h3 id="self-signed-certificate"><a class="header" href="#self-signed-certificate">Self signed certificate</a></h3>
-<p>If your server connection is SSL (with the <code>ssl://</code> or the <code>+ssl://</code> suffixed protocol) and you don’t specify a certificate and its private key, it’ll generate a self-signed certificate.</p>
-<p>If you want to retrieve the generated certificate because you need to trust it from a remote, you can specify a certificate path where the certificate will be written:</p>
-<pre><code class="language-yaml">ssl_config:
-  cert: "/opt/self_signed_cert.pem"
-</code></pre>
-<h3 id="usage"><a class="header" href="#usage">Usage</a></h3>
-<p>The SslConfig applies both to server and client configurations.</p>
-<p>If you specify a store, it’ll be used:</p>
-<ul>
-<li>On the client-side, to validate server certificates</li>
-<li>On the server-side, to validate client certificates</li>
-</ul>
-<p>Similarly, if you own a certificate (with a private key), it can be used as either a client or server certificate.</p>
+<h2 id="traces"><a class="header" href="#traces">Traces</a></h2>
+<p>Since ProSA is a transactional framework, traces are a must-have to view transaction-relative information.</p>
+<p><img src="ch01-03-monitoring-grafana_trace.png" alt="Grafana Trace"></p>
+<p>From this global trace, you can have <a href="ch02-04-observability.html#traces">processor spans</a> attached to it.</p>
+<h2 id="logs"><a class="header" href="#logs">Logs</a></h2>
+<p>All logs generated by ProSA are available.
+Normally processors should use the ProSA <a href="ch02-04-observability.html#logs">logging</a> system.
+If they do not, please refer to your processor to know how to handle them.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="ch01-02-01-observability.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="ch01-02-04-run.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="ch01-02-03-stream.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="ch01-04-puppet.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -295,11 +247,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="ch01-02-01-observability.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="ch01-02-04-run.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="ch01-02-03-stream.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="ch01-04-puppet.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

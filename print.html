@@ -13,24 +13,23 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff">
 
-        <link rel="icon" href="favicon.svg">
-        <link rel="shortcut icon" href="favicon.png">
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        <link rel="stylesheet" href="css/print.css" media="print">
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-2459343d.css">
+        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" id="highlight-css" href="highlight.css">
-        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
-        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
-        <link rel="stylesheet" href="worldline.css">
+        <link rel="stylesheet" href="worldline-189346fa.css">
 
 
         <!-- Provide site root and default themes to javascript -->
@@ -38,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex.js";
+            window.path_to_searchindex_js = "searchindex-82f6d18b.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc.js"></script>
+        <script src="toc-a260a5bf.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -55,7 +54,7 @@
             </div>
         </div>
     </div>
-    <div id="body-container">
+    <div id="mdbook-body-container">
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
         <script>
             try {
@@ -84,12 +83,12 @@
             html.classList.add("js");
         </script>
 
-        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
             let sidebar = null;
-            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
@@ -104,39 +103,39 @@
             }
         </script>
 
-        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
             <!-- populated by js -->
             <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
             <noscript>
                 <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
             </noscript>
-            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
             </div>
         </nav>
 
-        <div id="page-wrapper" class="page-wrapper">
+        <div id="mdbook-page-wrapper" class="page-wrapper">
 
             <div class="page">
-                <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
-                            <i class="fa fa-bars"></i>
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
                         </label>
-                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
-                            <i class="fa fa-paint-brush"></i>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
                         </button>
-                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
                         </ul>
-                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
-                            <i class="fa fa-search"></i>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
                         </button>
                     </div>
 
@@ -144,57 +143,58 @@
 
                     <div class="right-buttons">
                         <a href="print.html" title="Print this book" aria-label="Print this book">
-                            <i id="print-button" class="fa fa-print"></i>
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
                         <a href="https://github.com/worldline/ProSA" title="Git repository" aria-label="Git repository">
-                            <i id="git-repository-button" class="fa fa-github"></i>
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
                         </a>
 
                     </div>
                 </div>
 
-                <div id="search-wrapper" class="hidden">
-                    <form id="searchbar-outer" class="searchbar-outer">
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
                         <div class="search-wrapper">
-                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
                             <div class="spinner-wrapper">
-                                <i class="fa fa-spinner fa-spin"></i>
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
                             </div>
                         </div>
                     </form>
-                    <div id="searchresults-outer" class="searchresults-outer hidden">
-                        <div id="searchresults-header" class="searchresults-header"></div>
-                        <ul id="searchresults">
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
                         </ul>
                     </div>
                 </div>
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
                 <script>
-                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
-                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
-                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
                         link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
                     });
                 </script>
 
-                <div id="content" class="content">
+                <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="prosa---protocol-service-adaptor"><a class="header" href="#prosa---protocol-service-adaptor">ProSA - Protocol Service Adaptor</a></h1>
 <img class="logo" alt="Worldline" src="worldline.svg" height="20">
-<p>ProSA is an open-source Rust implementation of Worldline's service provider solution.
+<p>ProSA is an open-source Rust implementation of Worldline’s service provider solution.
 ProSA was designed to provide a simple and lightweight protocol service adaptor for service-oriented architectures and to offer a flexible and scalable platform for developing and deploying microservices. This allow developers to focus on writing business logic while ProSA takes care of the underlying infrastructure concerns.</p>
 <h2 id="contributing"><a class="header" href="#contributing">Contributing</a></h2>
 <p>ProSA is free and open source. You can find the source code on <a href="https://github.com/worldline/ProSA">GitHub</a>.
-ProSA relies on Worldliners to fix bugs and add features, but accept contribution from the community: if you'd like to contribute, please read the <a href="https://github.com/worldline/ProSA/blob/main/CONTRIBUTING.md">CONTRIBUTING</a> guide.</p>
+ProSA relies on Worldliners to fix bugs and add features, but accept contribution from the community: if you’d like to contribute, please read the <a href="https://github.com/worldline/ProSA/blob/main/CONTRIBUTING.md">CONTRIBUTING</a> guide.</p>
 <h2 id="license"><a class="header" href="#license">License</a></h2>
 <p>The ProSA source and documentation are released under
 the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">LGPLv3</a>.</p>
 <p>This license has been chosen to keep the framework and some modules open source, while allowing for other modules to be proprietary.
-In fact, ProSA contains no direct references to Worldline's private properties.</p>
+In fact, ProSA contains no direct references to Worldline’s private properties.</p>
 <h2 id="version"><a class="header" href="#version">Version</a></h2>
-<p>This book is intended for version 0.3.4 of ProSA.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="foreword"><a class="header" href="#foreword">Foreword</a></h1>
+<p>This book is intended for version 0.4.1 of ProSA.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="foreword"><a class="header" href="#foreword">Foreword</a></h1>
 <p>While programming languages continue to change and evolve, the foundational architectural concepts in software development remain steadfast.</p>
 <p>This book explores these enduring principles through the lens of ProSA, a project rooted in ideas originally conceived by Michel Roux in COBOL and Java.
 Our role has been to take the lead on development, adapting these concepts to the modern Rust language.</p>
@@ -204,7 +204,8 @@ Our role has been to take the lead on development, adapting these concepts to th
 By providing a product that seamlessly fits into this stack, developers and OPS professionals alike are free to focus on what truly matters: implementing and maintaining their own business solution.</p>
 <p>We hope this book offers valuable insights and guidance as you embark on your journey with ProSA.</p>
 <p>— Jérémy Hergault</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <p>Welcome to the ProSA ecosystem.
 This book will help you run and build a ProSA.</p>
 <h2 id="who-prosa-is-for"><a class="header" href="#who-prosa-is-for">Who ProSA is for</a></h2>
@@ -222,8 +223,8 @@ This book will help you run and build a ProSA.</p>
 <p>Processor: For more advanced developers who want to add new processors in ProSA.</p>
 </li>
 </ul>
-<p>These topics assume that you're reading them in sequence from OPS through Adaptor to Processor. Later chapters build on concepts from earlier chapters.
-It's important that you understand concepts from previous chapters if you want to dive into a specific topic.</p>
+<p>These topics assume that you’re reading them in sequence from OPS through Adaptor to Processor. Later chapters build on concepts from earlier chapters.
+It’s important that you understand concepts from previous chapters if you want to dive into a specific topic.</p>
 <ul>
 <li>
 <p>OPS people only need to understand the OPS chapter</p>
@@ -237,11 +238,12 @@ It's important that you understand concepts from previous chapters if you want t
 </ul>
 <h2 id="source-code"><a class="header" href="#source-code">Source code</a></h2>
 <p>The source files from which this book is generated can be found on <a href="https://github.com/worldline/ProSA/tree/main/prosa_book">GitHub</a>.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="ops"><a class="header" href="#ops">OPS</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="ops"><a class="header" href="#ops">OPS</a></h1>
 <p>This chapter is for people who want to know how to deploy a ProSA.</p>
 <h2 id="prosa-architecture"><a class="header" href="#prosa-architecture">ProSA architecture</a></h2>
 <p>Before deploying ProSA, you need to understand what it is.
-ProSA is not a process on its own; It's a modular system that is fully customizable with a variety of processors and adaptors.</p>
+ProSA is not a process on its own; It’s a modular system that is fully customizable with a variety of processors and adaptors.</p>
 <pre class="mermaid">flowchart LR
     proc1(Processor/Adaptor 1)
     proc2(Processor/Adaptor 2)
@@ -251,6 +253,7 @@ ProSA is not a process on its own; It's a modular system that is fully customiza
     proc1 &amp; proc3 &lt;--&gt; prosa
     prosa &lt;--&gt; proc2 &amp; procn
 </pre>
+
 <p>A ProSA is useful with a set of processors and adaptors.</p>
 <p>Every processor and its adaptor have a role. For example:</p>
 <ul>
@@ -262,25 +265,26 @@ ProSA is not a process on its own; It's a modular system that is fully customiza
 <p>Each processor and adaptor has its own configuration to define connection adresses, timers and so on.</p>
 <p>Every processor communicates through an internal bus.
 The goal of this bus is to facilitate transaction flow between processors with different routing configurations.
-This will be better explained in the next <a href="ch02-00-adaptor.html">Adaptor chapter</a>.</p>
-<p>With this "Lego" architecture, you can include any processor that you need and adapt messages from one protocol to another as you wish.
+This will be better explained in the next <a href="#adaptor">Adaptor chapter</a>.</p>
+<p>With this “Lego” architecture, you can include any processor that you need and adapt messages from one protocol to another as you wish.
 Because a ProSA solution is deployed using multiple processors, we have created the Cargo-ProSA tool to help you orchestrate your solution.
 We will cover this tool in the next section.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="cargo-prosa"><a class="header" href="#cargo-prosa">cargo-prosa</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cargo-prosa"><a class="header" href="#cargo-prosa">cargo-prosa</a></h1>
 <p>ProSA is a framework that handles processors organized around a service bus.
 As such, ProSA needs to be built from internal or external Processors/Adaptor/Main.</p>
 <p><a href="https://github.com/worldline/ProSA/tree/main/cargo-prosa">cargo-prosa</a> is a utility to package and deliver a builded ProSA.
 This builder is packaged within cargo as a custom command to be well integrated with the Rust ecosystem.</p>
 <h2 id="install"><a class="header" href="#install">Install</a></h2>
-<p>As you can tell by its name, cargo-prosa, is tool embeded in <a href="https://doc.rust-lang.org/book/ch14-05-extending-cargo.html">Cargo</a>.</p>
-<p>Therefore, you can install it via the Cargo command:</p>
+<p><code>cargo-prosa</code> is a <a href="https://doc.rust-lang.org/book/ch14-05-extending-cargo.html">Cargo subcommand</a>, so you need to have <a href="https://doc.rust-lang.org/cargo/getting-started/installation.html">Cargo installed</a> to use it.
+Install cargo-prosa using the following command:</p>
 <pre><code class="language-bash">cargo install cargo-prosa
 </code></pre>
-<p>You should have the command installed with its bounch of functions:</p>
+<p>After installation, verify that the command is available and explore its features:</p>
 <pre><code class="language-bash">cargo prosa --help
 </code></pre>
 <h2 id="use"><a class="header" href="#use">Use</a></h2>
-<p>Let's create a ProSA. You'll see cargo-prosa commands are quite similar to cargo regarding project management.</p>
+<p>Let’s create a ProSA. You’ll see cargo-prosa commands are quite similar to cargo regarding project management.</p>
 <pre><code class="language-bash">cargo prosa new my-prosa
 # or from an existing folder, init it
 cargo prosa init
@@ -288,9 +292,9 @@ cargo prosa init
 <p><em>cargo-prosa</em> is meant to evolve in the future.
 So maybe new things will be introduced.
 To update your model, you can update the generated file with <code>cargo prosa update</code>.</p>
-<p>At this point you'll want to add componennts to your ProSA.
+<p>At this point you’ll want to add componennts to your ProSA.
 To do so, you need to <a href="https://doc.rust-lang.org/cargo/commands/cargo-add.html">add</a> crates that declare them into your <code>Cargo.toml</code>.</p>
-<p>Once it's done, you can list all component avaible to build your ProSA with <code>cargo prosa list</code>.
+<p>Once it’s done, you can list all component avaible to build your ProSA with <code>cargo prosa list</code>.
 This will list all available component:</p>
 <ul>
 <li>Main - Main task (<code>core::main::MainProc</code> by default).</li>
@@ -323,7 +327,7 @@ A <code>target/config.yml</code> and <code>target/config.toml</code> will be gen
 </ul>
 <h2 id="run"><a class="header" href="#run">Run</a></h2>
 <p>When your ProSA is built, you can deploy like any Rust binary.
-So you'll find it in the target folder.</p>
+So you’ll find it in the target folder.</p>
 <p>And you can run it:</p>
 <pre><code class="language-bash">cargo run -- -n "MyBuiltProSA" -c default_config.yaml
 # or with binary
@@ -332,6 +336,86 @@ target/debug/my-prosa -n "MyBuiltProSA" -c default_config.yaml
 <h2 id="deploy"><a class="header" href="#deploy">Deploy</a></h2>
 <p>This builder offer you several possibilities to deploy your ProSA.
 The goal is to use the easiest method of a plateform to run your application.</p>
+<h3 id="locally"><a class="header" href="#locally">Locally</a></h3>
+<p>On Linux or MacOS, you can install ProSA directly on your machine:</p>
+<pre><code class="language-bash"># Install ProSA
+cargo prosa install
+
+# Uninstall ProSA
+cargo prosa uninstall
+</code></pre>
+<p>To avoid conflicts, specify a unique name during installation:</p>
+<pre><code class="language-bash">cargo prosa install --name dummy
+</code></pre>
+<p>Use the same name when uninstalling:</p>
+<pre><code class="language-bash">cargo prosa uninstall --name dummy
+</code></pre>
+<p>If the package isn’t compiled for debug or release (–release), it will automatically compile during installation.</p>
+<p>Simulate an installation with:</p>
+<pre><code class="language-bash">cargo prosa install --dry_run -n dummy
+</code></pre>
+<h4 id="linux"><a class="header" href="#linux">Linux</a></h4>
+<p>When you want to install ProSA with <code>cargo prosa install</code>:</p>
+<pre><code class="language-bash">$ cargo prosa install -r -n dummy
+Creating service file OK
+Copying binary OK
+Generating configuration OK
+Installed [12183 kB] ProSA `dummy`
+Binary file : $HOME/.local/bin/prosa-dummy
+Config file : $HOME/.config/prosa/dummy/prosa.toml
+Service file: $HOME/.config/systemd/user/dummy.service
+</code></pre>
+<p>And you’ll be able to handle it through <code>systemctl</code>:</p>
+<pre><code class="language-bash">$ systemctl --user status dummy.service
+○ dummy.service - Local ProSA instance
+     Loaded: loaded ($HOME/.config/systemd/user/dummy.service; disabled; preset: enabled)
+     Active: inactive (dead)
+</code></pre>
+<p>To install it for the whole system, you can use the <code>--system</code> option:</p>
+<pre><code class="language-bash">$ sudo -E $HOME/.cargo/bin/cargo prosa install -r -s -n dummy
+Creating service file OK
+Copying binary OK
+Generating configuration OK
+Installed [12184 kB] ProSA `dummy`
+Binary file : /usr/local/bin/prosa-dummy
+Config file : /etc/prosa/dummy/prosa.toml
+Service file: /etc/systemd/system/dummy.service
+</code></pre>
+<p>By installing ProSA system wide, you are able to see the service:</p>
+<pre><code class="language-bash">$ sudo service dummy status       
+○ dummy.service - Local ProSA instance
+     Loaded: loaded (/etc/systemd/system/dummy.service; disabled; preset: enabled)
+     Active: inactive (dead)
+</code></pre>
+<h4 id="macos"><a class="header" href="#macos">MacOS</a></h4>
+<p>On MacOS it’s the same as Linux, but with MacOS specifics.</p>
+<p>So you can install it, and if the binary don’t exist, it’ll compil the project:</p>
+<pre><code class="language-bash">$ cargo prosa install -r -n dummy
+Creating service OK
+   Compiling ...
+    Finished `release` profile [optimized] target(s) in 24.58s
+Copying binary OK
+Generating configuration OK
+Installed [10578 kB] ProSA `dummy`
+Binary file : $HOME/.local/bin/prosa-dummy
+Config file : $HOME/.config/prosa/dummy/prosa.toml
+Service file: $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+</code></pre>
+<p>And once cargo-prosa installed the service, MacOS should notify you to indicate the new created service:</p>
+<p><img src="/assets/macos_prosa_background.png" alt="MacOS service creation notification"></p>
+<p>You can now load it and run it with:</p>
+<pre><code class="language-bash">launchctl load $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+</code></pre>
+<p>and you can uninstall it with:</p>
+<pre><code class="language-bash">$ launchctl unload $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+$ cargo prosa uninstall -n dummy
+Remove service OK
+Remove binary OK
+Uninstalled ProSA `dummy`
+Binary file : $HOME/.local/bin/prosa-dummy
+Config file : $HOME/.config/prosa/dummy/prosa.toml
+Service file: $HOME/Library/LaunchAgents/com.prosa.dummy.plist
+</code></pre>
 <h3 id="container"><a class="header" href="#container">Container</a></h3>
 <p>Containerization will allow you to build and load ProSA in an image:</p>
 <pre><code class="language-bash"># Generate a Containerfile
@@ -348,14 +432,15 @@ cargo prosa container --docker
 <h3 id="deb-package"><a class="header" href="#deb-package">Deb package</a></h3>
 <p>Deb package can be created with the <a href="https://crates.io/crates/cargo-deb">cargo-deb</a> crate.</p>
 <p>To enable this feature, <em>create</em>, <em>init</em> or <em>update</em> your ProSA with the option <code>--deb</code>.
-It'll add every needed properties to generate a deb package.</p>
+It’ll add every needed properties to generate a deb package.</p>
 <p>The deb package will include the released binary, a default configuration file, and a systemd service file.</p>
 <h3 id="rpm-package"><a class="header" href="#rpm-package">RPM package</a></h3>
 <p>RPM (Red Hat Package Manager) package can be created with the <a href="https://crates.io/crates/cargo-generate-rpm">cargo-generate-rpm</a> crate.</p>
 <p>To enable this feature, <em>create</em>, <em>init</em> or <em>update</em> your ProSA with the option <code>--rpm</code>.
-It'll add every needed properties to generate an rpm package.</p>
+It’ll add every needed properties to generate an rpm package.</p>
 <p>The rpm package will include the released binary, a default configuration file, and a systemd service file.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h1>
 <p>ProSA uses a standard YAML file to configure itself, as well as its sub-processors and adaptors.</p>
 <h2 id="single-configuration-file"><a class="header" href="#single-configuration-file">Single configuration file</a></h2>
 <p>By default, ProSA will look for the configuration file at <code>/etc/prosa.yml</code>.
@@ -410,7 +495,8 @@ proc-1:
 <h2 id="environment-variables"><a class="header" href="#environment-variables">Environment variables</a></h2>
 <p>ProSA can also be configured using environment variables, assuming you only have one ProSA instance running on your system.
 For example, you can set the ProSA name by filling the variable <code>PROSA_NAME="prosa-name"</code>.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="observability"><a class="header" href="#observability">Observability</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="observability"><a class="header" href="#observability">Observability</a></h1>
 <p>For observability, ProSA uses <a href="https://opentelemetry.io/">OpenTelemetry</a> to collect metrics, traces, and logs.</p>
 <p>Observability is handled through the <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/observability/struct.Observability.html">Observability settings</a>.</p>
 <h2 id="settings"><a class="header" href="#settings">Settings</a></h2>
@@ -418,6 +504,32 @@ For example, you can set the ProSA name by filling the variable <code>PROSA_NAME
 You can configure your observability outputs to be redirected to stdout or an OpenTelemetry collector.
 You can also configure your processor to act as a server that exposes those metrics itself.</p>
 <p>Of course all configurations can be mixed. You can send your logs to an OpenTelemetry collector and to stdout simultaneously.</p>
+<h3 id="attributes"><a class="header" href="#attributes">Attributes</a></h3>
+<p>For each of your observability data, you can configure attribute that will add labels on your data.</p>
+<p>These attribute should follow the <a href="https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md">OpenTelemetry resource conventions</a>.</p>
+<p>Some of these attributtes are automaticcaly field from ProSA depending of your environment:</p>
+<ul>
+<li><code>service.name</code> took from <em>prosa name</em></li>
+<li><code>host.arch</code> if detected from the compilation</li>
+<li><code>os.type</code> if the OS was detected</li>
+<li><code>service.version</code> the package version</li>
+</ul>
+<p>For your logs and traces (but not metrics to avoid overloading metrics indexes), you’ll find:</p>
+<ul>
+<li><code>process.creation.time</code></li>
+<li><code>process.pid</code></li>
+</ul>
+<p>In the configuration you’ll have:</p>
+<pre><code class="language-yaml">observability:
+  attributes:
+    # Override the service.name from ProSA
+    service.name: "my_service"
+    # Overried the version
+    service.version: "1.0.0"
+  metric: # metrics params
+  traces: # traces params
+  logs:   # logs params
+</code></pre>
 <h3 id="stdout"><a class="header" href="#stdout">Stdout</a></h3>
 <p>If you want to direct all logs to stdout, you can do something like this:</p>
 <pre><code class="language-yaml">observability:
@@ -428,12 +540,21 @@ You can also configure your processor to act as a server that exposes those metr
   traces:
     stdout:
       level: debug
+</code></pre>
+<p>If you use <code>tracing</code>, you will get richer log output compared to <code>log</code>:</p>
+<pre><code class="language-yaml">observability:
+  level: debug
+  metrics:
+    stdout:
+      level: info
   logs:
     stdout:
       level: debug
 </code></pre>
+<p>If both <em>traces</em> and <em>logs</em> are configured, only the <em>traces</em> configuration will be applied.</p>
 <h3 id="opentelemetry"><a class="header" href="#opentelemetry">OpenTelemetry</a></h3>
-<p>You can also push your telemetry to a GRPC OpenTelemetry collector:</p>
+<h4 id="grpc"><a class="header" href="#grpc">gRPC</a></h4>
+<p>You can also push your telemetry to a gRPC OpenTelemetry collector:</p>
 <pre><code class="language-yaml">observability:
   level: debug
   metrics:
@@ -442,11 +563,20 @@ You can also configure your processor to act as a server that exposes those metr
   traces:
     otlp:
       endpoint: "grpc://localhost:4317"
+</code></pre>
+<p>If you specify <em>traces</em>, only <em>traces</em> (including <em>logs</em>) will be sent.
+To send <em>logs</em> separately, use the <strong>logs</strong>:</p>
+<pre><code class="language-yaml">observability:
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "grpc://localhost:4317"
   logs:
     otlp:
       endpoint: "grpc://localhost:4317"
 </code></pre>
-<p>Or an HTTP Opentelemetry collector:</p>
+<h4 id="http"><a class="header" href="#http">HTTP</a></h4>
+<p>To use an HTTP OpenTelemetry collector:</p>
 <pre><code class="language-yaml">observability:
   level: debug
   metrics:
@@ -455,6 +585,13 @@ You can also configure your processor to act as a server that exposes those metr
   traces:
     otlp:
       endpoint: "http://localhost:4318/v1/traces"
+</code></pre>
+<p>To send <em>logs</em> via HTTP, specify the <strong>logs</strong> (without the <em>traces</em>):</p>
+<pre><code class="language-yaml">observability:
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "http://localhost:4318/v1/metrics"
   logs:
     otlp:
       endpoint: "http://localhost:4318/v1/logs"
@@ -466,8 +603,9 @@ You can also configure your processor to act as a server that exposes those metr
     prom(Prometheus)
     prom --&gt; prosa
 </pre>
-<p>As such, you can't directly send metric to it.
-It's the role of Prometheus to gather metrics from your application.</p>
+
+<p>As such, you can’t directly send metric to it.
+It’s the role of Prometheus to gather metrics from your application.</p>
 <p>To do this, you need to declare a server that exposes your ProSA metrics:</p>
 <pre><code class="language-yaml">observability:
   level: debug
@@ -475,7 +613,11 @@ It's the role of Prometheus to gather metrics from your application.</p>
     prometheus:
       endpoint: "0.0.0.0:9090"
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="ssl"><a class="header" href="#ssl">SSL</a></h1>
+<blockquote>
+<p>You also need to enable the feature <code>prometheus</code> for ProSA.</p>
+</blockquote>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="ssl"><a class="header" href="#ssl">SSL</a></h1>
 <p>Configuring SSL is a complex task, but many options have been provided to make it accessible and flexible.</p>
 <h2 id="library-selection"><a class="header" href="#library-selection">Library selection</a></h2>
 <p>ProSA through traits:</p>
@@ -528,7 +670,7 @@ It's the role of Prometheus to gather metrics from your application.</p>
 <p><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/struct.SslConfig.html"><code>SslConfig</code></a> is the main configuration object for SSL.</p>
 <p>It allows configuring:</p>
 <ul>
-<li><a href="ch01-02-02-ssl.html#store">Store</a></li>
+<li><a href="#store">Store</a></li>
 <li>Certificate, key, or PKCS#12 bundle</li>
 <li>ALPN (<em>A</em>pplication-<em>L</em>ayer <em>P</em>rotocol <em>N</em>egotiation)</li>
 <li>Modern security flag as per <a href="https://wiki.mozilla.org/Security/Server_Side_TLS">Mozilla guidelines</a></li>
@@ -560,24 +702,25 @@ It's the role of Prometheus to gather metrics from your application.</p>
 <p>If you specify a certificate with a <code>.der</code> extention, it will be read as DER-encoded.</p>
 </blockquote>
 <h3 id="self-signed-certificate"><a class="header" href="#self-signed-certificate">Self signed certificate</a></h3>
-<p>If your server connection is SSL (with the <code>ssl://</code> or the <code>+ssl://</code> suffixed protocol) and you don't specify a certificate and its private key, it'll generate a self-signed certificate.</p>
+<p>If your server connection is SSL (with the <code>ssl://</code> or the <code>+ssl://</code> suffixed protocol) and you don’t specify a certificate and its private key, it’ll generate a self-signed certificate.</p>
 <p>If you want to retrieve the generated certificate because you need to trust it from a remote, you can specify a certificate path where the certificate will be written:</p>
 <pre><code class="language-yaml">ssl_config:
   cert: "/opt/self_signed_cert.pem"
 </code></pre>
 <h3 id="usage"><a class="header" href="#usage">Usage</a></h3>
 <p>The SslConfig applies both to server and client configurations.</p>
-<p>If you specify a store, it'll be used:</p>
+<p>If you specify a store, it’ll be used:</p>
 <ul>
 <li>On the client-side, to validate server certificates</li>
 <li>On the server-side, to validate client certificates</li>
 </ul>
 <p>Similarly, if you own a certificate (with a private key), it can be used as either a client or server certificate.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="stream"><a class="header" href="#stream">Stream</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="stream"><a class="header" href="#stream">Stream</a></h1>
 <p>The <code>Stream</code> objects have been developed to make socket handling more accessible, with a high level of customization.</p>
 <h2 id="listener"><a class="header" href="#listener">Listener</a></h2>
 <p>For <a href="https://docs.rs/prosa/latest/prosa/io/listener/enum.StreamListener.html">stream listener</a>, you can use <a href="https://docs.rs/prosa/latest/prosa/io/listener/struct.ListenerSetting.html"><code>ListenerSetting</code></a> to configure it.</p>
-<p>As a server, you need to specify the URL and optionally <a href="ch01-02-02-ssl.html">SSL</a>.</p>
+<p>As a server, you need to specify the URL and optionally <a href="#ssl">SSL</a>.</p>
 <pre><code class="language-yaml">listener:
   url: "0.0.0.0:8080"
   ssl:
@@ -591,7 +734,7 @@ It's the role of Prometheus to gather metrics from your application.</p>
 </blockquote>
 <h2 id="client"><a class="header" href="#client">Client</a></h2>
 <p>For clients, <a href="https://docs.rs/prosa/latest/prosa/io/stream/enum.Stream.html"><code>Stream</code></a> typically uses <a href="https://docs.rs/prosa/latest/prosa/io/stream/struct.TargetSetting.html"><code>TargetSetting</code></a> for configuration.</p>
-<p>You need to specify the URL and optionally <a href="ch01-02-02-ssl.html">SSL</a>.
+<p>You need to specify the URL and optionally <a href="#ssl">SSL</a>.
 Additionally, you can specify a proxy if needed:</p>
 <pre><code class="language-yaml">stream:
   url: "worldline.com:443"
@@ -604,36 +747,28 @@ Additionally, you can specify a proxy if needed:</p>
 <blockquote>
 <p>The <code>connect_timeout</code> setting prevents infinite waits during connection attempts.</p>
 </blockquote>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="run-prosa"><a class="header" href="#run-prosa">Run ProSA</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="run-prosa"><a class="header" href="#run-prosa">Run ProSA</a></h1>
 <p>Once you have created a binary using <code>cargo-prosa</code>, the next step is to run this binary.</p>
-<p>If you've installed a package or a container, you don't need to worry about the inner workings.
+<p>If you’ve installed a package or a container, you don’t need to worry about the inner workings.
 However, if you want to execute the binary manually, this section explains the available parameters.</p>
-<p>When you run <code>prosa_binary -h</code>, you'll see output like the following:</p>
+<p>When you run <code>prosa_binary -h</code>, you’ll see output like the following:</p>
 <pre><code>Usage: prosa_binary [OPTIONS]
 
 Options:
       --dry_run                   Show how the ProSA will run but doesn't start it. Write the config file if it doesn't exist
-  -d, --daemon
   -c, --config &lt;CONFIG_PATH&gt;      Path of the ProSA configuration file [default: prosa.yml]
   -n, --name &lt;NAME&gt;               Name of the ProSA
-      --user &lt;USER&gt;               User:Group to run the daemon ProSA
-  -l, --log_path &lt;LOGPATH&gt;        Path of the output log
   -t, --worker_threads &lt;THREADS&gt;  Number of worker threads to use for the main [default: 1]
   -h, --help                      Print help
   -V, --version                   Print version
 </code></pre>
 <p>Based on this, you have several options:</p>
 <ul>
-<li>dry_run: Use this option to test your configuration file or create it if it doesn't exist.</li>
-<li>daemon: Run ProSA as a daemon. If you have configured <a href="http://localhost:3000/ch01-02-01-observability.html#stdout">stdout</a> in your observability settings, a log file will be created.
-<ul>
-<li>user: Useful for running ProSA as a daemon. This option allows you to specify the user under which the ProSA process will run.</li>
-<li>log_path: Also useful when running ProSA as a daemon. This option creates files in the specified folder where logs will be saved.</li>
-</ul>
-</li>
+<li>dry_run: Use this option to test your configuration file or create it if it doesn’t exist.</li>
 <li>config: Specify the path to your configuration folder/file.</li>
 <li>name: Override the name in your prosa settings. This sets the name of your ProSA instance.</li>
-<li>worker_threads: Specify the number of threads allocated for ProSA. Each processor can launch threads individually; thus, this option may have varying effects depending on your processor's capabilities.</li>
+<li>worker_threads: Specify the number of threads allocated for ProSA. Each processor can launch threads individually; thus, this option may have varying effects depending on your processor’s capabilities.</li>
 <li>version: Provides information about the binary crate version as well as the versions of all components used. For example:</li>
 </ul>
 <pre><code class="language-bash">$ prosa_binary -V
@@ -647,20 +782,72 @@ prosa 0.1.0 - core::main::MainProc = { crate = prosa, version = 0.2.0 }
     Processor: stub::proc::StubProc = { crate = prosa, version = 0.2.0 }
     Adaptor  : stub::adaptor::StubParotAdaptor = { crate = prosa, version = 0.2.0 }
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="puppet-prosa"><a class="header" href="#puppet-prosa">Puppet ProSA</a></h1>
-<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h2>
-<ol>
-<li><a href="ch01-03-puppet.html#description">Description</a></li>
-<li><a href="ch01-03-puppet.html#setup">Setup</a>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="monitoring"><a class="header" href="#monitoring">Monitoring</a></h1>
+<p>If you configured <a href="#observability">Observability</a>, ProSA offers observability data out of the box.</p>
+<h2 id="metrics"><a class="header" href="#metrics">Metrics</a></h2>
+<p>Metrics are useful in processors.
+To know more, refer to the processor you use to know which metrics they expose.
+They should export <a href="#metrics-1">metrics</a>.</p>
+<p>But ProSA has also its own metrics to have a global view of what’s running.
+This generic dashboard will be available soon from Grafana if you want to import it.</p>
+<h3 id="graphical-representation"><a class="header" href="#graphical-representation">Graphical representation</a></h3>
+<p>Having a view of every processor and service is important to know if your processors are healthy and if your services are up and running.
+There is a node graph to view the entire state of ProSA:</p>
+<p><img src="ch01-03-monitoring-grafana_graph.png" alt="Grafana Graph"></p>
+<p>From this graph, you’ll see:</p>
 <ul>
-<li><a href="ch01-03-puppet.html#what-prosa-module-affects">What the ProSA module affects</a></li>
-<li><a href="ch01-03-puppet.html#setup-requirements">Setup requirements</a></li>
-<li><a href="ch01-03-puppet.html#beginning-with-prosa">Beginning with prosa</a></li>
+<li>Processors 🔄
+<ul>
+<li><font color="green">green</font> indicates that they are running</li>
+<li><font color="orange">orange</font> if they experienced at least one restart</li>
+<li><font color="grey">grey</font> if they are stopped</li>
+<li><font color="red">red</font> if they crashed</li>
 </ul>
 </li>
-<li><a href="ch01-03-puppet.html#usage">Usage</a></li>
-<li><a href="ch01-03-puppet.html#limitations">Limitations</a></li>
-<li><a href="ch01-03-puppet.html#development">Development - Guide for contributing to the module</a></li>
+<li>Services ⠶
+<ul>
+<li><font color="green">green</font> if at least one processor exposes it</li>
+<li><font color="grey">grey</font> if they are not available</li>
+</ul>
+</li>
+<li>Links between processors and services representing processors that expose a service</li>
+</ul>
+<p>From that graph, you have a complete view of your ProSA state.</p>
+<h3 id="system-metrics"><a class="header" href="#system-metrics">System metrics</a></h3>
+<p>ProSA provides RAM metrics in order to keep track of process allocation.
+This could be useful to know if on a VM ProSA is using the RAM, or it’s another process on the host.</p>
+<p>It provides 2 <code>type</code> of metrics:</p>
+<ul>
+<li><code>virtual</code> for virtual RAM used</li>
+<li><code>physical</code> for physical RAM used</li>
+</ul>
+<blockquote>
+<p>To have system metrics, you need to enable the feature <code>system-metrics</code> for ProSA.</p>
+</blockquote>
+<h2 id="traces"><a class="header" href="#traces">Traces</a></h2>
+<p>Since ProSA is a transactional framework, traces are a must-have to view transaction-relative information.</p>
+<p><img src="ch01-03-monitoring-grafana_trace.png" alt="Grafana Trace"></p>
+<p>From this global trace, you can have <a href="#traces-1">processor spans</a> attached to it.</p>
+<h2 id="logs"><a class="header" href="#logs">Logs</a></h2>
+<p>All logs generated by ProSA are available.
+Normally processors should use the ProSA <a href="#logs-1">logging</a> system.
+If they do not, please refer to your processor to know how to handle them.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="puppet-prosa"><a class="header" href="#puppet-prosa">Puppet ProSA</a></h1>
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h2>
+<ol>
+<li><a href="#description">Description</a></li>
+<li><a href="#setup">Setup</a>
+<ul>
+<li><a href="#what-prosa-module-affects">What the ProSA module affects</a></li>
+<li><a href="#setup-requirements">Setup requirements</a></li>
+<li><a href="#beginning-with-prosa">Beginning with prosa</a></li>
+</ul>
+</li>
+<li><a href="#usage-1">Usage</a></li>
+<li><a href="#limitations">Limitations</a></li>
+<li><a href="#development">Development - Guide for contributing to the module</a></li>
 </ol>
 <h2 id="description"><a class="header" href="#description">Description</a></h2>
 <p><a href="https://github.com/worldline/ProSA">ProSA</a> (<strong>Pro</strong>tocol <strong>S</strong>ervice <strong>A</strong>daptor) is a framework designed to provide a simple and lightweight protocol service adaptor for service-oriented architectures.
@@ -743,13 +930,13 @@ You can set them up individually or use <a href="https://forge.puppet.com/module
 <p>Since processors have different configurations, <code>proc_settings</code> is provided as a <code>Hash</code> to accommodate all necessary configuration options.
 To determine which configurations to specify, refer to the documentation for the corresponding processor.</p>
 <h2 id="reference"><a class="header" href="#reference">Reference</a></h2>
-<p>For information on classes, types and functions see the <a href="./REFERENCE.html">REFERENCE.md</a></p>
+<p>For information on classes, types and functions see the <a href="REFERENCE.html">REFERENCE.md</a></p>
 <h2 id="limitations"><a class="header" href="#limitations">Limitations</a></h2>
 <p>Limitations are associated with the ProSA binary generated with cargo-prosa.
 You need to pay attention to the compiled architecture of your binary.
-Additionally, if you are using external binaries (e.g., OpenSSL), you'll need to install them independently.</p>
+Additionally, if you are using external binaries (e.g., OpenSSL), you’ll need to install them independently.</p>
 <h2 id="development"><a class="header" href="#development">Development</a></h2>
-<p>For development guidelines, please follow <a href="./CONTRIBUTING.html">contributing</a> rules.</p>
+<p>For development guidelines, please follow <a href="CONTRIBUTING.html">contributing</a> rules.</p>
 <p>If you submit a change to this module, be sure to regenerate the reference documentation as follows:</p>
 <pre><code class="language-bash">puppet strings generate --format markdown --out REFERENCE.md
 </code></pre>
@@ -759,28 +946,34 @@ Additionally, if you are using external binaries (e.g., OpenSSL), you'll need to
 <ul>
 <li><a href="https://github.com/reneca">Jérémy HERGAULT</a></li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="cloud"><a class="header" href="#cloud">Cloud</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="cloud"><a class="header" href="#cloud">Cloud</a></h1>
 <p>ProSA is intended to be cloud native/agnostic.
-In this subsection, you'll find examples for deploying it on a Cloud PaaS<sup class="footnote-reference" id="fr-paas-1"><a href="#footnote-paas">1</a></sup>.</p>
+In this subsection, you’ll find examples for deploying it on a Cloud PaaS<sup class="footnote-reference" id="fr-paas-1"><a href="#footnote-paas">1</a></sup>.</p>
 <p>Most of the time, there are PaaS offerings that work with Docker containers and Rust runtimes.</p>
 <h2 id="docker-containers"><a class="header" href="#docker-containers">Docker containers</a></h2>
-<p>To build a Docker image for your ProSA, refer to the <a href="ch01-01-cargo-prosa.html#container">Cargo-ProSA Container</a>
+<p>To build a Docker image for your ProSA, refer to the <a href="#container">Cargo-ProSA Container</a>
 Select a base image that suits your PaaS requirements and push the generated image to your cloud repository.</p>
-<p>You'll find an example in the subsection for <a href="ch01-04-01-gcp-cloud_run.html">GCP Cloud Run</a></p>
+<p>You’ll find an example in the subsection for <a href="#gcp---cloud-run">GCP Cloud Run</a></p>
 <h2 id="rust-runtime"><a class="header" href="#rust-runtime">Rust runtime</a></h2>
-<p>If your PaaS allows you to use the Rust runtime to run ProSA, you need to use the project generated by <a href="ch01-01-cargo-prosa.html#use">Cargo-ProSA</a>.</p>
-<p>For an example, refer to the subsection for <a href="ch01-04-02-clever_cloud.html">Clever Cloud</a></p>
+<p>If your PaaS allows you to use the Rust runtime to run ProSA, you need to use the project generated by <a href="#use">Cargo-ProSA</a>.</p>
+<p>For an example, refer to the subsection for <a href="#clever-cloud">Clever Cloud</a></p>
 <hr>
-<ol class="footnote-definition"><li id="footnote-paas">
+<ol class="footnote-definition">
+<li id="footnote-paas">
 <p>Platform as a service - Run ProSA as a software without worrying about hardware, system, or infrastructure. <a href="#fr-paas-1">↩</a></p>
 </li>
-</ol><div style="break-before: page; page-break-before: always;"></div><h1 id="gcp---cloud-run"><a class="header" href="#gcp---cloud-run">GCP - Cloud Run</a></h1>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="gcp---cloud-run"><a class="header" href="#gcp---cloud-run">GCP - Cloud Run</a></h1>
 <p>TODO</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="clever-cloud"><a class="header" href="#clever-cloud">Clever Cloud</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="clever-cloud"><a class="header" href="#clever-cloud">Clever Cloud</a></h1>
 <p>TODO</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="adaptor"><a class="header" href="#adaptor">Adaptor</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="adaptor"><a class="header" href="#adaptor">Adaptor</a></h1>
 <p>This chapter is for application developers who want to know how to build an application using existing ProSA processors.</p>
-<p>This chapter will be the most abtract of all, as the Adaptor's implementation is up to the processor developer.
+<p>This chapter will be the most abtract of all, as the Adaptor’s implementation is up to the processor developer.
 However, developers need to follow certain guidelines, which will be outlined here.
 These guidelines are also useful for processor developers to ensure they expose their processor effectively.</p>
 <p>Adaptors act as a simplified environment for application developers such that they can solely focus on working on their business solution without worrying about the underlying network protocol that will transport their messages.
@@ -788,7 +981,7 @@ They are designed to provide a simple interface for those who may not be familia
 You know what processing needs to be done on a specific message, but not the underlying protocol that transports it.</p>
 <h2 id="relation"><a class="header" href="#relation">Relation</a></h2>
 <p>Adaptors are assigned to a processor.
-They are called by the processor, so they need to implement all the interfaces the processor requires; otherwise, they won't function properly.</p>
+They are called by the processor, so they need to implement all the interfaces the processor requires; otherwise, they won’t function properly.</p>
 <p>A processor can only use one adaptor when running.</p>
 <pre class="mermaid">flowchart LR
     ext(External System)
@@ -799,10 +992,12 @@ They are called by the processor, so they need to implement all the interfaces t
     adapt &lt;-- protocol adaptation --&gt; proc
     end
 </pre>
+
 <p>The adaptor should be viewed as an interface between the internal ProSA TVF messaging system and the external connected system.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="tvf"><a class="header" href="#tvf">TVF</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="tvf"><a class="header" href="#tvf">TVF</a></h1>
 <p><strong>T</strong>ag <strong>V</strong>alue <strong>F</strong>ield is the internal message interface used by ProSA.</p>
-<p>It's not a full-fledged format but a <a href="https://docs.rs/prosa-utils/latest/prosa_utils/msg/tvf/trait.Tvf.html">Rust trait</a> that defines what a message format should support.</p>
+<p>It’s not a full-fledged format but a <a href="https://docs.rs/prosa-utils/latest/prosa_utils/msg/tvf/trait.Tvf.html">Rust trait</a> that defines what a message format should support.</p>
 <p>Currently, only the <a href="https://docs.rs/prosa-utils/latest/prosa_utils/msg/simple_string_tvf/struct.SimpleStringTvf.html">SimpleStringTvf</a> implementation exists.
 However, in the future, others could implement the TVF trait, such as <a href="https://docs.rs/protobuf/latest/protobuf/">ProtoBuf</a>, and more.</p>
 <h2 id="usage-2"><a class="header" href="#usage-2">Usage</a></h2>
@@ -812,9 +1007,9 @@ The trait allows you to:</p>
 <li>Add fields using <code>put_*</code> methods</li>
 <li>Retrieve fields using <code>get_*</code> methods</li>
 <li>Access information from the container</li>
-<li>...</li>
+<li>…</li>
 </ul>
-<p>Most of the time, when using a component that use TVF, you'll see a generic declaration like:</p>
+<p>Most of the time, when using a component that use TVF, you’ll see a generic declaration like:</p>
 <pre><code class="language-rust noplayground">struct StructObject&lt;M&gt;
 where
     M: 'static
@@ -864,11 +1059,12 @@ This data must not be printed or extracted from the application to ensure securi
 <p>To address this, ProSA provides the <a href="https://docs.rs/prosa-utils/latest/prosa_utils/msg/tvf/trait.TvfFilter.html"><code>TvfFilter</code></a> trait, which allows filtering and masking sensitive fields.</p>
 <p>Depending on your message, sensitive field may vary.
 Since <code>TvfFilter</code> is a trait, you can implement your own filter tailored to your message format.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="adaptor-creation"><a class="header" href="#adaptor-creation">Adaptor creation</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="adaptor-creation"><a class="header" href="#adaptor-creation">Adaptor creation</a></h1>
 <p>Adaptors strongly depend on the underlying processor implementation.
 Their structure varies according to the choices of the processor developer.
 Sometimes you will have a wide latitude for customization, while other times the processor will need to be restrictive, especially regarding secrets or security considerations.</p>
-<p>However, we'll describe good practices for adaptor design to help you understand concepts that you'll encounter most of the time.</p>
+<p>However, we’ll describe good practices for adaptor design to help you understand concepts that you’ll encounter most of the time.</p>
 <h2 id="instantiation"><a class="header" href="#instantiation">Instantiation</a></h2>
 <p>A Processor uses an Adaptor to transform messages, so you typically need a single Adaptor instance to perform this role.
 This adaptor instance must be both <code>Send</code> and <code>Sync</code>.</p>
@@ -880,7 +1076,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + prosa::core::msg::Tvf
         + std::default::Default,
 {
     /// Method called when the processor spawns
@@ -889,8 +1085,8 @@ where
     where
         Self: Sized;
 }</code></pre>
-<p>Most of the time, the processor is provided as a parameter to the adaptor's constructor, allowing you to retrieve all necessary information (e.g., settings, name, etc.).</p>
-<p>It's preferable to provide a <code>new()</code> method to create your adaptor, rather than relying on <a href="https://doc.rust-lang.org/std/default/trait.Default.html"><code>default()</code></a>, because <code>new()</code> gives you access to processor settings and other information.
+<p>Most of the time, the processor is provided as a parameter to the adaptor’s constructor, allowing you to retrieve all necessary information (e.g., settings, name, etc.).</p>
+<p>It’s preferable to provide a <code>new()</code> method to create your adaptor, rather than relying on <a href="https://doc.rust-lang.org/std/default/trait.Default.html"><code>default()</code></a>, because <code>new()</code> gives you access to processor settings and other information.
 Additionally, <code>new()</code> can fail with a <code>ProcError</code> or a dedicated error type if the processor cannot start.</p>
 <h2 id="processing"><a class="header" href="#processing">Processing</a></h2>
 <p>When you use or develop an adaptor, you need to consider that you may have to process both internal TVF request/response messages, as well as message objects intended for external systems.</p>
@@ -904,6 +1100,7 @@ Additionally, <code>new()</code> can fail with a <code>ProcError</code> or a ded
     adaptor-- request (protocol) --&gt;external
     external-- response(protocol) --&gt;adaptor
 </pre>
+
 <p>In this architecture, if your adaptor needs to send external requests originating from internal messages, it may look like this:</p>
 <pre><code class="language-rust noplayground"><span class="boring">pub struct ExternalObjectRequest {}
 </span><span class="boring">pub struct ExternalObjectResponse {}
@@ -916,7 +1113,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + prosa::core::msg::Tvf
         + std::default::Default,
 {
     /// Method to process incoming requests from internal
@@ -937,7 +1134,7 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + prosa::core::msg::Tvf
         + std::default::Default,
 {
     /// Method to process incoming requests from external system
@@ -962,13 +1159,14 @@ where
         + std::marker::Sized
         + std::clone::Clone
         + std::fmt::Debug
-        + prosa_utils::msg::tvf::Tvf
+        + prosa::core::msg::Tvf
         + std::default::Default,
 {
     const USER_AGENT: &amp;str = "ProSA user agent";
 }</code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="adaptor-declaration"><a class="header" href="#adaptor-declaration">Adaptor declaration</a></h1>
-<p>As you saw with <a href="ch01-01-cargo-prosa.html">cargo-prosa</a>, available adaptor can be listed using <code>cargo prosa list</code>.
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="adaptor-declaration"><a class="header" href="#adaptor-declaration">Adaptor declaration</a></h1>
+<p>As you saw with <a href="#cargo-prosa">cargo-prosa</a>, available adaptor can be listed using <code>cargo prosa list</code>.
 This allows you to easily add your adaptor to the <em>ProSA.toml</em> configuration file.</p>
 <p>To build this list, cargo-prosa leverages <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-metadata-table">cargo metadata</a>.
 Thanks to this, it can retrieve metadata from your dependencies and show the list of adaptors you have defined.</p>
@@ -976,21 +1174,22 @@ Thanks to this, it can retrieve metadata from your dependencies and show the lis
 <pre><code class="language-toml">[package.metadata.prosa.&lt;processor_name&gt;]
 adaptor = ["&lt;your crate name&gt;::&lt;path to your adaptor&gt;"]
 </code></pre>
-<p>An adaptor is always related to a processor. That's why you need to declare your adaptor under the relevant processor name.</p>
+<p>An adaptor is always related to a processor. That’s why you need to declare your adaptor under the relevant processor name.</p>
 <p>The <code>adaptor</code> field is a list. So you can declare as many adaptors as you want. In most cases, there are multiple adaptors per processor.</p>
 <p>For an example, see the <a href="https://github.com/worldline/ProSA/blob/main/prosa/Cargo.toml#L19">ProSA Cargo.toml</a>.</p>
 <p>You can also include your <a href="ch03-02-declaration.html">processor declaration</a> in this metadata block if you declare your adaptor in the same crate as your processor.</p>
-<p>This declaration step is very important because it simplifies the build process with <a href="ch01-01-cargo-prosa.html#use">cargo-prosa</a>.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="observability-1"><a class="header" href="#observability-1">Observability</a></h1>
-<p>As discussed in the <a href="ch01-02-01-observability.html">Configuration</a> chapter, ProSA uses the <a href="https://opentelemetry.io/docs/languages/rust/">Opentelemetry</a> stack to provide metrics, traces and logs.
+<p>This declaration step is very important because it simplifies the build process with <a href="#use">cargo-prosa</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="observability-1"><a class="header" href="#observability-1">Observability</a></h1>
+<p>As discussed in the <a href="#observability">Configuration</a> chapter, ProSA uses the <a href="https://opentelemetry.io/docs/languages/rust/">Opentelemetry</a> stack to provide metrics, traces and logs.
 All required settings are described in this chapter.</p>
 <p>This section explains how you can use observability features for your own purposes.
 When you create an adaptor, you may want to generate custom metrics, traces or logs from relevant data you are processing.</p>
 <p>It is important to understand how to implement these features within ProSA, as ProSA handles much of the integration for you.</p>
-<p>Each time you'll need to include opentelemetry dependency to your project:</p>
+<p>Each time you’ll need to include opentelemetry dependency to your project:</p>
 <pre><code class="language-toml">opentelemetry = { version = "0.29", features = ["metrics", "trace", "logs"] }
 </code></pre>
-<h2 id="metrics"><a class="header" href="#metrics">Metrics</a></h2>
+<h2 id="metrics-1"><a class="header" href="#metrics-1">Metrics</a></h2>
 <p>Metrics in ProSA are managed using the <a href="https://docs.rs/opentelemetry/latest/opentelemetry/metrics/struct.Meter.html">OpenTelemetry Meter</a>.
 With the meter, you can declare counters, gauges, and more.</p>
 <p>A meter is created from the <a href="https://docs.rs/prosa/latest/prosa/core/main/struct.Main.html#method.meter">main task</a> or from <a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.meter">processors</a>.
@@ -1050,12 +1249,12 @@ fn push_metric(metric_sender: tokio::sync::watch::Sender&lt;u64&gt;) {
   metric_sender.send(42);
   // Alternatively, use `send_modify()` if you need to modify the value in place
 }</code></pre>
-<h2 id="traces"><a class="header" href="#traces">Traces</a></h2>
+<h2 id="traces-1"><a class="header" href="#traces-1">Traces</a></h2>
 <p>If you package ProSA with cargo-prosa, traces are automatically configured.
 If you want to set it up manually in your Observability setting, use the <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/observability/struct.Observability.html#method.tracing_init"><code>tracing_init()</code></a> method.</p>
 <p>Once tracing is configured, you can use the <a href="https://docs.rs/tracing/latest/tracing/">Tracing</a> crate anywhere in your code.
-Tracing create spans and send them automatically to the configured <a href="ch01-02-01-observability.html#opentelemetry">tracing endpoint</a> or to <a href="ch01-02-01-observability.html#stdout">stdout</a>.</p>
-<p>Traces is also deeply integrated into ProSA's internal <a href="https://docs.rs/prosa/latest/prosa/core/msg/trait.Msg.html">messaging</a>.
+Tracing create spans and send them automatically to the configured <a href="#opentelemetry">tracing endpoint</a> or to <a href="#stdout">stdout</a>.</p>
+<p>Traces is also deeply integrated into ProSA’s internal <a href="https://docs.rs/prosa/latest/prosa/core/msg/trait.Msg.html">messaging</a>.
 ProSA messages (which inplement the <code>prosa::core::msg::Msg</code> trait) have an internal span that represents the flow of a message through ProSA services.</p>
 <pre><code class="language-rust noplayground">fn process_prosa_msg&lt;M&gt;(msg: prosa::core::msg::Msg&lt;M&gt;)
 where
@@ -1070,16 +1269,17 @@ where
   let msg_span = msg.get_span();
   // You can also retrieve the span of the message if you want to link it to something else.
 }</code></pre>
-<h2 id="logs"><a class="header" href="#logs">Logs</a></h2>
+<h2 id="logs-1"><a class="header" href="#logs-1">Logs</a></h2>
 <p>With traces, standalone logs are often less useful, since events are better attached to spans, making it easier to know which transaction produced a given log message.</p>
 <p>However, if you want to log messages, you can use the <a href="https://docs.rs/log/latest/log/">log</a> crate.
 Like tracing, logging is provisioned automatically with ProSA.</p>
 <pre><code class="language-rust noplayground">log::info!("Generate an info log (will not be attached to a trace)");</code></pre>
-<p>If you prefer not to use <code>log</code>, you also have access to the <a href="https://docs.rs/opentelemetry/0.29.0/opentelemetry/logs/trait.LoggerProvider.html#associatedtype.Logger">OpenTelemetry Logger</a> from the <a href="https://docs.rs/prosa/latest/prosa/core/main/struct.Main.html#method.logger">main task</a> and <a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.logger">processors</a>.
-You can use this logger for full control over your observability logs.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="processor"><a class="header" href="#processor">Processor</a></h1>
+<p>If you configure traces, your logs will automatically be included as part of the traces.
+This behavior is inherent to how OpenTelemetry tracing works.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="processor"><a class="header" href="#processor">Processor</a></h1>
 <p>This chapter is intended for advanced developers who want to build their own ProSA processors.</p>
-<p>A processor is a central part of ProSA. It's used to handle the main processing logic.</p>
+<p>A processor is a central part of ProSA. It’s used to handle the main processing logic.</p>
 <pre class="mermaid">flowchart LR
     ext(External System)
     adapt(Adaptor)
@@ -1093,15 +1293,17 @@ You can use this logger for full control over your observability logs.</p>
     proc &lt;-- protocol adaptation --&gt; adapt
     end
 </pre>
+
 <p>There are several kinds of processors:</p>
 <ul>
 <li><em>Protocol</em> - Used to handle a specific protocol and map it to internal TVF messages.</li>
 <li><em>Internal</em> - Handles only internal messages; useful for modifying or routing messages.</li>
 <li><em>Standalone</em> - The processor works independently, with no internal messages involved; useful for interacting with external systems.</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="processor-settings"><a class="header" href="#processor-settings">Processor settings</a></h1>
-<p>As you saw in the <a href="ch01-01-cargo-prosa.html">cargo-prosa</a> chapter, every processor has a configuration object attached to it.
-You'll specify your processor settings object when you create your processor in the next chapter.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="processor-settings"><a class="header" href="#processor-settings">Processor settings</a></h1>
+<p>As you saw in the <a href="#cargo-prosa">cargo-prosa</a> chapter, every processor has a configuration object attached to it.
+You’ll specify your processor settings object when you create your processor in the next chapter.</p>
 <blockquote>
 <p><code>Settings</code> is the top-level configuration object, while <code>ProcSettings</code> is specific to processors.</p>
 </blockquote>
@@ -1146,8 +1348,9 @@ impl Default for MySettings {
         }
     }
 }</code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="processor-creation"><a class="header" href="#processor-creation">Processor creation</a></h1>
-<p>A processor in ProSA is an autonomous routine executed within its own <a href="ch03-08-threads.html">thread(s)</a>.
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="processor-creation"><a class="header" href="#processor-creation">Processor creation</a></h1>
+<p>A processor in ProSA is an autonomous routine executed within its own <a href="#threads">thread(s)</a>.
 Processor interact with each other through internal TVF messages.</p>
 <h2 id="creation-1"><a class="header" href="#creation-1">Creation</a></h2>
 <p>The <a href="https://docs.rs/prosa/latest/prosa/core/proc/index.html">Proc module</a> contains everything you need to create a processor, along with an example processor and configuration.</p>
@@ -1168,13 +1371,13 @@ impl MyProc
     }
 }</code></pre>
 <p>Finally, implement the <a href="https://docs.rs/prosa/latest/prosa/core/proc/trait.Proc.html"><code>Proc</code></a> trait.</p>
-<p>Here's an example skeleton:</p>
+<p>Here’s an example skeleton:</p>
 <pre><code class="language-rust noplayground">#[proc]
 impl&lt;A&gt; Proc&lt;A&gt; for MyProc
 where
     A: Adaptor + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&amp;mut self, name: String) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         // TODO: Initialize your adaptor here
 
         // Register the processor if ready to run
@@ -1215,13 +1418,14 @@ impl&lt;A&gt; Proc&lt;A&gt; for MyProc&lt;SimpleStringTvf&gt;
 where
     A: Adaptor + std::marker::Send + std::marker::Sync,
 {
-    async fn internal_run(&amp;mut self, name: String) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         // Custom handling for SimpleStringTvf
     }
 }</code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="processor-declaration"><a class="header" href="#processor-declaration">Processor declaration</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="processor-declaration"><a class="header" href="#processor-declaration">Processor declaration</a></h1>
 <p>In the previous chapter, you learned how to declare your <a href="ch02-02-declaration.html">Adaptor</a>.
-Now it's time to declare your processor.</p>
+Now it’s time to declare your processor.</p>
 <p>As with the Adaptor, you need to declare your processor using <a href="https://doc.rust-lang.org/cargo/reference/manifest.html#the-metadata-table">cargo metadata</a>.
 In your <em>Cargo.toml</em>, you should include a section like this:</p>
 <pre><code class="language-toml">[package.metadata.prosa.&lt;processor_name&gt;]
@@ -1232,7 +1436,8 @@ adaptor = []
 <p>Of course, in this section you can also list adaptors. You may have generic adaptors that cover most cases.</p>
 <p>For an example, see <a href="https://github.com/worldline/ProSA/blob/main/prosa/Cargo.toml#L19">ProSA - Cargo.toml</a>.</p>
 <p>If you declare this metadata correctly, you will be able to see your processor, settings, and adaptors when using <a href="http://localhost:3000/ch01-01-cargo-prosa.html#use">cargo-prosa</a>.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="error"><a class="header" href="#error">Error</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="error"><a class="header" href="#error">Error</a></h1>
 <p>When making production grade application, error handling is really important.
 It is out of the question for the application to crash on an unhandled error.
 And even in such occurrence, it is mandatory to have logs about the root cause of such crash.</p>
@@ -1274,16 +1479,16 @@ impl ProcError for ProcSpecificError {
 <h2 id="service-error"><a class="header" href="#service-error">Service Error</a></h2>
 <p>When you deal with ProSA internal transaction, you need to pay attention to <a href="https://docs.rs/prosa/latest/prosa/core/service/enum.ServiceError.html">ServiceError</a>.
 This type is the base error type that a SOA<sup class="footnote-reference" id="fr-soa-1"><a href="#footnote-soa">1</a></sup> need to handle.
-In it, you'll find:</p>
+In it, you’ll find:</p>
 <ul>
-<li><code>UnableToReachService</code> indicate that the service is not available. You should stop sending transaction to it, and send service test until it's available.</li>
+<li><code>UnableToReachService</code> indicate that the service is not available. You should stop sending transaction to it, and send service test until it’s available.</li>
 <li><code>Timeout</code> is an error about your processing time. To guarantee real-time processing, you need to propagate this information to indicate the source that you were not able to process the transaction in time.</li>
 <li><code>ProtocolError</code> indicate a protocol issue on the source request. In that case you need to check your API version.</li>
 </ul>
 <h2 id="processor-error"><a class="header" href="#processor-error">Processor error</a></h2>
 <p>As you can see when you implement a processor, <a href="https://docs.rs/prosa/latest/prosa/core/proc/trait.Proc.html#tymethod.internal_run">internal_run</a> method return a ProcError.</p>
 <p>This error follow the same principle as the <a href="https://doc.rust-lang.org/std/error/trait.Error.html">std::error::Error</a>.
-It's a trait that you need to implement to be usable for your processor.</p>
+It’s a trait that you need to implement to be usable for your processor.</p>
 <p>By default, it already implements some of the default error types.</p>
 <p>But when you implement your processor, a good practice is to define your own specific error with <a href="https://docs.rs/thiserror/latest/thiserror/">thiserror</a>.
 Following that, you can implement the <a href="https://docs.rs/prosa/latest/prosa/core/proc/trait.ProcError.html">prosa::proc::ProcError</a> trait.</p>
@@ -1292,16 +1497,19 @@ Following that, you can implement the <a href="https://docs.rs/prosa/latest/pros
 It means that the error is transient and the processor can be restarted.</p>
 <p>The processor will wait a bit and then try to reestablish the communication. On every error occurrence, the wait delay will increase until a maximum wait time is reached.</p>
 <hr>
-<ol class="footnote-definition"><li id="footnote-soa">
+<ol class="footnote-definition">
+<li id="footnote-soa">
 <p>Service Oriented Architecure. There is a lot of good lecture about Microservice resilience that is useful when you want to implement properly a service. <a href="#fr-soa-1">↩</a></p>
 </li>
-</ol><div style="break-before: page; page-break-before: always;"></div><h1 id="service"><a class="header" href="#service">Service</a></h1>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="service"><a class="header" href="#service">Service</a></h1>
 <p>This part provides all the information you need to work with services within ProSA.</p>
 <h2 id="listening-to-a-service"><a class="header" href="#listening-to-a-service">Listening to a service</a></h2>
 <h3 id="single"><a class="header" href="#single">Single</a></h3>
 <p>When your processor starts, you register it with the main task using <a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_proc"><code>add_proc()</code></a>.
 After declaration, the main task gains access to a queue for sending service requests to your processor.
-However, by default, your processor doesn't listen to any services.
+However, by default, your processor doesn’t listen to any services.
 To start listening to a specific service, call <a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_service_proc"><code>add_service_proc()</code></a></p>
 <pre><code class="language-rust noplayground"><span class="boring">#[proc]
 </span><span class="boring">struct MyProc {}
@@ -1311,7 +1519,7 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
 </span><span class="boring">where
 </span><span class="boring">    A: Adaptor + std::marker::Send + std::marker::Sync,
 </span><span class="boring">{
-</span>    async fn internal_run(&amp;mut self, name: String) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+</span>    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         // Declare the processor
         self.proc.add_proc().await?;
 
@@ -1355,7 +1563,7 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
 </span><span class="boring">where
 </span><span class="boring">    A: Adaptor + std::marker::Send + std::marker::Sync,
 </span><span class="boring">{
-</span>    async fn internal_run(&amp;mut self, name: String) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+</span>    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         // Declare the processor
         self.proc.add_proc().await?;
 
@@ -1440,7 +1648,7 @@ After that, you are free to call any services.</p>
 </span><span class="boring">where
 </span><span class="boring">    A: Adaptor + std::marker::Send + std::marker::Sync,
 </span><span class="boring">{
-</span>    async fn internal_run(&amp;mut self, name: String) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+</span>    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         // Register the processor
         self.proc.add_proc().await?;
 
@@ -1492,7 +1700,7 @@ The logic is similar to single senders, but you specify the queue when sending m
 </span><span class="boring">where
 </span><span class="boring">    A: Adaptor + std::marker::Send + std::marker::Sync,
 </span><span class="boring">{
-</span>    async fn internal_run(&amp;mut self, name: String) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+</span>    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         // Register the processor
         self.proc.add_proc().await?;
 
@@ -1543,12 +1751,13 @@ The logic is similar to single senders, but you specify the queue when sending m
         Ok(())
     }
 <span class="boring">}</span></code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="events"><a class="header" href="#events">Events</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="events"><a class="header" href="#events">Events</a></h1>
 <p>ProSA, being a transactional framework, makes events extremely useful when developing a processor.</p>
-<p>In the next sections, we'll go over all event-based objects provided by ProSA.</p>
+<p>In the next sections, we’ll go over all event-based objects provided by ProSA.</p>
 <h2 id="messages-with-timeout---pendingmsgs"><a class="header" href="#messages-with-timeout---pendingmsgs">Messages with timeout - <code>PendingMsgs</code></a></h2>
 <p>Your processor should handle timeouts for transactions in order to drop them if they cannot be processed in time.
-That's the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html"><code>PendingMsgs</code></a> object.</p>
+That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html"><code>PendingMsgs</code></a> object.</p>
 <p>There are three important methods you need to use for this object:</p>
 <ul>
 <li><a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.push"><code>push()</code></a> Add your message to be monitored for timeouts.</li>
@@ -1647,6 +1856,7 @@ It ensures a regular message flow, as illustrated below:</p>
     queue --&gt; recv1
     queue --&gt; recvn
 </pre>
+
 <p>However, if a message in the queue expires (because a receiver failed to consume it in time), the sender retrieves the message:</p>
 <pre class="mermaid">flowchart LR
     send[Sender]
@@ -1654,15 +1864,17 @@ It ensures a regular message flow, as illustrated below:</p>
     send --&gt; queue
     queue -- timeout --&gt; send
 </pre>
+
 <p>This is the key advantage of the <code>TimedQueue</code>.
 Unlike a standard queue, where a message is only returned if explicitly pulled, the <code>TimedQueue</code> allows messages to expire even if they are in the middle of the queue.
 In real-time systems, this ensures that every message receives a response within a specified timeframe—even if that response is simply an acknowledgment of a missed deadline.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="io"><a class="header" href="#io">I/O</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="io"><a class="header" href="#io">I/O</a></h1>
 <p>Since ProSA is designed to connect to external systems, helpers for I/O operation are essential.</p>
 <p>This page covers I/O from server and client perspectives, with a few examples.</p>
 <h2 id="listener-1"><a class="header" href="#listener-1">Listener</a></h2>
 <p><a href="https://docs.rs/prosa/latest/prosa/io/listener/enum.StreamListener.html"><code>StreamListener</code></a> type is used to handle server sockets.
-It can be instantiated from a <a href="ch01-02-03-stream.html#listener"><code>ListenerSetting</code></a> using the <a href="https://docs.rs/prosa/latest/prosa/io/listener/struct.ListenerSetting.html#method.bind"><code>bind</code></a> method.</p>
+It can be instantiated from a <a href="#listener"><code>ListenerSetting</code></a> using the <a href="https://docs.rs/prosa/latest/prosa/io/listener/struct.ListenerSetting.html#method.bind"><code>bind</code></a> method.</p>
 <p>It supports three types of server sockets:</p>
 <ul>
 <li>UNIX</li>
@@ -1673,7 +1885,7 @@ It can be instantiated from a <a href="ch01-02-03-stream.html#listener"><code>Li
 Each accepted connection will create a <code>Stream</code> socket, which can be managed just like a client socket.</p>
 <h2 id="stream-1"><a class="header" href="#stream-1">Stream</a></h2>
 <p>A <code>Stream</code> represents a client socket or a socket created by a <code>StreamListener</code> when a client connects.
-It can be instantiated from a <a href="ch01-02-03-stream.html#client"><code>TargetSetting</code></a> using the <a href="https://docs.rs/prosa/latest/prosa/io/stream/struct.TargetSetting.html#method.connect"><code>connect</code></a> method.</p>
+It can be instantiated from a <a href="#client"><code>TargetSetting</code></a> using the <a href="https://docs.rs/prosa/latest/prosa/io/stream/struct.TargetSetting.html#method.connect"><code>connect</code></a> method.</p>
 <p>It supports several types of client sockets:</p>
 <ul>
 <li>UNIX</li>
@@ -1690,12 +1902,13 @@ It can be instantiated from a <a href="ch01-02-03-stream.html#client"><code>Targ
 </ul>
 <h2 id="io-macro"><a class="header" href="#io-macro">IO macro</a></h2>
 <p>This section will be documented when the macro becomes stable, or removed if it is not relevant.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="threads"><a class="header" href="#threads">Threads</a></h1>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="threads"><a class="header" href="#threads">Threads</a></h1>
 <p>For threading, ProSA relies on <a href="https://docs.rs/tokio/latest/tokio/runtime/index.html">Tokio</a>.</p>
 <h2 id="main-threads"><a class="header" href="#main-threads">Main threads</a></h2>
 <p>When you launch your ProSA, you have the option <code> -t, --worker_threads &lt;THREADS&gt;</code> to run the main function with multiple threads.
 By default, the main function will start observability tasks and the ProSA main task.</p>
-<p>If you pay attention to the threads launched by ProSA for the main task, you'll see:</p>
+<p>If you pay attention to the threads launched by ProSA for the main task, you’ll see:</p>
 <ul>
 <li>For a single thread:</li>
 </ul>
@@ -1739,6 +1952,11 @@ Of course, if you implement it, you can get the number of threads from your proc
 
         </div>
 
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
 
 
@@ -1747,17 +1965,17 @@ Of course, if you implement it, you can get the number of threads from your proc
         </script>
 
 
-        <script src="elasticlunr.min.js"></script>
-        <script src="mark.min.js"></script>
-        <script src="searcher.js"></script>
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-c2a407aa.js"></script>
 
-        <script src="clipboard.min.js"></script>
-        <script src="highlight.js"></script>
-        <script src="book.js"></script>
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-a0b12cfe.js"></script>
 
         <!-- Custom JS scripts -->
-        <script src="mermaid.min.js"></script>
-        <script src="mermaid-init.js"></script>
+        <script src="mermaid-3a6b472a.min.js"></script>
+        <script src="mermaid-init-025d9952.js"></script>
 
         <script>
         window.addEventListener('load', function() {

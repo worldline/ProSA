@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>SSL - ProSA - Protocol Service Adaptor</title>
+        <title>Puppet - ProSA - Protocol Service Adaptor</title>
 
 
         <!-- Custom HTML head -->
@@ -178,114 +178,128 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="ssl"><a class="header" href="#ssl">SSL</a></h1>
-<p>Configuring SSL is a complex task, but many options have been provided to make it accessible and flexible.</p>
-<h2 id="library-selection"><a class="header" href="#library-selection">Library selection</a></h2>
-<p>ProSA through traits:</p>
+                        <h1 id="puppet-prosa"><a class="header" href="#puppet-prosa">Puppet ProSA</a></h1>
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h2>
+<ol>
+<li><a href="#description">Description</a></li>
+<li><a href="#setup">Setup</a>
 <ul>
-<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslStore.html"><code>SslStore</code></a> to handle specific library certificate Store.</li>
-<li><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/trait.SslConfigContext.html"><code>SslConfigContext</code></a> to handle specific client/server SSL context for TLS negociation.</li>
+<li><a href="#what-prosa-module-affects">What the ProSA module affects</a></li>
+<li><a href="#setup-requirements">Setup requirements</a></li>
+<li><a href="#beginning-with-prosa">Beginning with prosa</a></li>
 </ul>
-<p>allows the use of <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/openssl/index.html">OpenSSL</a> and later more SSL libraries.</p>
-<p>By default, ProSA will use OpenSSL, but if you want, you can use the following features to change it:</p>
+</li>
+<li><a href="#usage">Usage</a></li>
+<li><a href="#limitations">Limitations</a></li>
+<li><a href="#development">Development - Guide for contributing to the module</a></li>
+</ol>
+<h2 id="description"><a class="header" href="#description">Description</a></h2>
+<p><a href="https://github.com/worldline/ProSA">ProSA</a> (<strong>Pro</strong>tocol <strong>S</strong>ervice <strong>A</strong>daptor) is a framework designed to provide a simple and lightweight protocol service adaptor for service-oriented architectures.
+This <a href="https://www.puppet.com/docs/puppet/8/modules_fundamentals.html">Puppet module</a> managed with <a href="https://puppet.com/docs/pdk/latest/pdk_generating_modules.html">PDK</a> streamlines the process of creating configurations to manage ProSA in your infrastructure.
+It is capable of configuring and managing a range of processors.
+For more information on deploying ProSA, please refer to <a href="https://github.com/worldline/ProSA/tree/main/cargo-prosa">cargo-prosa</a>.</p>
+<h2 id="setup"><a class="header" href="#setup">Setup</a></h2>
+<h3 id="what-the-prosa-module-affects"><a class="header" href="#what-the-prosa-module-affects">What the ProSA module affects</a></h3>
 <ul>
-<li><code>openssl</code>: Use OpenSSL by default</li>
-<li><code>openssl-vendored</code>: <a href="https://docs.rs/openssl/latest/openssl/#vendored">Vendored</a> OpenSSL that compiles and statically links to the OpenSSL library</li>
+<li>Service and configuration files for ProSA</li>
+<li>ProSA processor configuration files</li>
 </ul>
-<h2 id="store"><a class="header" href="#store">Store</a></h2>
-<p>You have two options to configure an <a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/enum.Store.html">SSL store</a>:</p>
+<h3 id="setup-requirements"><a class="header" href="#setup-requirements">Setup Requirements</a></h3>
+<p>This module does not install dependencies required for your specific ProSA instance, such as OpenSSL.
+You will need to install these dependencies separately according to your ProSA setup.</p>
+<h3 id="beginning-with-prosa"><a class="header" href="#beginning-with-prosa">Beginning with prosa</a></h3>
+<p>To have Puppet install ProSA with the default parameters, declare the [<code>prosa</code>][https://forge.puppet.com/modules/worldline/prosa/reference#prosa] class:</p>
+<pre><code class="language-puppet">class { 'prosa': }
+</code></pre>
+<p>When you declare this class with the default options, the module:</p>
 <ul>
-<li>Specify a store path that will include all certificates found within the folder and its subfolders</li>
-<li>Specify individual certificates directly in PEM format</li>
+<li>Installs the ProSA instace binary from the configured <a href="https://forge.puppet.com/modules/worldline/prosa/reference#-prosa--bin_repo"><em>bin_repo</em></a>.</li>
+<li>Generate configuration files in the <a href="https://forge.puppet.com/modules/worldline/prosa/reference#-prosa--conf_dir"><code>conf_dir</code></a>.</li>
+<li>Creates and starts a ProSA service.</li>
 </ul>
-<h3 id="store-path"><a class="header" href="#store-path">Store path</a></h3>
-<p>When you declare a store path, the system scans the folder and subfolders to load all <code>.pem</code> and <code>.der</code> certificates it finds.</p>
-<p>To configure it, just specify the path:</p>
-<pre><code class="language-yaml">store:
-  path: "/etc/ssl/certs/"
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<h3 id="prosa-base"><a class="header" href="#prosa-base">ProSA base</a></h3>
+<p>To set up ProSA, you need to use the [<code>prosa</code>][https://forge.puppet.com/modules/worldline/prosa/reference#prosa] class.</p>
+<p>From this class, you should specify the binary repository to retrieve the ProSA binary.
+Additionally, observability is configured by default, but you may need to specify parameters based on your particular stack.
+For more details on configuration, please refer to the <a href="https://worldline.github.io/ProSA/ch01-02-config.html">ProSA configuration guide</a>.</p>
+<pre><code class="language-puppet">class { 'prosa':
+  bin_repo        =&gt; 'https://user:password@binary.repo.com/repository/prosa-1.0.0.bin',
+  telemetry_level =&gt; 'info',
+  observability   =&gt; {
+    'metrics' =&gt; {
+      'otlp' =&gt; {
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
+      },
+    },
+    'traces' =&gt; {
+      'otlp' =&gt; {
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
+      },
+      'stdout' =&gt; {
+        'level' =&gt; 'info',
+      },
+    },
+    'logs' =&gt; {
+      'otlp' =&gt; {
+        'endpoint' =&gt; 'grpc://opentelemetry-collector:4317',
+      },
+      'stdout' =&gt; {
+        'level' =&gt; 'info',
+      },
+    },
+  }
+}
 </code></pre>
-<h3 id="store-certificates"><a class="header" href="#store-certificates">Store certificates</a></h3>
-<p>If you prefer to include your certificates directly in the configuration (in PEM format), you can do so as follows:</p>
-<pre><code class="language-yaml">store:
-  certs:
-    - |
-        -----BEGIN CERTIFICATE-----
-        MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
-        CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
-        R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
-        MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
-        ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
-        EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
-        +1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
-        ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
-        AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
-        zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
-        tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
-        /q4AaOeMSQ+2b1tbFfLn
-        -----END CERTIFICATE-----
+<p>With this configuration, ProSA will be installed and ready to accept processors.
+Configuring processors is the next step.</p>
+<h3 id="configuring-processors"><a class="header" href="#configuring-processors">Configuring Processors</a></h3>
+<p>Processors are configured using the <a href="https://forge.puppet.com/modules/worldline/prosa/reference#prosa--proc"><code>prosa::proc</code></a> defined type.
+You can set them up individually or use <a href="https://forge.puppet.com/modules/worldline/prosa/reference#prosa--processors"><code>prosa::processors</code></a> for all:</p>
+<pre><code class="language-puppet">class { 'prosa::processors':
+  processors =&gt; {
+    'stub' =&gt; {
+      'proc_settings' =&gt; {
+        'service_names' =&gt; ['test'],
+      },
+    },
+    'inj' =&gt; {
+      'proc_settings' =&gt; {
+        'service_name' =&gt; 'test',
+      },
+    },
+  }
+}
 </code></pre>
-<blockquote>
-<p>This method is primarily used for inline certificates embedded in the code.</p>
-</blockquote>
-<h2 id="sslconfig"><a class="header" href="#sslconfig">SslConfig</a></h2>
-<p><a href="https://docs.rs/prosa-utils/latest/prosa_utils/config/ssl/struct.SslConfig.html"><code>SslConfig</code></a> is the main configuration object for SSL.</p>
-<p>It allows configuring:</p>
+<p>Since processors have different configurations, <code>proc_settings</code> is provided as a <code>Hash</code> to accommodate all necessary configuration options.
+To determine which configurations to specify, refer to the documentation for the corresponding processor.</p>
+<h2 id="reference"><a class="header" href="#reference">Reference</a></h2>
+<p>For information on classes, types and functions see the <a href="./REFERENCE.html">REFERENCE.md</a></p>
+<h2 id="limitations"><a class="header" href="#limitations">Limitations</a></h2>
+<p>Limitations are associated with the ProSA binary generated with cargo-prosa.
+You need to pay attention to the compiled architecture of your binary.
+Additionally, if you are using external binaries (e.g., OpenSSL), you’ll need to install them independently.</p>
+<h2 id="development"><a class="header" href="#development">Development</a></h2>
+<p>For development guidelines, please follow <a href="./CONTRIBUTING.html">contributing</a> rules.</p>
+<p>If you submit a change to this module, be sure to regenerate the reference documentation as follows:</p>
+<pre><code class="language-bash">puppet strings generate --format markdown --out REFERENCE.md
+</code></pre>
+<p>Acceptance tests are runs with <a href="https://puppetlabs.github.io/litmus/Running-acceptance-tests.html">litmus</a></p>
+<h2 id="authors"><a class="header" href="#authors">Authors</a></h2>
+<h3 id="worldline"><a class="header" href="#worldline">Worldline</a></h3>
 <ul>
-<li><a href="#store">Store</a></li>
-<li>Certificate, key, or PKCS#12 bundle</li>
-<li>ALPN (<em>A</em>pplication-<em>L</em>ayer <em>P</em>rotocol <em>N</em>egotiation)</li>
-<li>Modern security flag as per <a href="https://wiki.mozilla.org/Security/Server_Side_TLS">Mozilla guidelines</a></li>
-<li>SSL timeout for negociations</li>
+<li><a href="https://github.com/reneca">Jérémy HERGAULT</a></li>
 </ul>
-<h3 id="pkcs12"><a class="header" href="#pkcs12">PKCS#12</a></h3>
-<p>To configure SSL with a PKCS#12 bundle:</p>
-<pre><code class="language-yaml">ssl_config:
-  store:
-    path: "/etc/ssl/certs/"
-  pkcs12: "/opt/cert.p12"
-  passphrase: "p12_passphrase"
-</code></pre>
-<h3 id="pemder-certificates"><a class="header" href="#pemder-certificates">PEM/DER certificates</a></h3>
-<p>For traditional PEM certificates:</p>
-<pre><code class="language-yaml">ssl_config:
-  store:
-    path: "/etc/ssl/certs/"
-  cert: "/opt/cert.pem"
-  key: "/opt/cert.key"
-  passphrase: "key_passphrase"
-  alpn:
-    - "h2"
-    - "http/1.1"
-  modern_security: true
-  ssl_timeout: 3000
-</code></pre>
-<blockquote>
-<p>If you specify a certificate with a <code>.der</code> extention, it will be read as DER-encoded.</p>
-</blockquote>
-<h3 id="self-signed-certificate"><a class="header" href="#self-signed-certificate">Self signed certificate</a></h3>
-<p>If your server connection is SSL (with the <code>ssl://</code> or the <code>+ssl://</code> suffixed protocol) and you don’t specify a certificate and its private key, it’ll generate a self-signed certificate.</p>
-<p>If you want to retrieve the generated certificate because you need to trust it from a remote, you can specify a certificate path where the certificate will be written:</p>
-<pre><code class="language-yaml">ssl_config:
-  cert: "/opt/self_signed_cert.pem"
-</code></pre>
-<h3 id="usage"><a class="header" href="#usage">Usage</a></h3>
-<p>The SslConfig applies both to server and client configurations.</p>
-<p>If you specify a store, it’ll be used:</p>
-<ul>
-<li>On the client-side, to validate server certificates</li>
-<li>On the server-side, to validate client certificates</li>
-</ul>
-<p>Similarly, if you own a certificate (with a private key), it can be used as either a client or server certificate.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="ch01-02-01-observability.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="ch01-03-monitoring.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="ch01-02-03-stream.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="ch01-05-cloud.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -295,11 +309,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="ch01-02-01-observability.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="ch01-03-monitoring.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="ch01-02-03-stream.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="ch01-05-cloud.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>
