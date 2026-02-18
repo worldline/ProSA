@@ -243,6 +243,7 @@ fn generate_struct_impl_settings(
             }
 
             fn set_prosa_name(&mut self, name: std::string::String) {
+                self.observability.set_prosa_name(name.as_ref());
                 self.name = Some(name);
             }
 

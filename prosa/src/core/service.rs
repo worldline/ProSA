@@ -4,9 +4,10 @@ use super::{
     msg::InternalMsg,
     proc::{ProcBusParam, ProcParam},
 };
+use opentelemetry::{KeyValue, metrics::AsyncInstrument};
 use prosa_utils::msg::tvf::{Tvf, TvfError};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::{self, Debug},
     sync::atomic,
 };
@@ -20,7 +21,7 @@ where
     M: Sized + Clone + Tvf,
 {
     /// HashMap that contain the service name as key and a vector of processor services with a round robin information
-    table: HashMap<String, (Vec<ProcService<M>>, atomic::AtomicU64)>,
+    table: HashMap<Box<str>, (Vec<ProcService<M>>, atomic::AtomicU64)>,
 }
 
 impl<M> ServiceTable<M>
@@ -35,6 +36,33 @@ where
     /// Getter of the length of the service table (use for metrics)
     pub fn len(&self) -> usize {
         self.table.len()
+    }
+
+    /// Method to record metrics on the service table
+    pub(crate) fn observe_metrics(&self, services_meter: &dyn AsyncInstrument<u64>) {
+        for (name, (services, _)) in self.table.iter() {
+            services_meter.observe(
+                services.len() as u64,
+                &[
+                    KeyValue::new("type", "node"),
+                    KeyValue::new("id", name.to_string()),
+                ],
+            );
+            let mut processor_link = HashSet::new();
+            for service in services {
+                if processor_link.insert(service.proc_id) {
+                    services_meter.observe(
+                        1,
+                        &[
+                            KeyValue::new("type", "link"),
+                            KeyValue::new("id", format!("{name}/{}", service.proc_id)),
+                            KeyValue::new("source", name.to_string()),
+                            KeyValue::new("target", service.proc_id as i64),
+                        ],
+                    );
+                }
+            }
+        }
     }
 
     /// Method to know if the service is available from a processor
@@ -71,10 +99,8 @@ where
                 services.push(proc_service);
             }
         } else {
-            self.table.insert(
-                name.to_string(),
-                (vec![proc_service], atomic::AtomicU64::new(0)),
-            );
+            self.table
+                .insert(name.into(), (vec![proc_service], atomic::AtomicU64::new(0)));
         }
     }
 
@@ -163,7 +189,7 @@ where
     M: Sized + Clone + Tvf,
 {
     proc_id: u32,
-    proc_name: String,
+    proc_name: Box<str>,
     queue_id: u32,
     /// Processor queue use to send transactionnal message to the processor
     pub proc_queue: mpsc::Sender<InternalMsg<M>>,
@@ -181,7 +207,7 @@ where
     ) -> ProcService<M> {
         ProcService {
             proc_id: proc.get_proc_id(),
-            proc_name: proc.name().to_string(),
+            proc_name: proc.name().into(),
             queue_id,
             proc_queue,
         }
@@ -191,7 +217,7 @@ where
     pub fn new_proc(proc: &ProcParam<M>, queue_id: u32) -> ProcService<M> {
         ProcService {
             proc_id: proc.get_proc_id(),
-            proc_name: proc.name().to_string(),
+            proc_name: proc.name().into(),
             queue_id,
             proc_queue: proc.get_service_queue(),
         }
@@ -217,7 +243,7 @@ where
     }
 
     fn name(&self) -> &str {
-        self.proc_name.as_str()
+        self.proc_name.as_ref()
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "prosa"
-version = "0.4.0"
+version = "0.4.1"
 authors.workspace = true
 description = "ProSA core"
 homepage.workspace = true
@@ -10,10 +10,12 @@ license.workspace = true
 include.workspace = true
 
 [features]
-default = ["http-proxy", "openssl"]
+default = ["system-metrics", "http-proxy", "openssl", "prometheus"]
+system-metrics = ["dep:memory-stats"]
 http-proxy = ["dep:async-http-proxy"]
 openssl = ["dep:openssl", "dep:tokio-openssl", "prosa-utils/config-openssl"]
 openssl-vendored = ["openssl", "openssl/vendored", "prosa-utils/config-openssl-vendored"]
+prometheus = ["dep:prometheus", "prosa-utils/config-observability-prometheus"]
 queue = ["prosa-utils/queue"]
 
 [[example]]
@@ -38,12 +40,11 @@ settings = "stub::proc::StubSettings"
 adaptor = ["stub::adaptor::StubParotAdaptor"]
 
 [dependencies]
-prosa-utils = { workspace = true, features = ["msg", "config", "config-observability", "config-observability-prometheus"] }
+prosa-utils = { workspace = true, features = ["msg", "config", "config-observability"] }
 prosa-macros.workspace = true
 log.workspace = true
 tracing = "0.1"
 thiserror.workspace = true
-base64 = "0.22"
 url = { version = "2", features = ["serde"] }
 rlimit = "0.10"
 
@@ -62,8 +63,8 @@ serde_yaml = "0.9"
 
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
-prometheus.workspace = true
-memory-stats = "1"
+prometheus = { workspace = true, optional = true }
+memory-stats = { version = "1", optional = true }
 
 [dev-dependencies]
 futures-util = { version = "0.3", default-features = false }

@@ -4,9 +4,11 @@
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/doc_assets/settings.svg"))]
 //! </svg>
 
-use std::path::PathBuf;
+use std::{path::PathBuf, process::Command};
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use thiserror::Error;
+use url::Url;
 
 // Feature openssl or rusttls,...
 pub mod ssl;
@@ -40,7 +42,7 @@ pub enum ConfigError {
     OpenSsl(#[from] openssl::error::ErrorStack),
 }
 
-/// Method to get the country name from the OS
+/// Method to try get the country name from the OS
 pub fn os_country() -> Option<String> {
     if let Some(lang) = option_env!("LANG") {
         let language = if let Some(pos) = lang.find('.') {
@@ -57,6 +59,70 @@ pub fn os_country() -> Option<String> {
     None
 }
 
+/// Method to try get the hostname from the OS
+pub fn hostname() -> Option<String> {
+    #[cfg(target_family = "unix")]
+    if let Some(host) = option_env!("HOSTNAME").map(str::trim)
+        && !host.is_empty()
+        && !host.contains('\n')
+    {
+        return Some(String::from(host));
+    }
+
+    #[cfg(target_family = "unix")]
+    return Command::new("hostname")
+        .arg("-s")
+        .output()
+        .ok()
+        .and_then(|h| {
+            str::from_utf8(h.stdout.trim_ascii())
+                .ok()
+                .filter(|h| !h.is_empty() && !h.contains('\n'))
+                .map(|h| h.to_string())
+        });
+
+    #[cfg(target_family = "windows")]
+    return Command::new("hostname").output().ok().and_then(|h| {
+        str::from_utf8(h.stdout.trim_ascii())
+            .ok()
+            .filter(|h| !h.is_empty() && !h.contains('\n'))
+            .map(|h| h.to_string())
+    });
+
+    #[cfg(all(not(target_family = "unix"), not(target_family = "windows")))]
+    return None;
+}
+
+/// Method to get authentication value out of URL username/password
+///
+/// - If user password is provided, it return *Basic* authentication with base64 encoded username:password
+/// - If only password is provided, it return *Bearer* authentication with the password as token
+///
+/// ```
+/// use url::Url;
+/// use prosa_utils::config::url_authentication;
+///
+/// let basic_auth_target = Url::parse("http://user:pass@localhost:8080").unwrap();
+/// assert_eq!(Some(String::from("Basic dXNlcjpwYXNz")), url_authentication(&basic_auth_target));
+///
+/// let bearer_auth_target = Url::parse("http://:token@localhost:8080").unwrap();
+/// assert_eq!(Some(String::from("Bearer token")), url_authentication(&bearer_auth_target));
+/// ```
+pub fn url_authentication(url: &Url) -> Option<String> {
+    if let Some(password) = url.password() {
+        if url.username().is_empty() {
+            Some(format!("Bearer {password}"))
+        } else {
+            Some(format!(
+                "Basic {}",
+                STANDARD.encode(format!("{}:{}", url.username(), password))
+            ))
+        }
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,5 +133,31 @@ mod tests {
         if let Some(cn) = country {
             assert_eq!(2, cn.len());
         }
+    }
+
+    #[test]
+    fn test_hostname() {
+        let host = hostname();
+        if let Some(hn) = host {
+            assert!(!hn.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_url_authentication_basic() {
+        let basic_auth_target = Url::parse("http://user:pass@localhost:8080").unwrap();
+        assert_eq!(
+            Some(String::from("Basic dXNlcjpwYXNz")),
+            url_authentication(&basic_auth_target)
+        );
+    }
+
+    #[test]
+    fn test_url_authentication_bearer() {
+        let bearer_auth_target = Url::parse("http://:token@localhost:8080").unwrap();
+        assert_eq!(
+            Some(String::from("Bearer token")),
+            url_authentication(&bearer_auth_target)
+        );
     }
 }

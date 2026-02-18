@@ -417,6 +417,7 @@ where
     }
 
     /// Getter of the Prometheus registry
+    #[cfg(feature = "prometheus")]
     pub fn get_prometheus_registry(&self) -> &prometheus::Registry {
         self.main.get_prometheus_registry()
     }
@@ -468,8 +469,9 @@ where
 macro_rules! proc_run {
     ( $self:ident ) => {
         info!(
-            target: $self.name(),
-            "Run processor on {} threads",
+            "Run processor[{}] {} on {} threads",
+            $self.get_proc_id(),
+            $self.name(),
             $self.get_proc_threads()
         );
 
@@ -489,8 +491,9 @@ macro_rules! proc_run {
                 // Log and restart if needed
                 if proc_err.recoverable() {
                     warn!(
-                        target: $self.name(),
-                        "Processor encounter an error `{}`. Will restart after {}ms",
+                        "Processor[{}] {} encounter an error `{}`. Will restart after {}ms",
+                        $self.get_proc_id(),
+                        $self.name(),
                         proc_err,
                         (wait_time + recovery_duration).as_millis()
                     );
@@ -501,8 +504,9 @@ macro_rules! proc_run {
                     }
                 } else {
                     error!(
-                        target: $self.name(),
-                        "Processor encounter a fatal error `{}`",
+                        "Processor[{}] {} encounter a fatal error `{}`",
+                        $self.get_proc_id(),
+                        $self.name(),
                         proc_err
                     );
 

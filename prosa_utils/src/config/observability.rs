@@ -1,17 +1,21 @@
 //! Definition of Opentelemetry configuration
 
-use opentelemetry::trace::TracerProvider as _;
-use opentelemetry_otlp::{ExportConfig, ExporterBuildError, Protocol, WithExportConfig};
+use opentelemetry::{KeyValue, trace::TracerProvider as _};
+use opentelemetry_otlp::{
+    ExportConfig, ExporterBuildError, Protocol, WithExportConfig, WithHttpConfig,
+};
 use opentelemetry_sdk::{
     logs::SdkLoggerProvider,
-    metrics::{PeriodicReader, SdkMeterProvider},
+    metrics::SdkMeterProvider,
     trace::{SdkTracerProvider, Tracer},
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 use tracing_subscriber::{filter, prelude::*};
 use tracing_subscriber::{layer::SubscriberExt, util::TryInitError};
 use url::Url;
+
+use crate::config::url_authentication;
 
 use super::tracing::{TelemetryFilter, TelemetryLevel};
 
@@ -19,35 +23,61 @@ use super::tracing::{TelemetryFilter, TelemetryLevel};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub(crate) struct OTLPExporterCfg {
     pub(crate) level: Option<TelemetryLevel>,
-    #[serde(default = "OTLPExporterCfg::get_default_name")]
-    name: String,
     endpoint: Url,
     #[serde(skip_serializing)]
     timeout_sec: Option<u64>,
 }
 
 impl OTLPExporterCfg {
-    pub(crate) const DEFAULT_TRACER_NAME: &'static str = "prosa";
-
-    fn get_default_name() -> String {
-        Self::DEFAULT_TRACER_NAME.into()
+    pub(crate) fn get_protocol(&self) -> Protocol {
+        match self.endpoint.scheme().to_lowercase().as_str() {
+            "grpc" => Protocol::Grpc,
+            "http/json" => Protocol::HttpJson,
+            _ => Protocol::HttpBinary,
+        }
     }
 
-    pub(crate) fn get_protocol(&self) -> Protocol {
-        if self.endpoint.scheme().to_lowercase() == "grpc" {
-            Protocol::Grpc
-        } else {
-            Protocol::HttpBinary
+    pub(crate) fn get_header(&self) -> HashMap<String, String> {
+        let mut headers = HashMap::with_capacity(1);
+        if let Some(authorization) = url_authentication(&self.endpoint) {
+            headers.insert("Authorization".to_string(), authorization);
         }
+        headers
+    }
+
+    pub(crate) fn get_resource(
+        &self,
+        attr: Vec<KeyValue>,
+    ) -> opentelemetry_sdk::resource::Resource {
+        opentelemetry_sdk::resource::Resource::builder()
+            .with_attributes(attr)
+            .with_attribute(opentelemetry::KeyValue::new(
+                "process.creation.time",
+                chrono::Utc::now().to_rfc3339(),
+            ))
+            .with_attribute(opentelemetry::KeyValue::new(
+                "process.pid",
+                opentelemetry::Value::I64(std::process::id() as i64),
+            ))
+            .build()
     }
 }
 
 impl From<OTLPExporterCfg> for ExportConfig {
     fn from(value: OTLPExporterCfg) -> Self {
+        let protocol = value.get_protocol();
+        let mut endpoint = value.endpoint;
+        if !endpoint.username().is_empty() {
+            let _ = endpoint.set_username("");
+        }
+        if endpoint.password().is_some() {
+            let _ = endpoint.set_password(None);
+        }
+
         ExportConfig {
-            endpoint: Some(value.endpoint.to_string()),
+            endpoint: Some(endpoint.to_string()),
             timeout: value.timeout_sec.map(Duration::from_secs),
-            protocol: value.get_protocol(),
+            protocol,
         }
     }
 }
@@ -56,7 +86,6 @@ impl Default for OTLPExporterCfg {
     fn default() -> Self {
         Self {
             level: None,
-            name: Self::get_default_name(),
             endpoint: Url::parse("grpc://localhost:4317").unwrap(),
             timeout_sec: None,
         }
@@ -124,6 +153,15 @@ impl PrometheusExporterCfg {
 
         Ok(())
     }
+
+    pub(crate) fn get_resource(
+        &self,
+        attr: Vec<KeyValue>,
+    ) -> opentelemetry_sdk::resource::Resource {
+        opentelemetry_sdk::resource::Resource::builder()
+            .with_attributes(attr)
+            .build()
+    }
 }
 
 /// Configuration struct of an stdout exporter
@@ -146,7 +184,8 @@ impl TelemetryMetrics {
     /// Build a meter provider based on the self configuration
     fn build_provider(
         &self,
-        registry: &prometheus::Registry,
+        #[cfg(feature = "config-observability-prometheus")] resource_attr: Vec<KeyValue>,
+        #[cfg(feature = "config-observability-prometheus")] registry: &prometheus::Registry,
     ) -> Result<SdkMeterProvider, ExporterBuildError> {
         let mut meter_provider = SdkMeterProvider::builder();
         if let Some(s) = &self.otlp {
@@ -158,11 +197,11 @@ impl TelemetryMetrics {
             } else {
                 opentelemetry_otlp::MetricExporter::builder()
                     .with_http()
+                    .with_headers(s.get_header())
                     .with_export_config(s.clone().into())
                     .build()
             }?;
-            let reader = PeriodicReader::builder(exporter).build();
-            meter_provider = meter_provider.with_reader(reader);
+            meter_provider = meter_provider.with_periodic_exporter(exporter);
         }
 
         #[cfg(feature = "config-observability-prometheus")]
@@ -170,11 +209,13 @@ impl TelemetryMetrics {
             // configure OpenTelemetry to use this registry
             let exporter = opentelemetry_prometheus::exporter()
                 .with_registry(registry.clone())
+                .with_resource_selector(opentelemetry_prometheus::ResourceSelector::All)
                 .without_target_info()
-                .without_scope_info()
                 .build()
                 .map_err(|e| ExporterBuildError::InternalFailure(e.to_string()))?;
-            meter_provider = meter_provider.with_reader(exporter);
+            meter_provider = meter_provider
+                .with_resource(prom.get_resource(resource_attr))
+                .with_reader(exporter);
 
             // Initialize the Prometheus server if needed
             prom.init_prometheus_server(registry)?;
@@ -182,8 +223,7 @@ impl TelemetryMetrics {
 
         if self.stdout.is_some() {
             let exporter = opentelemetry_stdout::MetricExporter::default();
-            let reader = PeriodicReader::builder(exporter).build();
-            meter_provider = meter_provider.with_reader(reader);
+            meter_provider = meter_provider.with_periodic_exporter(exporter);
         }
 
         Ok(meter_provider.build())
@@ -220,6 +260,7 @@ impl TelemetryData {
     /// Build a logger provider based on the self configuration
     fn build_logger_provider(
         &self,
+        resource_attr: Vec<KeyValue>,
     ) -> Result<(SdkLoggerProvider, TelemetryLevel), ExporterBuildError> {
         let logs_provider = SdkLoggerProvider::builder();
         if let Some(s) = &self.otlp {
@@ -231,11 +272,15 @@ impl TelemetryData {
             } else {
                 opentelemetry_otlp::LogExporter::builder()
                     .with_http()
+                    .with_headers(s.get_header())
                     .with_export_config(s.clone().into())
                     .build()
             }?;
             Ok((
-                logs_provider.with_batch_exporter(exporter).build(),
+                logs_provider
+                    .with_resource(s.get_resource(resource_attr))
+                    .with_batch_exporter(exporter)
+                    .build(),
                 s.level.unwrap_or_default(),
             ))
         } else if let Some(stdout) = &self.stdout {
@@ -251,7 +296,10 @@ impl TelemetryData {
     }
 
     /// Build a tracer provider based on the self configuration
-    fn build_tracer_provider(&self) -> Result<SdkTracerProvider, ExporterBuildError> {
+    fn build_tracer_provider(
+        &self,
+        resource_attr: Vec<KeyValue>,
+    ) -> Result<SdkTracerProvider, ExporterBuildError> {
         let mut trace_provider = SdkTracerProvider::builder();
         if let Some(s) = &self.otlp {
             let exporter = if s.get_protocol() == Protocol::Grpc {
@@ -262,37 +310,27 @@ impl TelemetryData {
             } else {
                 opentelemetry_otlp::SpanExporter::builder()
                     .with_http()
+                    .with_headers(s.get_header())
                     .with_export_config(s.clone().into())
                     .build()
             }?;
-            trace_provider = trace_provider.with_batch_exporter(exporter);
+
+            trace_provider = trace_provider
+                .with_resource(s.get_resource(resource_attr))
+                .with_batch_exporter(exporter);
         }
 
         Ok(trace_provider.build())
     }
 
     /// Build a tracer provider based on the self configuration
-    fn build_tracer(&self) -> Result<Tracer, ExporterBuildError> {
-        let mut trace_provider = SdkTracerProvider::builder();
-        if let Some(s) = &self.otlp {
-            let exporter = if s.get_protocol() == Protocol::Grpc {
-                opentelemetry_otlp::SpanExporter::builder()
-                    .with_tonic()
-                    .with_export_config(s.clone().into())
-                    .build()
-            } else {
-                opentelemetry_otlp::SpanExporter::builder()
-                    .with_http()
-                    .with_export_config(s.clone().into())
-                    .build()
-            }?;
-            trace_provider = trace_provider.with_batch_exporter(exporter);
-            Ok(trace_provider.build().tracer(s.name.clone()))
-        } else {
-            Ok(trace_provider
-                .build()
-                .tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME))
-        }
+    fn build_tracer(
+        &self,
+        name: &str,
+        resource_attr: Vec<KeyValue>,
+    ) -> Result<Tracer, ExporterBuildError> {
+        self.build_tracer_provider(resource_attr)
+            .map(|p| p.tracer(name.to_string()))
     }
 }
 
@@ -325,6 +363,11 @@ impl Default for TelemetryData {
 /// ```
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Observability {
+    /// Name of ProSA from observability perspective
+    service_name: Option<String>,
+    /// Additional attributes for all telemetry data
+    #[serde(default)]
+    attributes: HashMap<String, String>,
     /// Global level for observability
     #[serde(default)]
     level: TelemetryLevel,
@@ -337,14 +380,83 @@ pub struct Observability {
 }
 
 impl Observability {
+    pub(crate) fn common_scope_attributes(service_name: String, capacity: usize) -> Vec<KeyValue> {
+        let mut scope_attributes = Vec::with_capacity(capacity + 3);
+        scope_attributes.push(KeyValue::new("service.name", service_name));
+
+        match std::env::consts::ARCH {
+            "x86_64" => scope_attributes.push(KeyValue::new("host.arch", "amd64")),
+            "aarch64" => scope_attributes.push(KeyValue::new("host.arch", "arm64")),
+            "arm" => scope_attributes.push(KeyValue::new("host.arch", "arm32")),
+            _ => {}
+        }
+
+        match std::env::consts::OS {
+            "linux" => scope_attributes.push(KeyValue::new("os.type", "linux")),
+            "macos" => scope_attributes.push(KeyValue::new("os.type", "darwin")),
+            "freebsd" => scope_attributes.push(KeyValue::new("os.type", "freebsd")),
+            "openbsd" => scope_attributes.push(KeyValue::new("os.type", "openbsd")),
+            "netbsd" => scope_attributes.push(KeyValue::new("os.type", "netbsd")),
+            "windows" => scope_attributes.push(KeyValue::new("os.type", "windows")),
+            _ => {}
+        }
+
+        scope_attributes
+    }
+
     /// Create an observability object with inline parameter instead of getting it from an external configuration
     pub fn new(level: TelemetryLevel) -> Observability {
         Observability {
+            service_name: None,
+            attributes: HashMap::new(),
             level,
             metrics: Some(TelemetryMetrics::default()),
             logs: Some(TelemetryData::default()),
             traces: Some(TelemetryData::default()),
         }
+    }
+
+    /// Setter of the ProSA name for all observability `service.name` attributes
+    pub fn set_prosa_name(&mut self, name: &str) {
+        if self.service_name.is_none() {
+            self.service_name = Some(name.to_string());
+        }
+    }
+
+    /// Getter of the common scope attributes
+    pub fn get_scope_attributes(&self) -> Vec<KeyValue> {
+        // start with common attributes
+        let mut scope_attr = if let Some(service_name) = self.attributes.get("service.name") {
+            Self::common_scope_attributes(service_name.clone(), self.attributes.len() + 2)
+        } else {
+            Self::common_scope_attributes(
+                self.service_name.clone().unwrap_or("prosa".to_string()),
+                self.attributes.len() + 2,
+            )
+        };
+
+        if !self.attributes.contains_key("host.name")
+            && let Some(hostname) = super::hostname()
+        {
+            scope_attr.push(KeyValue::new("host.name", hostname));
+        }
+
+        if !self.attributes.contains_key("service.version") {
+            scope_attr.push(KeyValue::new("service.version", env!("CARGO_PKG_VERSION")));
+        }
+
+        // append custom attributes from configuration
+        scope_attr.append(
+            self.attributes
+                .iter()
+                .map(|(k, v)| {
+                    KeyValue::new(k.clone(), opentelemetry::Value::String(v.clone().into()))
+                })
+                .collect::<Vec<KeyValue>>()
+                .as_mut(),
+        );
+
+        scope_attr
     }
 
     /// Getter of the log level (max value)
@@ -362,9 +474,22 @@ impl Observability {
     }
 
     /// Meter provider builder
+    #[cfg(feature = "config-observability-prometheus")]
     pub fn build_meter_provider(&self, registry: &prometheus::Registry) -> SdkMeterProvider {
         if let Some(settings) = &self.metrics {
-            settings.build_provider(registry).unwrap_or_default()
+            settings
+                .build_provider(self.get_scope_attributes(), registry)
+                .unwrap_or_default()
+        } else {
+            SdkMeterProvider::default()
+        }
+    }
+
+    /// Meter provider builder
+    #[cfg(not(feature = "config-observability-prometheus"))]
+    pub fn build_meter_provider(&self) -> SdkMeterProvider {
+        if let Some(settings) = &self.metrics {
+            settings.build_provider().unwrap_or_default()
         } else {
             SdkMeterProvider::default()
         }
@@ -373,7 +498,7 @@ impl Observability {
     /// Logger provider builder
     pub fn build_logger_provider(&self) -> (SdkLoggerProvider, TelemetryLevel) {
         if let Some(settings) = &self.logs {
-            match settings.build_logger_provider() {
+            match settings.build_logger_provider(self.get_scope_attributes()) {
                 Ok(m) => m,
                 Err(_) => (
                     SdkLoggerProvider::builder().build(),
@@ -401,7 +526,9 @@ impl Observability {
     /// ```
     pub fn build_tracer_provider(&self) -> SdkTracerProvider {
         if let Some(settings) = &self.traces {
-            settings.build_tracer_provider().unwrap_or_default()
+            settings
+                .build_tracer_provider(self.get_scope_attributes())
+                .unwrap_or_default()
         } else {
             SdkTracerProvider::default()
         }
@@ -419,12 +546,17 @@ impl Observability {
     /// ```
     pub fn build_tracer(&self) -> Tracer {
         if let Some(settings) = &self.traces {
-            match settings.build_tracer() {
+            match settings.build_tracer(
+                self.service_name.as_deref().unwrap_or("prosa"),
+                self.get_scope_attributes(),
+            ) {
                 Ok(m) => m,
-                Err(_) => SdkTracerProvider::default().tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME),
+                Err(_) => SdkTracerProvider::default()
+                    .tracer(self.service_name.clone().unwrap_or("prosa".to_string())),
             }
         } else {
-            SdkTracerProvider::default().tracer(OTLPExporterCfg::DEFAULT_TRACER_NAME)
+            SdkTracerProvider::default()
+                .tracer(self.service_name.clone().unwrap_or("prosa".to_string()))
         }
     }
 
@@ -461,7 +593,8 @@ impl Observability {
                 subscriber.try_init()
             }
         } else if let Some(logs) = &self.logs
-            && let Ok((logger_provider, level)) = logs.build_logger_provider()
+            && let Ok((logger_provider, level)) =
+                logs.build_logger_provider(self.get_scope_attributes())
             && level > TelemetryLevel::OFF
         {
             let logger_filter = filter.clone_with_level(level);
@@ -482,6 +615,8 @@ impl Observability {
 impl Default for Observability {
     fn default() -> Self {
         Self {
+            service_name: None,
+            attributes: HashMap::new(),
             level: TelemetryLevel::default(),
             metrics: Some(TelemetryMetrics::default()),
             logs: Some(TelemetryData {

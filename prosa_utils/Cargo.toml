@@ -1,6 +1,6 @@
 [package]
 name = "prosa-utils"
-version = "0.4.0"
+version = "0.4.1"
 authors.workspace = true
 description = "ProSA utils"
 homepage.workspace = true
@@ -10,15 +10,14 @@ license.workspace = true
 include.workspace = true
 
 [features]
-default = ["full"]
+default = ["msg", "config", "config-openssl", "config-observability"]
 msg = []
-config = ["dep:glob","dep:serde","dep:serde_yaml"]
+config = ["dep:glob","dep:serde","dep:serde_yaml", "dep:base64"]
 config-openssl = ["config", "dep:openssl"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored"]
-config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:opentelemetry-appender-tracing", "dep:prometheus"]
-config-observability-prometheus = ["config-observability", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
+config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:opentelemetry-appender-tracing"]
+config-observability-prometheus = ["config-observability", "dep:prometheus", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
 queue = []
-full = ["msg", "config", "config-openssl", "config-observability", "config-observability-prometheus"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -38,6 +37,7 @@ hex = "0.4"
 glob = { version = "0.3", optional = true }
 serde = { workspace = true, optional = true }
 serde_yaml = { version = "0.9", optional = true }
+base64 = { version = "0.22", optional = true }
 
 # Config OpenSSL
 openssl = { workspace = true, optional = true }
@@ -46,14 +46,14 @@ openssl = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 tracing-core = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["std", "env-filter"], optional = true }
-tracing-opentelemetry = { version = "0.30", optional = true }
+tracing-opentelemetry = { version = "0.32.1", optional = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
-opentelemetry-stdout = { version = "0.29", optional = true, features = ["metrics", "trace", "logs"]}
-opentelemetry-otlp = { version = "0.29", optional = true, features = ["metrics", "trace", "logs", "grpc-tonic"]}
+opentelemetry-stdout = { version = "0.31.0", optional = true, features = ["metrics", "trace", "logs"]}
+opentelemetry-otlp = { version = "0.31.0", optional = true, features = ["metrics", "trace", "logs", "grpc-tonic"]}
 prometheus = { workspace = true, optional = true }
-opentelemetry-prometheus = { version = "0.29", optional = true }
-opentelemetry-appender-tracing = { version = "0.29", optional = true }
+opentelemetry-prometheus = { version = "0.31.0", optional = true }
+opentelemetry-appender-tracing = { version = "0.31.0", optional = true }
 
 # Web Observability
 tokio = { workspace = true, optional = true }
