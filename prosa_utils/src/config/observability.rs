@@ -110,15 +110,17 @@ impl PrometheusExporterCfg {
             let registry = registry.clone();
             tokio::task::spawn(async move {
                 match tokio::net::TcpListener::bind(endpoint).await {
-                    Ok(listener) => loop {
-                        if let Ok((stream, _)) = listener.accept().await {
-                            let io = hyper_util::rt::TokioIo::new(stream);
-                            let registry = registry.clone();
-                            tokio::task::spawn(async move {
-                                if let Err(err) = hyper::server::conn::http1::Builder::new()
+                    Ok(listener) => {
+                        loop {
+                            if let Ok((stream, _)) = listener.accept().await {
+                                let io = hyper_util::rt::TokioIo::new(stream);
+                                let registry = registry.clone();
+                                tokio::task::spawn(async move {
+                                    if let Err(err) = hyper::server::conn::http1::Builder::new()
                                     .serve_connection(
                                         io,
-                                        hyper::service::service_fn(|_req| {
+                                        #[allow(unused)]
+                                        hyper::service::service_fn(|req| {
                                             let registry = registry.clone();
                                             async move {
                                                 let metric_families = registry.gather();
@@ -126,13 +128,35 @@ impl PrometheusExporterCfg {
                                                 if let Ok(metric_data) =
                                                     encoder.encode_to_string(&metric_families)
                                                 {
-                                                    Ok(hyper::Response::new(
-                                                        http_body_util::Full::new(
+                                                    let response = hyper::Response::builder()
+                                                        .header(hyper::header::SERVER, concat!("ProSA/", env!("CARGO_PKG_VERSION")))
+                                                        .header(
+                                                            hyper::header::CONTENT_TYPE,
+                                                            "text/plain; version=1.0.0",
+                                                        );
+
+                                                    #[cfg(feature = "config-observability-gzip")]
+                                                    if req.headers().get(hyper::header::ACCEPT_ENCODING).is_some_and(|a| a.to_str().is_ok_and(|v| v.contains("gzip"))) {
+                                                        let mut gz_encoder = flate2::write::GzEncoder::new(Vec::with_capacity(2048), flate2::Compression::fast());
+                                                        if std::io::Write::write_all(&mut gz_encoder, metric_data.as_bytes()).is_ok()
+                                                            && let Ok(compressed_data) = gz_encoder.finish()
+                                                        {
+                                                            return response
+                                                                .header(hyper::header::CONTENT_ENCODING, "gzip")
+                                                                .body(http_body_util::Full::new(
+                                                                    bytes::Bytes::from(compressed_data)),
+                                                                )
+                                                                .map_err(|e| e.to_string());
+                                                        }
+                                                    }
+
+                                                    response
+                                                        .body(http_body_util::Full::new(
                                                             bytes::Bytes::from(metric_data),
-                                                        ),
-                                                    ))
+                                                        ))
+                                                        .map_err(|e| e.to_string())
                                                 } else {
-                                                    Err("Can't serialize metrics")
+                                                    Err("Can't serialize metrics".to_string())
                                                 }
                                             }
                                         }),
@@ -141,9 +165,10 @@ impl PrometheusExporterCfg {
                                 {
                                     log::debug!(target: "prosa::observability::prometheus_server", "Error serving prometheus connection: {err:?}");
                                 }
-                            });
+                                });
+                            }
                         }
-                    },
+                    }
                     Err(e) => {
                         log::error!(target: "prosa::observability::prometheus_server", "Failed to bind Prometheus metrics server: {e}");
                     }

@@ -1,6 +1,6 @@
 [package]
 name = "prosa-utils"
-version = "0.4.1"
+version = "0.4.2"
 authors.workspace = true
 description = "ProSA utils"
 homepage.workspace = true
@@ -16,6 +16,7 @@ config = ["dep:glob","dep:serde","dep:serde_yaml", "dep:base64"]
 config-openssl = ["config", "dep:openssl"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:opentelemetry-appender-tracing"]
+config-observability-gzip = ["dep:flate2", "opentelemetry-otlp/gzip-tonic", "opentelemetry-otlp/gzip-http"]
 config-observability-prometheus = ["config-observability", "dep:prometheus", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
 queue = []
 
@@ -50,7 +51,7 @@ tracing-opentelemetry = { version = "0.32.1", optional = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
 opentelemetry-stdout = { version = "0.31.0", optional = true, features = ["metrics", "trace", "logs"]}
-opentelemetry-otlp = { version = "0.31.0", optional = true, features = ["metrics", "trace", "logs", "grpc-tonic"]}
+opentelemetry-otlp = { version = "0.31.0", optional = true, features = ["metrics", "trace", "logs", "reqwest-rustls", "grpc-tonic"]}
 prometheus = { workspace = true, optional = true }
 opentelemetry-prometheus = { version = "0.31.0", optional = true }
 opentelemetry-appender-tracing = { version = "0.31.0", optional = true }
@@ -60,6 +61,7 @@ tokio = { workspace = true, optional = true }
 hyper = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
+flate2 = { version = "1", optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
