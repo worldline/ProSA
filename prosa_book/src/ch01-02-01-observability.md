@@ -124,6 +124,36 @@ observability:
       endpoint: "http://localhost:4318/v1/logs"
 ```
 
+#### Grafana Cloud
+
+You can connect ProSA directly to Grafana Cloud to send metrics, logs and traces.
+To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource.
+
+To set it up, you have to:
+- Select OpenTelemetry SDK, with Other as language (or Rust if it's available)
+- Use Linux as infrastructure
+- Use a direct connection with a token
+- Decode the base64 basic authorization token from `Create an Instrumentation Instance`. You'll get an `id:password` to set OTLP credential with.
+
+> For the first configuration you may have to set the service name to `my-app` to let Grafana Cloud detect that it's working.
+
+With these information, set you observability stack with (look before if you want to set up traces):
+```yaml
+observability:
+  # For the datasource setup
+  service_name: my-app
+  level: debug
+  metrics:
+    otlp:
+      endpoint: "https://1234567:glc_<value>@otlp-gateway-prod-eu-west-2.grafana.net/otlp/v1/metrics"
+  traces:
+    otlp:
+      endpoint: "https://1234567:glc_<value>@otlp-gateway-prod-eu-west-2.grafana.net/otlp/v1/traces"
+  logs:
+    otlp:
+      endpoint: "https://1234567:glc_<value>@otlp-gateway-prod-eu-west-2.grafana.net/otlp/v1/logs"
+```
+
 ### Prometheus server
 
 Prometheus works as a metric puller.
