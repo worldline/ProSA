@@ -126,18 +126,18 @@ observability:
 
 #### Grafana Cloud
 
-You can connect ProSA directly to Grafana Cloud to send metrics, logs and traces.
+You can connect ProSA directly to Grafana Cloud to send metrics, logs, and traces.
 To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource.
 
 To set it up, you have to:
 - Select OpenTelemetry SDK, with Other as language (or Rust if it's available)
 - Use Linux as infrastructure
 - Use a direct connection with a token
-- Decode the base64 basic authorization token from `Create an Instrumentation Instance`. You'll get an `id:password` to set OTLP credential with.
+- Decode the base64-encoded basic authorization token from the `Create an Instrumentation Instance`. You'll get an `id:password` to set OTLP credentials with.
 
 > For the first configuration you may have to set the service name to `my-app` to let Grafana Cloud detect that it's working.
 
-With these information, set you observability stack with (look before if you want to set up traces):
+With this information, set up your observability stack (look before if you want to set up traces):
 ```yaml
 observability:
   # For the datasource setup
