@@ -109,7 +109,11 @@ pub fn hostname() -> Option<String> {
 /// assert_eq!(Some(String::from("Bearer token")), url_authentication(&bearer_auth_target));
 /// ```
 pub fn url_authentication(url: &Url) -> Option<String> {
-    if let Some(password) = url.password() {
+    if let Some(password) = url.password().map(|p| {
+        p.replace("%24", "$")
+            .replace("%26", "&")
+            .replace("%3D", "=")
+    }) {
         if url.username().is_empty() {
             Some(format!("Bearer {password}"))
         } else {
@@ -148,6 +152,15 @@ mod tests {
         let basic_auth_target = Url::parse("http://user:pass@localhost:8080").unwrap();
         assert_eq!(
             Some(String::from("Basic dXNlcjpwYXNz")),
+            url_authentication(&basic_auth_target)
+        );
+    }
+
+    #[test]
+    fn test_url_safe_authentication_basic() {
+        let basic_auth_target = Url::parse("http://user:$ab&cd=@localhost:8080").unwrap();
+        assert_eq!(
+            Some(String::from("Basic dXNlcjokYWImY2Q9")),
             url_authentication(&basic_auth_target)
         );
     }
