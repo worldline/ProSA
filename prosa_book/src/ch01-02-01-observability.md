@@ -141,7 +141,8 @@ With this information, set up your observability stack (look before if you want 
 ```yaml
 observability:
   # For the datasource setup
-  service_name: my-app
+  attributes:
+    - service.name: my-app
   level: debug
   metrics:
     otlp:
