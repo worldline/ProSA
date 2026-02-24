@@ -388,8 +388,6 @@ impl Default for TelemetryData {
 /// ```
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Observability {
-    /// Name of ProSA from observability perspective
-    service_name: Option<String>,
     /// Additional attributes for all telemetry data
     #[serde(default)]
     attributes: HashMap<String, String>,
@@ -432,7 +430,6 @@ impl Observability {
     /// Create an observability object with inline parameter instead of getting it from an external configuration
     pub fn new(level: TelemetryLevel) -> Observability {
         Observability {
-            service_name: None,
             attributes: HashMap::new(),
             level,
             metrics: Some(TelemetryMetrics::default()),
@@ -441,24 +438,28 @@ impl Observability {
         }
     }
 
+    /// Getter of the observability `service.name` attributes
+    pub fn get_service_name(&self) -> &str {
+        self.attributes
+            .get("service.name")
+            .map(|s| s.as_ref())
+            .unwrap_or("prosa")
+    }
+
     /// Setter of the ProSA name for all observability `service.name` attributes
     pub fn set_prosa_name(&mut self, name: &str) {
-        if self.service_name.is_none() {
-            self.service_name = Some(name.to_string());
-        }
+        self.attributes
+            .entry("service.name".to_string())
+            .or_insert_with(|| name.to_string());
     }
 
     /// Getter of the common scope attributes
     pub fn get_scope_attributes(&self) -> Vec<KeyValue> {
         // start with common attributes
-        let mut scope_attr = if let Some(service_name) = self.attributes.get("service.name") {
-            Self::common_scope_attributes(service_name.clone(), self.attributes.len() + 2)
-        } else {
-            Self::common_scope_attributes(
-                self.service_name.clone().unwrap_or("prosa".to_string()),
-                self.attributes.len() + 2,
-            )
-        };
+        let mut scope_attr = Self::common_scope_attributes(
+            self.get_service_name().to_string(),
+            self.attributes.len() + 2,
+        );
 
         if !self.attributes.contains_key("host.name")
             && let Some(hostname) = super::hostname()
@@ -571,17 +572,12 @@ impl Observability {
     /// ```
     pub fn build_tracer(&self) -> Tracer {
         if let Some(settings) = &self.traces {
-            match settings.build_tracer(
-                self.service_name.as_deref().unwrap_or("prosa"),
-                self.get_scope_attributes(),
-            ) {
+            match settings.build_tracer(self.get_service_name(), self.get_scope_attributes()) {
                 Ok(m) => m,
-                Err(_) => SdkTracerProvider::default()
-                    .tracer(self.service_name.clone().unwrap_or("prosa".to_string())),
+                Err(_) => SdkTracerProvider::default().tracer(self.get_service_name().to_string()),
             }
         } else {
-            SdkTracerProvider::default()
-                .tracer(self.service_name.clone().unwrap_or("prosa".to_string()))
+            SdkTracerProvider::default().tracer(self.get_service_name().to_string())
         }
     }
 
@@ -640,7 +636,6 @@ impl Observability {
 impl Default for Observability {
     fn default() -> Self {
         Self {
-            service_name: None,
             attributes: HashMap::new(),
             level: TelemetryLevel::default(),
             metrics: Some(TelemetryMetrics::default()),
