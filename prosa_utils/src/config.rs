@@ -62,11 +62,11 @@ pub fn os_country() -> Option<String> {
 /// Method to try get the hostname from the OS
 pub fn hostname() -> Option<String> {
     #[cfg(target_family = "unix")]
-    if let Some(host) = option_env!("HOSTNAME").map(str::trim)
+    if let Ok(host) = std::env::var("HOSTNAME").map(|h| h.trim().to_string())
         && !host.is_empty()
         && !host.contains('\n')
     {
-        return Some(String::from(host));
+        return Some(host);
     }
 
     #[cfg(target_family = "unix")]
