@@ -66,7 +66,7 @@ pub fn hostname() -> Option<String> {
         && !host.is_empty()
         && !host.contains('\n')
     {
-        return Some(String::from(host));
+        return Some(host);
     }
 
     #[cfg(target_family = "unix")]
