@@ -118,7 +118,7 @@ where
     /// Can be call only by the main task to modify the service table
     pub fn remove_service(&mut self, name: &str, proc_id: u32, queue_id: u32) {
         if let Some((services, _)) = self.table.get_mut(name) {
-            services.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);
+            services.retain(|s| s.proc_id != proc_id || s.queue_id != queue_id);
         }
     }
 
@@ -138,7 +138,7 @@ where
     pub fn remove_proc_queue_services(&mut self, proc_id: u32, queue_id: u32) {
         // This will let service with empty processors
         for (services, _) in self.table.values_mut() {
-            services.retain(|s| s.proc_id != proc_id && s.queue_id != queue_id);
+            services.retain(|s| s.proc_id != proc_id || s.queue_id != queue_id);
         }
     }
 }

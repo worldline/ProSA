@@ -22,7 +22,7 @@ macro_rules! spmc {
         impl<T, const N: usize> $sender<T, N> {
             /// Method to check if timer are still on existing items
             fn timers_retain(&mut self, head: $p, id: $p) {
-                let tail = id + 1 % self.queue.max_capacity();
+                let tail = (id + 1) % self.queue.max_capacity();
                 self.timers.retain(|t| prosa_utils::id_in_queue!(t, head, tail));
             }
 
