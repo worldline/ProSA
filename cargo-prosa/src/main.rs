@@ -186,24 +186,22 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
                         metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
                     }
                 } else {
+                    let mut metadata_table = toml_edit::Table::new();
+                    metadata_table.set_implicit(true);
+
                     if deb_pkg {
                         let mut deb_table = toml_edit::Table::new();
                         DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
-
-                        let mut metadata_table = toml_edit::Table::new();
-                        metadata_table.set_implicit(true);
                         metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
-
-                        package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
                     }
+
                     if rpm_pkg {
                         let mut rpm_table = toml_edit::Table::new();
                         RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
-
-                        let mut metadata_table = toml_edit::Table::new();
-                        metadata_table.set_implicit(true);
                         metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
+                    }
 
+                    if deb_pkg || rpm_pkg {
                         package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
                     }
                 }

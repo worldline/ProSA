@@ -1,6 +1,6 @@
 [package]
 name = "prosa"
-version = "0.4.1"
+version = "0.4.2"
 authors.workspace = true
 description = "ProSA core"
 homepage.workspace = true
@@ -46,7 +46,7 @@ log.workspace = true
 tracing = "0.1"
 thiserror.workspace = true
 url = { version = "2", features = ["serde"] }
-rlimit = "0.10"
+rlimit = "0.11"
 
 aquamarine.workspace = true
 
