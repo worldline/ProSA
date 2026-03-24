@@ -116,13 +116,18 @@ impl Speed {
         }
     }
 
-    /// Getter of the duration time it must wait since the last event to target the given TPS (Transaction Per Seconds) rate
-    /// Consider an overhead to get a lasy duration to not overwhelmed a distant
-    /// TPS should be superior to 0 otherwise it'll panic
-    /// Duration equal 0 if the result is negative
+    /// Returns the duration to wait since the last event to achieve the target TPS (Transactions Per Second).
+    /// Includes a small overhead to ensure a conservative duration and avoid overwhelming a remote system.
+    /// If TPS is not positive or finite, returns `Duration::MAX`.
+    /// Returns `Duration::ZERO` if the calculated duration is negative.
     ///
     /// <math><mfrac><mi>1000 × <msub><mi>N</mi><mn>t</mn></msub></mi><mi>TPS</mi></mfrac> + overhead − <msub><mi>Σ</mi><mn>t</mn></msub> = duration</math>
     pub fn get_duration_overhead(&self, tps: f64, overhead: Option<Duration>) -> Duration {
+        // Guard against invalid TPS values to prevent division by zero or invalid computation
+        if tps <= 0.0 || !tps.is_finite() {
+            return Duration::MAX;
+        }
+
         let duration =
             Duration::from_millis(((1000 * self.event_speeds.len()) as f64 / tps) as u64);
         let sum_duration = self.accumulate_event_speeds();
@@ -135,9 +140,9 @@ impl Speed {
         }
     }
 
-    /// Getter of the duration time it must wait since the last event to target the given TPS (Transaction Per Seconds) rate
-    /// TPS should be superior to 0 otherwise it'll panic
-    /// Duration equal 0 if the result is negative
+    /// Returns the duration to wait since the last event to achieve the target TPS (Transactions Per Second).
+    /// If TPS is not positive or finite, returns `Duration::MAX`.
+    /// Returns `Duration::ZERO` if the calculated duration is negative.
     ///
     /// <math><mfrac><mi>1000 × <msub><mi>N</mi><mn>t</mn></msub></mi><mi>TPS</mi></mfrac> − <msub><mi>Σ</mi><mn>t</mn></msub> = duration</math>
     pub fn get_duration(&self, tps: f64) -> Duration {

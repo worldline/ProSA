@@ -46,7 +46,7 @@ openssl = { workspace = true, optional = true }
 # Config Observability
 log = { workspace = true, optional = true }
 tracing-core = { version = "0.1", optional = true }
-tracing-subscriber = { version = "0.3", features = ["std", "env-filter"], optional = true }
+tracing-subscriber = { version = ">=0.3.20, < 0.4", features = ["std", "env-filter"], optional = true }
 tracing-opentelemetry = { version = "0.32.1", optional = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
