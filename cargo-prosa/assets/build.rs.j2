@@ -117,7 +117,7 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
     writeln!(f, "{{ '}}' }}")?;
 
     writeln!(f, "\n/// Method to run all configured processors, return the number of processors runned")?;
-    writeln!(f, "fn run_processors(bus: prosa::core::main::Main<{{ '{}' }}>, settings: &RunSettings) {{ '{{' }}", desc.prosa.tvf)?;
+    writeln!(f, "fn run_processors(bus: prosa::core::main::Main<{{ '{}' }}>, settings: &RunSettings) -> Result<(), std::io::Error> {{ '{{' }}", desc.prosa.tvf)?;
 
     let mut proc_id = 0u32;
     if let Some(processors) = &desc.proc {{ '{' }}
@@ -131,10 +131,11 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
                 writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, \"{{ '{}' }}\".to_string(), bus.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name())?;
             {{ '}' }}
 
-            writeln!(f, "    prosa::core::proc::Proc::<{{ '{}' }}>::run(proc);", processor.adaptor)?;
+            writeln!(f, "    prosa::core::proc::Proc::<{{ '{}' }}>::run(proc)?;", processor.adaptor)?;
         {{ '}' }}
     {{ '}' }}
 
+    writeln!(f, "    Ok(())")?;
     writeln!(f, "{{ '}}' }}")?;
     writeln!(f, "\n/// Number of configured processor")?;
     writeln!(f, "#[allow(dead_code)]")?;

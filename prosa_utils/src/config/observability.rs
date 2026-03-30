@@ -86,7 +86,7 @@ impl Default for OTLPExporterCfg {
     fn default() -> Self {
         Self {
             level: None,
-            endpoint: Url::parse("grpc://localhost:4317").unwrap(),
+            endpoint: Url::parse("grpc://localhost:4317").expect("default OTLP address is invalid"),
             timeout_sec: None,
         }
     }

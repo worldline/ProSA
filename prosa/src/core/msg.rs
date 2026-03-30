@@ -243,10 +243,12 @@ where
             .send(InternalMsg::Response(ResponseMsg::from_request(self, resp)))
             .map_err(|e| {
                 e.map(|i| {
-                    if let InternalMsg::Response(mut resp) = i {
-                        resp.take_data().unwrap()
+                    if let InternalMsg::Response(mut resp) = i
+                        && let Some(data) = resp.take_data()
+                    {
+                        data
                     } else {
-                        panic!("Expected InternalMsg::Response")
+                        panic!("Expected InternalMsg::Response with data")
                     }
                 })
             })

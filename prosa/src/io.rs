@@ -226,7 +226,7 @@ mod tests {
     #[cfg(feature = "openssl")]
     use prosa_utils::config::ssl::{SslConfig, SslConfigContext as _, Store};
 
-    use std::os::fd::AsRawFd as _;
+    use std::{io, os::fd::AsRawFd as _};
     use stream::Stream;
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt};
 
@@ -234,9 +234,9 @@ mod tests {
 
     #[cfg(target_family = "unix")]
     #[tokio::test]
-    async fn unix_client_server() {
+    async fn unix_client_server() -> io::Result<()> {
         let addr = "/tmp/prosa_unix_client_server_test.sock";
-        let listener = StreamListener::Unix(tokio::net::UnixListener::bind(addr).unwrap());
+        let listener = StreamListener::Unix(tokio::net::UnixListener::bind(addr)?);
         assert!(listener.as_raw_fd() > 0);
         assert!(
             format!("{listener:?}").contains("UnixListener"),
@@ -252,18 +252,18 @@ mod tests {
         );
 
         let server = async move {
-            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            let (mut client_stream, client_addr) = listener.accept().await?;
             assert!(client_addr.is_loopback());
 
             let mut buf = [0; 5];
-            client_stream.read_exact(&mut buf).await.unwrap();
+            client_stream.read_exact(&mut buf).await?;
             assert_eq!(&buf, b"ProSA");
 
-            client_stream.write_all(b"Worldline").await.unwrap();
+            client_stream.write_all(b"Worldline").await
         };
 
         let client = async {
-            let mut stream = Stream::connect_unix(addr).await.unwrap();
+            let mut stream = Stream::connect_unix(addr).await?;
             assert!(stream.as_raw_fd() > 0);
             assert!(
                 format!("{stream:?}").contains("UnixStream"),
@@ -274,23 +274,25 @@ mod tests {
                 "stream `{stream:?}` don't contain {addr}"
             );
 
-            stream.write_all(b"ProSA").await.unwrap();
+            stream.write_all(b"ProSA").await?;
 
             let mut buf = Vec::new();
-            stream.read_to_end(&mut buf).await.unwrap();
+            stream.read_to_end(&mut buf).await?;
             assert_eq!(buf, b"Worldline");
 
             let _ = stream.shutdown().await;
+            Ok(())
         };
 
-        future::join(server, client).await;
-        std::fs::remove_file(addr).unwrap();
+        let (res1, res2) = future::join(server, client).await;
+        std::fs::remove_file(addr)?;
+        res1.and(res2)
     }
 
     #[tokio::test]
-    async fn tcp_client_server() {
+    async fn tcp_client_server() -> io::Result<()> {
         let addr = "localhost:41800";
-        let listener = StreamListener::bind(addr).await.unwrap();
+        let listener = StreamListener::bind(addr).await?;
         assert!(listener.as_raw_fd() > 0);
         assert!(
             format!("{listener:?}").contains("Tcp"),
@@ -303,21 +305,21 @@ mod tests {
         assert!(listener.to_string().starts_with("tcp://"));
 
         let server = async move {
-            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            let (mut client_stream, client_addr) = listener.accept().await?;
             assert!(client_addr.is_loopback());
 
             let mut buf = [0; 5];
-            client_stream.read_exact(&mut buf).await.unwrap();
+            client_stream.read_exact(&mut buf).await?;
             assert_eq!(&buf, b"ProSA");
 
             // Should do nothing
-            client_stream = listener.handshake(client_stream).await.unwrap();
+            client_stream = listener.handshake(client_stream).await?;
 
-            client_stream.write_all(b"Worldline").await.unwrap();
+            client_stream.write_all(b"Worldline").await
         };
 
         let client = async {
-            let mut stream = Stream::connect_tcp(addr).await.unwrap();
+            let mut stream = Stream::connect_tcp(addr).await?;
             assert!(stream.as_raw_fd() > 0);
             assert!(
                 format!("{stream:?}").contains("Tcp"),
@@ -329,38 +331,37 @@ mod tests {
             );
             assert!(stream.to_string().starts_with("tcp://"));
 
-            stream.write_all(b"ProSA").await.unwrap();
+            stream.write_all(b"ProSA").await?;
 
             let mut buf = Vec::new();
-            stream.read_to_end(&mut buf).await.unwrap();
+            stream.read_to_end(&mut buf).await?;
             assert_eq!(buf, b"Worldline");
 
-            let _ = stream.shutdown().await;
+            stream.shutdown().await
         };
 
-        future::join(server, client).await;
+        let (res1, res2) = future::join(server, client).await;
+        res1.and(res2)
     }
 
     #[cfg(feature = "openssl")]
     #[tokio::test]
-    async fn openssl_client_server() {
+    async fn openssl_client_server() -> io::Result<()> {
         let addr = "localhost:41443";
-        let addr_url = Url::parse(format!("tls://{addr}").as_str()).unwrap();
+        let addr_url = Url::parse(format!("tls://{addr}").as_str()).expect("Target url is invalid");
         let cert_path = std::env::temp_dir()
             .join("test_openssl_client_server.pem")
             .to_str()
-            .unwrap()
+            .expect("Certificate path should exist")
             .to_string();
 
         let mut ssl_config = SslConfig::new_self_cert(cert_path.clone());
         let listener = {
-            let ssl_acceptor_builder: ::openssl::ssl::SslAcceptorBuilder = ssl_config
-                .init_tls_server_context(addr_url.host_str())
-                .unwrap();
+            let ssl_acceptor_builder: ::openssl::ssl::SslAcceptorBuilder =
+                ssl_config.init_tls_server_context(addr_url.host_str())?;
             let ssl_acceptor = ssl_acceptor_builder.build();
             StreamListener::bind(addr)
-                .await
-                .unwrap()
+                .await?
                 .ssl_acceptor(ssl_acceptor, Some(ssl_config.get_ssl_timeout()))
         };
 
@@ -376,27 +377,25 @@ mod tests {
         assert!(listener.to_string().starts_with("ssl://"));
 
         let server = async move {
-            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            let (mut client_stream, client_addr) = listener.accept().await?;
             assert!(client_addr.is_loopback());
 
             let mut buf = [0; 5];
-            client_stream.read_exact(&mut buf).await.unwrap();
+            client_stream.read_exact(&mut buf).await?;
             assert_eq!(&buf, b"ProSA");
 
-            client_stream.write_all(b"Worldline").await.unwrap();
+            client_stream.write_all(b"Worldline").await?;
 
-            let _ = client_stream.shutdown().await;
+            client_stream.shutdown().await
         };
 
         ssl_config.set_store(Store::File { path: cert_path });
         let client = async {
             let mut stream = {
                 let ssl_client_context: ::openssl::ssl::SslConnectorBuilder =
-                    ssl_config.init_tls_client_context().unwrap();
+                    ssl_config.init_tls_client_context()?;
 
-                Stream::connect_openssl(&addr_url, &ssl_client_context.build())
-                    .await
-                    .unwrap()
+                Stream::connect_openssl(&addr_url, &ssl_client_context.build()).await?
             };
 
             assert!(stream.as_raw_fd() > 0);
@@ -406,38 +405,37 @@ mod tests {
             );
             assert!(stream.to_string().starts_with("ssl://"));
 
-            stream.write_all(b"ProSA").await.unwrap();
+            stream.write_all(b"ProSA").await?;
 
             let mut buf = Vec::new();
-            stream.read_to_end(&mut buf).await.unwrap();
+            stream.read_to_end(&mut buf).await?;
             assert_eq!(buf, b"Worldline");
 
-            let _ = stream.shutdown().await;
+            stream.shutdown().await
         };
 
-        future::join(server, client).await;
+        let (res1, res2) = future::join(server, client).await;
+        res1.and(res2)
     }
 
     #[cfg(feature = "openssl")]
     #[tokio::test]
-    async fn openssl_client_server_raw() {
+    async fn openssl_client_server_raw() -> io::Result<()> {
         let addr = "localhost:41453";
-        let addr_url = Url::parse(format!("tls://{addr}").as_str()).unwrap();
+        let addr_url = Url::parse(format!("tls://{addr}").as_str()).expect("Target url is invalid");
         let cert_path = std::env::temp_dir()
             .join("test_openssl_client_server_raw.pem")
             .to_str()
-            .unwrap()
+            .expect("Certificate path should exist")
             .to_string();
 
         let mut ssl_config = SslConfig::new_self_cert(cert_path.clone());
         let listener = {
-            let ssl_acceptor_builder: ::openssl::ssl::SslAcceptorBuilder = ssl_config
-                .init_tls_server_context(addr_url.host_str())
-                .unwrap();
+            let ssl_acceptor_builder: ::openssl::ssl::SslAcceptorBuilder =
+                ssl_config.init_tls_server_context(addr_url.host_str())?;
             let ssl_acceptor = ssl_acceptor_builder.build();
             StreamListener::bind(addr)
-                .await
-                .unwrap()
+                .await?
                 .ssl_acceptor(ssl_acceptor, Some(ssl_config.get_ssl_timeout()))
         };
 
@@ -453,28 +451,26 @@ mod tests {
         assert!(listener.to_string().starts_with("ssl://"));
 
         let server = async move {
-            let (mut client_stream, client_addr) = listener.accept_raw().await.unwrap();
+            let (mut client_stream, client_addr) = listener.accept_raw().await?;
             assert!(client_addr.is_loopback());
-            client_stream = listener.handshake(client_stream).await.unwrap();
+            client_stream = listener.handshake(client_stream).await?;
 
             let mut buf = [0; 5];
-            client_stream.read_exact(&mut buf).await.unwrap();
+            client_stream.read_exact(&mut buf).await?;
             assert_eq!(&buf, b"ProSA");
 
-            client_stream.write_all(b"Worldline").await.unwrap();
+            client_stream.write_all(b"Worldline").await?;
 
-            let _ = client_stream.shutdown().await;
+            client_stream.shutdown().await
         };
 
         ssl_config.set_store(Store::File { path: cert_path });
         let client = async {
             let mut stream = {
                 let ssl_client_context: ::openssl::ssl::SslConnectorBuilder =
-                    ssl_config.init_tls_client_context().unwrap();
+                    ssl_config.init_tls_client_context()?;
 
-                Stream::connect_openssl(&addr_url, &ssl_client_context.build())
-                    .await
-                    .unwrap()
+                Stream::connect_openssl(&addr_url, &ssl_client_context.build()).await?
             };
 
             assert!(stream.as_raw_fd() > 0);
@@ -484,27 +480,28 @@ mod tests {
             );
             assert!(stream.to_string().starts_with("ssl://"));
 
-            stream.write_all(b"ProSA").await.unwrap();
+            stream.write_all(b"ProSA").await?;
 
             let mut buf = Vec::new();
-            stream.read_to_end(&mut buf).await.unwrap();
+            stream.read_to_end(&mut buf).await?;
             assert_eq!(buf, b"Worldline");
 
-            let _ = stream.shutdown().await;
+            stream.shutdown().await
         };
 
-        future::join(server, client).await;
+        let (res1, res2) = future::join(server, client).await;
+        res1.and(res2)
     }
 
     #[cfg(feature = "openssl")]
     #[tokio::test]
-    async fn ssl_client_server_with_config() {
+    async fn ssl_client_server_with_config() -> io::Result<()> {
         let addr_str = "tls://localhost:41463";
-        let addr = Url::parse(addr_str).unwrap();
+        let addr = Url::parse(addr_str).expect("Target url is invalid");
         let cert_path = std::env::temp_dir()
             .join("test_ssl_client_server_with_config.pem")
             .to_str()
-            .unwrap()
+            .expect("Certificate path should exist")
             .to_string();
 
         let mut server_ssl_config = SslConfig::new_self_cert(cert_path.clone());
@@ -524,7 +521,7 @@ mod tests {
         );
         assert!(listener_settings.to_string().starts_with(addr_str));
 
-        let listener = listener_settings.bind().await.unwrap();
+        let listener = listener_settings.bind().await?;
         assert!(listener.as_raw_fd() > 0);
         assert!(
             format!("{listener:?}").contains("Ssl"),
@@ -536,19 +533,19 @@ mod tests {
         );
 
         let server = async move {
-            let (mut client_stream, client_addr) = listener.accept().await.unwrap();
+            let (mut client_stream, client_addr) = listener.accept().await?;
             assert!(client_addr.is_loopback());
 
             let mut buf = [0; 5];
-            client_stream.read_exact(&mut buf).await.unwrap();
+            client_stream.read_exact(&mut buf).await?;
             assert_eq!(&buf, b"ProSA");
 
             // Should do nothing
-            client_stream = listener.handshake(client_stream).await.unwrap();
+            client_stream = listener.handshake(client_stream).await?;
 
-            client_stream.write_all(b"Worldline").await.unwrap();
+            client_stream.write_all(b"Worldline").await?;
 
-            let _ = client_stream.shutdown().await;
+            client_stream.shutdown().await
         };
 
         let mut client_ssl_config = SslConfig::default();
@@ -558,7 +555,7 @@ mod tests {
         assert_eq!(addr_str, target_settings.to_string());
 
         let client = async {
-            let mut stream = target_settings.connect().await.unwrap();
+            let mut stream = target_settings.connect().await?;
             assert!(stream.as_raw_fd() > 0);
             assert!(
                 format!("{stream:?}").contains("Ssl") || format!("{stream:?}").contains("Tls"),
@@ -570,34 +567,35 @@ mod tests {
                 panic!("Should be an SSL stream for client");
             }
 
-            stream.write_all(b"ProSA").await.unwrap();
+            stream.write_all(b"ProSA").await?;
 
             let mut buf = Vec::new();
-            stream.read_to_end(&mut buf).await.unwrap();
+            stream.read_to_end(&mut buf).await?;
             assert_eq!(buf, b"Worldline");
 
-            let _ = stream.shutdown().await;
+            stream.shutdown().await
         };
 
-        future::join(server, client).await;
+        let (res1, res2) = future::join(server, client).await;
+        res1.and(res2)
     }
 
     #[cfg(all(feature = "openssl", not(feature = "openssl-vendored")))]
     #[tokio::test]
-    async fn ssl_client_public_with_config() {
+    async fn ssl_client_public_with_config() -> io::Result<()> {
         let addr_str = "https://worldline.com/";
-        let addr = Url::parse(addr_str).unwrap();
+        let addr = Url::parse(addr_str).expect("Target url is invalid");
 
         let target_settings = stream::TargetSetting::new(addr, Some(SslConfig::default()), None);
         assert_eq!(addr_str, target_settings.to_string());
 
-        let mut stream = target_settings.connect().await.unwrap();
+        let mut stream = target_settings.connect().await?;
         assert!(stream.as_raw_fd() > 0);
         assert!(
             format!("{stream:?}").contains("Ssl") || format!("{stream:?}").contains("Tls"),
             "stream `{stream:?}` don't contain Ssl or Tls"
         );
 
-        let _ = stream.shutdown().await;
+        stream.shutdown().await
     }
 }

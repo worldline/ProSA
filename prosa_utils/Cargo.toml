@@ -1,6 +1,6 @@
 [package]
 name = "prosa-utils"
-version = "0.4.2"
+version = "0.4.3"
 authors.workspace = true
 description = "ProSA utils"
 homepage.workspace = true
@@ -26,6 +26,9 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.prosa]
 tvf = ["msg::simple_string_tvf::SimpleStringTvf"]
+
+[lints.clippy]
+unwrap_used = "deny"
 
 [dependencies]
 thiserror.workspace = true

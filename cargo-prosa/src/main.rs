@@ -347,8 +347,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // Create the new Rust project
                 let cargo_new = std::process::Command::new("cargo").args(args).output()?;
 
-                io::stdout().write_all(&cargo_new.stdout).unwrap();
-                io::stderr().write_all(&cargo_new.stderr).unwrap();
+                io::stdout().write_all(&cargo_new.stdout)?;
+                io::stderr().write_all(&cargo_new.stderr)?;
 
                 if cargo_new.status.success() {
                     init_prosa(path, &j2_context)?;
@@ -363,8 +363,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     args.push("--name");
                     args.push(name);
                     j2_context.insert("name", name);
-                } else if let Some(name) = path.file_name() {
-                    j2_context.insert("name", &tera::Value::String(name.to_str().unwrap().into()));
+                } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    j2_context.insert("name", &tera::Value::String(name.into()));
                 }
 
                 j2_context.insert("deb_pkg", &matches.get_flag("deb"));
@@ -376,8 +376,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Init the Rust project
                     let cargo_init = std::process::Command::new("cargo").args(args).output()?;
 
-                    io::stdout().write_all(&cargo_init.stdout).unwrap();
-                    io::stderr().write_all(&cargo_init.stderr).unwrap();
+                    io::stdout().write_all(&cargo_init.stdout)?;
+                    io::stderr().write_all(&cargo_init.stderr)?;
 
                     if cargo_init.status.success() {
                         init_prosa(path_name, &j2_context)?;

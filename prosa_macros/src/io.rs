@@ -44,30 +44,23 @@ fn generate_struct(mut item_struct: syn::ItemStruct) -> syn::parse::Result<syn::
     // Add mandatory fields
     if let syn::Fields::Named(ref mut fields) = item_struct.fields {
         // Add the stream field to handle a net object
-        fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! { stream: IO })
-                .unwrap(),
-        );
+        fields
+            .named
+            .push(syn::Field::parse_named.parse2(quote! { stream: IO })?);
         // Add the Address field that is the remote address
         fields.named.push(
             syn::Field::parse_named
-                .parse2(quote! { addr: std::option::Option<prosa::io::SocketAddr> })
-                .unwrap(),
+                .parse2(quote! { addr: std::option::Option<prosa::io::SocketAddr> })?,
         );
         // Add the buffer object to read from the net object
-        fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! { buffer: bytes::BytesMut })
-                .unwrap(),
-        );
+        fields
+            .named
+            .push(syn::Field::parse_named.parse2(quote! { buffer: bytes::BytesMut })?);
 
         // Add the socket id information
-        fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! { socket_id: u32 })
-                .unwrap(),
-        );
+        fields
+            .named
+            .push(syn::Field::parse_named.parse2(quote! { socket_id: u32 })?);
     }
 
     // Add the Generic type IO to specify the net object

@@ -142,6 +142,7 @@ use glob::glob;
 use log::{error, info, warn};
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::io;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
@@ -191,8 +192,12 @@ pub trait ProcSettings {
             Config::builder()
                 .add_source(
                     glob(config_path)
-                        .unwrap()
-                        .map(|path| File::from(path.unwrap()))
+                        .map_err(|e| {
+                            ConfigError::Message(format!(
+                                "Wrong adaptor config path pattern `{config_path}`: `{e}`"
+                            ))
+                        })?
+                        .filter_map(|path| path.ok().map(File::from))
                         .collect::<Vec<_>>(),
                 )
                 .build()?
@@ -586,7 +591,7 @@ where
     ///     Proc::<A>::run(proc);
     /// }
     /// ```
-    fn run(mut self)
+    fn run(mut self) -> Result<(), io::Error>
     where
         Self: Sized + 'static + std::marker::Send,
     {
@@ -606,12 +611,11 @@ where
                             .enable_all()
                             .thread_name(self.name())
                             .build()
-                            .unwrap()
+                            .expect("Tokio single Runtime can't be build")
                             .block_on(async {
                                 proc_run!(self);
                             })
-                    })
-                    .unwrap();
+                    })?;
             }
             // Start a Tokio runtime on multiple threads
             n => {
@@ -623,14 +627,15 @@ where
                             .enable_all()
                             .thread_name(self.name())
                             .build()
-                            .unwrap()
+                            .expect("Tokio Runtime can't be build")
                             .block_on(async {
                                 proc_run!(self);
                             })
-                    })
-                    .unwrap();
+                    })?;
             }
         }
+
+        Ok(())
     }
 }
 

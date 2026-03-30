@@ -185,8 +185,8 @@ impl InstanceInstall {
                 let cargo_build = std::process::Command::new("cargo")
                     .args(build_args)
                     .output()?;
-                io::stdout().write_all(&cargo_build.stdout).unwrap();
-                io::stderr().write_all(&cargo_build.stderr).unwrap();
+                io::stdout().write_all(&cargo_build.stdout)?;
+                io::stderr().write_all(&cargo_build.stderr)?;
 
                 if !cargo_build.status.success() {
                     return Err(io::Error::new(

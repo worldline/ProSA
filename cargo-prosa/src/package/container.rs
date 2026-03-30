@@ -86,11 +86,14 @@ impl ContainerFile {
 
 impl fmt::Display for ContainerFile {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let img_name = format!(
-            "{}:{}",
-            self.ctx.get("name").unwrap().as_str().unwrap(),
-            self.ctx.get("version").unwrap().as_str().unwrap()
-        );
+        let img_name = if let Some(name) = self.ctx.get("name").and_then(|v| v.as_str())
+            && let Some(version) = self.ctx.get("version").and_then(|v| v.as_str())
+        {
+            format!("{name}:{version}")
+        } else {
+            "prosa:1.0.0".to_string()
+        };
+
         writeln!(f, "To build your container, use the command:")?;
         if self.is_docker {
             write!(f, "  `docker build")?;
@@ -116,9 +119,8 @@ impl fmt::Display for ContainerFile {
         } else if self.path.is_some() {
             writeln!(
                 f,
-                "  `podman build -f {} -t {} .`",
-                self.get_path().display(),
-                img_name
+                "  `podman build -f {} -t {img_name} .`",
+                self.get_path().display()
             )
         } else {
             writeln!(f, "  `podman build -t {img_name} .`")

@@ -495,8 +495,10 @@ impl CargoMetadata {
         if cargo_metadata.status.success() {
             let mut metadata: CargoMetadata =
                 serde_json::from_slice(cargo_metadata.stdout.as_slice())?;
-            if metadata.packages.len() == 1 {
-                Ok(metadata.packages.pop().unwrap())
+            if let Some(package) = metadata.packages.pop()
+                && metadata.packages.is_empty()
+            {
+                Ok(package)
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidData,

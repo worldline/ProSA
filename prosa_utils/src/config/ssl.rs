@@ -408,10 +408,11 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
     /q4AaOeMSQ+2b1tbFfLn
     -----END CERTIFICATE-----",
         )
-        .unwrap();
+        .expect("SSL certificate configuration should be read");
         assert!(format!("{config_store_le_x1_x2}").contains("ISRG Root X"));
 
-        let config_store_file: Store = serde_yaml::from_str("path: \"/opt\"").unwrap();
+        let config_store_file: Store = serde_yaml::from_str("path: \"/opt\"")
+            .expect("Certificate configuration path should be read");
         assert_eq!(
             Store::File {
                 path: "/opt".to_string()
@@ -423,7 +424,10 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
     #[test]
     fn test_tls_server_context() {
         let ssl_config = SslConfig::default();
-        let ssl_acceptor = ssl_config.init_tls_server_context(None).unwrap().build();
+        let ssl_acceptor = ssl_config
+            .init_tls_server_context(None)
+            .expect("The TLS server context should be init")
+            .build();
 
         // Check for self signed certificate
         assert!(ssl_acceptor.context().private_key().is_some());

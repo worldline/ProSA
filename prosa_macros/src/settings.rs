@@ -7,7 +7,7 @@ use syn::{
 /// Function to add default member to Default trait impl
 fn add_default_member<F>(mut item_impl: ItemImpl, func: F) -> syn::parse::Result<ItemImpl>
 where
-    F: Fn(&mut syn::ExprStruct),
+    F: Fn(&mut syn::ExprStruct) -> syn::parse::Result<()>,
 {
     if let (Some((_, trait_path, _)), syn::Type::Path(self_path)) =
         (&item_impl.trait_, item_impl.self_ty.as_ref())
@@ -33,18 +33,18 @@ where
                                     expr.fields.push_punct(syn::token::Comma::default());
                                 }
 
-                                func(expr);
+                                func(expr)?;
                             }
                         }
                         // Direct Expr return (Self {..})
-                        syn::Stmt::Expr(syn::Expr::Struct(expr), _) => {
-                            if expr.path.is_ident(self_ident) {
-                                if !expr.fields.trailing_punct() {
-                                    expr.fields.push_punct(syn::token::Comma::default());
-                                }
-
-                                func(expr);
+                        syn::Stmt::Expr(syn::Expr::Struct(expr), _)
+                            if expr.path.is_ident(self_ident) =>
+                        {
+                            if !expr.fields.trailing_punct() {
+                                expr.fields.push_punct(syn::token::Comma::default());
                             }
+
+                            func(expr)?;
                         }
                         _ => {}
                     }
@@ -82,36 +82,24 @@ fn generate_proc_settings_struct(
     // Add mandatory fields
     if let syn::Fields::Named(ref mut fields) = item_struct.fields {
         // Adaptor config path
-        fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! {
-                    #[doc = "Path to the adaptor configuration file (if needed by the custom adaptor)"]
-                    adaptor_config_path: std::option::Option<std::string::String>
-                })
-                .unwrap(),
-        );
+        fields.named.push(syn::Field::parse_named.parse2(quote! {
+            #[doc = "Path to the adaptor configuration file (if needed by the custom adaptor)"]
+            adaptor_config_path: std::option::Option<std::string::String>
+        })?);
 
         // Restart duration period
-        fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! {
-                    #[serde(skip_serializing)]
-                    #[doc = "Duration period between two processor restart (in ms)"]
-                    proc_restart_duration_period: std::option::Option<std::time::Duration>
-                })
-                .unwrap(),
-        );
+        fields.named.push(syn::Field::parse_named.parse2(quote! {
+            #[serde(skip_serializing)]
+            #[doc = "Duration period between two processor restart (in ms)"]
+            proc_restart_duration_period: std::option::Option<std::time::Duration>
+        })?);
 
         // Max restart period
-        fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! {
-                    #[serde(skip_serializing)]
-                    #[doc = "Maximum number of restart in the given duration period"]
-                    proc_max_restart_period: std::option::Option<std::primitive::u32>
-                })
-                .unwrap(),
-        );
+        fields.named.push(syn::Field::parse_named.parse2(quote! {
+            #[serde(skip_serializing)]
+            #[doc = "Maximum number of restart in the given duration period"]
+            proc_max_restart_period: std::option::Option<std::primitive::u32>
+        })?);
     }
 
     Ok(item_struct)
@@ -155,9 +143,7 @@ pub(crate) fn proc_settings_impl(item: syn::Item) -> syn::parse::Result<proc_mac
                 }
             }) {
                 x.fields.push_value(
-                    syn::FieldValue::parse
-                        .parse2(quote! { adaptor_config_path: None })
-                        .unwrap(),
+                    syn::FieldValue::parse.parse2(quote! { adaptor_config_path: None })?,
                 );
                 x.fields.push_punct(syn::token::Comma::default());
             }
@@ -170,9 +156,7 @@ pub(crate) fn proc_settings_impl(item: syn::Item) -> syn::parse::Result<proc_mac
                 }
             }) {
                 x.fields.push_value(
-                    syn::FieldValue::parse
-                        .parse2(quote! { proc_restart_duration_period: None })
-                        .unwrap(),
+                    syn::FieldValue::parse.parse2(quote! { proc_restart_duration_period: None })?,
                 );
                 x.fields.push_punct(syn::token::Comma::default());
             }
@@ -185,12 +169,11 @@ pub(crate) fn proc_settings_impl(item: syn::Item) -> syn::parse::Result<proc_mac
                 }
             }) {
                 x.fields.push_value(
-                    syn::FieldValue::parse
-                        .parse2(quote! { proc_max_restart_period: None })
-                        .unwrap(),
+                    syn::FieldValue::parse.parse2(quote! { proc_max_restart_period: None })?,
                 );
                 x.fields.push_punct(syn::token::Comma::default());
             }
+            Ok(())
         })?
         .into_token_stream()),
         _ => Err(syn::Error::new(
@@ -208,18 +191,13 @@ fn generate_settings_struct(
         // ProSA name setting
         fields.named.push(
             syn::Field::parse_named
-                .parse2(quote! { name: std::option::Option<std::string::String> })
-                .unwrap(),
+                .parse2(quote! { name: std::option::Option<std::string::String> })?,
         );
 
         // ProSA observability setting
-        fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! {
-                #[serde(default)]
-                observability: prosa_utils::config::observability::Observability })
-                .unwrap(),
-        );
+        fields.named.push(syn::Field::parse_named.parse2(quote! {
+        #[serde(default)]
+        observability: prosa_utils::config::observability::Observability })?);
     }
 
     Ok(item_struct)
@@ -269,16 +247,17 @@ pub(crate) fn settings_impl(item: syn::Item) -> syn::parse::Result<proc_macro2::
             x.fields.push_value(
                 syn::FieldValue::parse
                     .parse2(quote! { name: None })
-                    .unwrap(),
+                    ?,
             );
             x.fields.push_punct(syn::token::Comma::default());
 
             x.fields.push_value(
                 syn::FieldValue::parse
                     .parse2(quote! { observability: prosa_utils::config::observability::Observability::default() })
-                    .unwrap(),
+                    ?,
             );
             x.fields.push_punct(syn::token::Comma::default());
+            Ok(())
         })?
         .into_token_stream()),
         _ => Err(syn::Error::new(
