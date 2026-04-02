@@ -1,6 +1,6 @@
 [package]
 name = "prosa"
-version = "0.4.2"
+version = "0.4.3"
 authors.workspace = true
 description = "ProSA core"
 homepage.workspace = true
@@ -38,6 +38,9 @@ adaptor = ["inj::adaptor::InjDummyAdaptor"]
 proc = "stub::proc::StubProc"
 settings = "stub::proc::StubSettings"
 adaptor = ["stub::adaptor::StubParotAdaptor"]
+
+[lints.clippy]
+unwrap_used = "deny"
 
 [dependencies]
 prosa-utils = { workspace = true, features = ["msg", "config", "config-observability"] }

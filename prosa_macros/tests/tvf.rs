@@ -26,35 +26,43 @@ mod macro_tests {
         });
 
         assert_eq!(5, buffer.len());
-        assert_eq!(2, buffer.get_unsigned(1).unwrap());
-        assert_eq!(4, buffer.get_signed(3).unwrap());
+        assert_eq!(Ok(2), buffer.get_unsigned(1));
+        assert_eq!(Ok(4), buffer.get_signed(3));
 
-        let subbuffer = buffer.get_buffer(5).unwrap();
-        assert_eq!(1u64, subbuffer.get_unsigned(1).unwrap());
-        assert_eq!(2.0f64, subbuffer.get_float(2).unwrap());
-        assert_eq!(3i64, subbuffer.get_signed(3).unwrap());
-        assert_eq!("four", subbuffer.get_string(4).unwrap().to_mut().to_owned());
-
-        let sub = subbuffer.get_buffer(5).unwrap();
-        assert_eq!("object", sub.get_string(1).unwrap().to_mut().to_owned());
+        let subbuffer = buffer.get_buffer(5).expect("TVF should have a sub buffer");
+        assert_eq!(Ok(1u64), subbuffer.get_unsigned(1));
+        assert_eq!(Ok(2.0f64), subbuffer.get_float(2));
+        assert_eq!(Ok(3i64), subbuffer.get_signed(3));
         assert_eq!(
-            Bytes::from_static(&[
+            Ok("four"),
+            subbuffer.get_string(4).map(|s| s.to_string()).as_deref()
+        );
+
+        let sub = subbuffer
+            .get_buffer(5)
+            .expect("TVF should have a sub buffer");
+        assert_eq!(
+            Ok("object"),
+            sub.get_string(1).map(|s| s.to_string()).as_deref()
+        );
+        assert_eq!(
+            Ok(Bytes::from_static(&[
                 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
                 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B,
                 0x1C, 0x1D, 0x1E, 0x1F
-            ]),
-            sub.get_bytes(2).unwrap().to_mut().to_owned()
+            ])),
+            sub.get_bytes(2).as_deref().cloned()
         );
         assert_eq!(
-            NaiveDate::from_ymd_opt(1995, 1, 10).unwrap(),
-            buffer.get_date(6).unwrap()
+            Ok(NaiveDate::from_ymd_opt(1995, 1, 10).expect("NaiveDate should be build")),
+            buffer.get_date(6)
         );
         assert_eq!(
-            NaiveDate::from_ymd_opt(2023, 6, 5)
-                .unwrap()
+            Ok(NaiveDate::from_ymd_opt(2023, 6, 5)
+                .expect("NaiveDate should be build")
                 .and_hms_opt(15, 2, 0)
-                .unwrap(),
-            buffer.get_datetime(200).unwrap()
+                .expect("NaiveDateTime should be build")),
+            buffer.get_datetime(200)
         );
     }
 }

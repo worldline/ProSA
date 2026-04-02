@@ -234,13 +234,16 @@ mod tests {
     #[test]
     fn telemetry_level() {
         assert!(
-            TelemetryLevel::try_from("warn").unwrap() < TelemetryLevel::INFO,
+            TelemetryLevel::try_from("warn").expect("Warn Telemetry level should exist")
+                < TelemetryLevel::INFO,
             "{:?} < Info",
             TelemetryLevel::try_from("warn")
         );
         assert_eq!(
             "The config parameter TelemetryLevel have an incorrect value `wrong`".to_owned(),
-            TelemetryLevel::try_from("wrong").err().unwrap().to_string()
+            TelemetryLevel::try_from("wrong")
+                .expect_err("Wrong Telemetry level shouldn't exist")
+                .to_string()
         );
 
         assert_eq!(

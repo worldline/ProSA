@@ -75,7 +75,7 @@ async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
         let main_task = main.run();
 
         // Run all processors
-        run_processors(bus, &prosa_settings);
+        run_processors(bus, &prosa_settings)?;
 
         // Wait on main task
         main_task.await;

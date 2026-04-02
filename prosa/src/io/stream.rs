@@ -180,13 +180,13 @@ impl Stream {
         S: AsyncRead + AsyncWrite + std::marker::Unpin,
     {
         let ssl = ssl_connector.configure()?.into_ssl(domain)?;
-        let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream).unwrap();
+        let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream)?;
         if let Err(e) = Pin::new(&mut stream).connect().await
             && e.code() != openssl::ssl::ErrorCode::ZERO_RETURN
         {
             return Err(io::Error::new(
                 io::ErrorKind::Interrupted,
-                format!("Can't connect the SSL socket `{e}`"),
+                format!("Can't connect the OpenSSL socket `{e}`"),
             ));
         }
 
@@ -851,14 +851,14 @@ impl TargetSetting {
         let openssl_context = if self.openssl_context.is_some() {
             self.openssl_context.clone()
         } else if let Some(ssl_config) = &self.ssl {
-            let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
-                SslConfigContext::init_tls_client_context(ssl_config).ok();
-            ssl_context_builder.map(|c| c.build())
+            let ssl_context_builder: openssl::ssl::SslConnectorBuilder =
+                SslConfigContext::init_tls_client_context(ssl_config)?;
+            Some(ssl_context_builder.build())
         } else if url_is_ssl(&self.url) {
             let ssl_config = SslConfig::default();
-            let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
-                SslConfigContext::init_tls_client_context(&ssl_config).ok();
-            ssl_context_builder.map(|c| c.build())
+            let ssl_context_builder: openssl::ssl::SslConnectorBuilder =
+                SslConfigContext::init_tls_client_context(&ssl_config)?;
+            Some(ssl_context_builder.build())
         } else {
             None
         };
@@ -1018,7 +1018,7 @@ mod tests {
     #[test]
     fn target_settings_test() {
         let target_without_credential = TargetSetting::new(
-            Url::parse("https://localhost:4443/v1?var=1").unwrap(),
+            Url::parse("https://localhost:4443/v1?var=1").expect("Target url is invalid"),
             None,
             None,
         );
@@ -1032,7 +1032,8 @@ mod tests {
         );
 
         let target_with_user_password = TargetSetting::new(
-            Url::parse("https://admin:admin@localhost:4443/v1?user=admin&password=admin").unwrap(),
+            Url::parse("https://admin:admin@localhost:4443/v1?user=admin&password=admin")
+                .expect("Target url is invalid"),
             None,
             None,
         );
@@ -1050,7 +1051,7 @@ mod tests {
         );
 
         let target_with_token = TargetSetting::new(
-            Url::parse("https://:token@localhost:4443/v1").unwrap(),
+            Url::parse("https://:token@localhost:4443/v1").expect("Target url is invalid"),
             None,
             None,
         );

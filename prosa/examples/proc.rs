@@ -78,13 +78,13 @@ where
                     let stub_service_name = String::from("STUB_TEST");
                     if let Some(service) = self.service.get_proc_service(&stub_service_name) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await.unwrap();
+                        let _ = service.proc_queue.send(InternalMsg::Request(RequestMsg::new(stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await;
                     }
 
                     let proc_service_name = String::from("PROC_TEST");
                     if let Some(service) = self.service.get_proc_service(&proc_service_name) {
                         debug!("The service is find: {:?}", service);
-                        service.proc_queue.send(InternalMsg::Request(RequestMsg::new(proc_service_name, tvf, self.proc.get_service_queue()))).await.unwrap();
+                        let _ = service.proc_queue.send(InternalMsg::Request(RequestMsg::new(proc_service_name, tvf, self.proc.get_service_queue()))).await;
                     }
                 },
                 Some(msg) = pending_msgs.pull(), if !pending_msgs.is_empty() => {
@@ -116,8 +116,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::builder()
         .add_source(config::File::with_name("examples/my_prosa_settings.yml"))
         .add_source(config::Environment::with_prefix("PROSA"))
-        .build()
-        .unwrap();
+        .build()?;
 
     let my_settings = config.try_deserialize::<MySettings>()?;
     println!("My ProSA settings: {my_settings:?}");
@@ -139,18 +138,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bus.clone(),
         stub_settings,
     );
-    Proc::<StubParotAdaptor>::run(stub_proc);
+    Proc::<StubParotAdaptor>::run(stub_proc)?;
 
     // Launch the test processor
     let proc = MyProcClass::<SimpleStringTvf>::create_raw(2, String::from("proc_1"), bus.clone());
-    Proc::<MyAdaptor>::run(proc);
+    Proc::<MyAdaptor>::run(proc)?;
 
     // Wait before launch the second processor
     std::thread::sleep(time::Duration::from_secs(2));
 
     // Launch the second test processor
     let proc2 = MyProcClass::<SimpleStringTvf>::create_raw(3, String::from("proc_2"), bus.clone());
-    Proc::<MyAdaptor>::run(proc2);
+    Proc::<MyAdaptor>::run(proc2)?;
 
     // Wait on main task
     main.run().await;

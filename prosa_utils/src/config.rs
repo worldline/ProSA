@@ -4,7 +4,7 @@
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/doc_assets/settings.svg"))]
 //! </svg>
 
-use std::{path::PathBuf, process::Command};
+use std::{io, path::PathBuf, process::Command};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use thiserror::Error;
@@ -40,6 +40,15 @@ pub enum ConfigError {
     /// SSL error
     #[error("Openssl error `{0}`")]
     OpenSsl(#[from] openssl::error::ErrorStack),
+}
+
+impl From<ConfigError> for io::Error {
+    fn from(err: ConfigError) -> Self {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("ProSA Config error: {}", err),
+        )
+    }
 }
 
 /// Method to try get the country name from the OS
@@ -149,7 +158,8 @@ mod tests {
 
     #[test]
     fn test_url_authentication_basic() {
-        let basic_auth_target = Url::parse("http://user:pass@localhost:8080").unwrap();
+        let basic_auth_target = Url::parse("http://user:pass@localhost:8080")
+            .expect("Basic auth target URL should be valid");
         assert_eq!(
             Some(String::from("Basic dXNlcjpwYXNz")),
             url_authentication(&basic_auth_target)
@@ -158,7 +168,8 @@ mod tests {
 
     #[test]
     fn test_url_safe_authentication_basic() {
-        let basic_auth_target = Url::parse("http://user:$ab&cd=@localhost:8080").unwrap();
+        let basic_auth_target = Url::parse("http://user:$ab&cd=@localhost:8080")
+            .expect("Basic auth target URL should be valid");
         assert_eq!(
             Some(String::from("Basic dXNlcjokYWImY2Q9")),
             url_authentication(&basic_auth_target)
@@ -167,7 +178,8 @@ mod tests {
 
     #[test]
     fn test_url_authentication_bearer() {
-        let bearer_auth_target = Url::parse("http://:token@localhost:8080").unwrap();
+        let bearer_auth_target = Url::parse("http://:token@localhost:8080")
+            .expect("Basic auth target URL should be valid");
         assert_eq!(
             Some(String::from("Bearer token")),
             url_authentication(&bearer_auth_target)

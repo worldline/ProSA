@@ -151,10 +151,8 @@ macro_rules! mpsc {
                             }
                             return val;
                         }
-                        Err(QueueError::Empty) => {
-                            if self.send_sem.available_permits() == 0 {
-                                self.send_sem.add_permits(1);
-                            }
+                        Err(QueueError::Empty) if self.send_sem.available_permits() == 0 => {
+                            self.send_sem.add_permits(1);
                         }
                         _ => {}
                     }
@@ -182,10 +180,8 @@ macro_rules! mpsc {
                         }
                         Ok(Some(val))
                     }
-                    Err(QueueError::Empty) => {
-                        if self.send_sem.available_permits() == 0 {
-                            self.send_sem.add_permits(1);
-                        }
+                    Err(QueueError::Empty) if self.send_sem.available_permits() == 0 => {
+                        self.send_sem.add_permits(1);
                         Err(QueueError::Empty)
                     }
                     v => v,

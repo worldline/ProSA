@@ -385,7 +385,7 @@ mod tests {
                             },
                             InternalMsg::Service(table) => {
                                 if let Some(service) = table.get_proc_service("TEST") {
-                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.unwrap();
+                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(String::from("TEST"), Default::default(), self.proc.get_service_queue().clone()))).await.expect("Internal msg should be send");
                                 }
                             },
                             _ => return Err(BusError::ProcComm(self.get_proc_id(), 0, String::from("Wrong message"))),
@@ -423,7 +423,7 @@ mod tests {
                                 if let Some(service) = table.get_proc_service("TEST") {
                                     let mut msg: SimpleStringTvf = Default::default();
                                     msg.put_string(1, "good");
-                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.unwrap();
+                                    service.proc_queue.send(InternalMsg::Request(RequestMsg::new(String::from("TEST"), msg, self.proc.get_service_queue().clone()))).await.expect("Internal msg should be send");
                                 }
                             },
                             _ => return Err(BusError::ProcComm(self.get_proc_id(), 0, String::from("Wrong message"))),
@@ -494,7 +494,9 @@ mod tests {
                 .await
         );
 
-        bus.stop("ProSA unit test end".into()).await.unwrap();
-        main_task.await.unwrap();
+        bus.stop("ProSA unit test end".into())
+            .await
+            .expect("ProSA should stop");
+        main_task.await.expect("Main task should end correctly");
     }
 }

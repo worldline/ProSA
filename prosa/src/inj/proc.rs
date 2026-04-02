@@ -255,17 +255,19 @@ where
         }
 
         // Send first transaction
-        self.service
-            .get_proc_service(&self.settings.service_name)
-            .unwrap()
-            .proc_queue
-            .send(InternalMsg::Request(RequestMsg::new(
-                self.settings.service_name.clone(),
-                next_transaction.take().unwrap(),
-                self.proc.get_service_queue(),
-            )))
-            .await?;
-        regulator.notify_send_transaction();
+        if let Some(service) = self.service.get_proc_service(&self.settings.service_name)
+            && let Some(transaction) = next_transaction.take()
+        {
+            service
+                .proc_queue
+                .send(InternalMsg::Request(RequestMsg::new(
+                    self.settings.service_name.clone(),
+                    transaction,
+                    self.proc.get_service_queue(),
+                )))
+                .await?;
+            regulator.notify_send_transaction();
+        }
 
         loop {
             tokio::select! {

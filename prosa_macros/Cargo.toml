@@ -1,6 +1,6 @@
 [package]
 name = "prosa-macros"
-version = "0.4.1"
+version = "0.4.2"
 authors.workspace = true
 description = "ProSA macros"
 homepage.workspace = true
@@ -11,6 +11,9 @@ include.workspace = true
 
 [lib]
 proc-macro = true
+
+[lints.clippy]
+unwrap_used = "deny"
 
 [dependencies]
 syn = { version = "2", features = ["full"] }

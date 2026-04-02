@@ -153,16 +153,6 @@ impl Tvf for SimpleStringTvf {
         }
     }
 
-    //fn get_datetime_at<T: chrono::Offset + chrono::TimeZone>(&self, id: usize, offset: T) -> Result<chrono::DateTime<T>, TvfError> {
-    //    match self.fields.get(&id) {
-    //        Some(str_value) => match NaiveDateTime::parse_from_str(str_value, SIMPLE_DATETIME_FMT) {
-    //            Ok(d) => Ok(offset.from_utc_datetime(&d)),
-    //            Err(e) => Err(TvfError::ConvertionError(e.to_string()))
-    //        },
-    //        None => Err(TvfError::FieldNotFound(id)),
-    //    }
-    //}
-
     fn put_buffer(&mut self, id: usize, buffer: SimpleStringTvf) {
         self.fields.insert(id, buffer.serialize());
     }
@@ -202,10 +192,6 @@ impl Tvf for SimpleStringTvf {
         self.fields
             .insert(id, datetime.format(SIMPLE_DATETIME_FMT).to_string());
     }
-
-    //fn put_datetime_tz<T: chrono::Offset + chrono::TimeZone>(&mut self, id: usize, datetime: chrono::DateTime<T>) {
-    //    self.fields.insert(id, datetime.naive_utc().format(SIMPLE_DATETIME_FMT).to_string());
-    //}
 }
 
 impl SimpleStringTvf {
@@ -275,17 +261,23 @@ mod tests {
         tvf.put_string(2, String::from("The great string"));
         assert!(tvf.contains(2));
         tvf.put_signed(3, -1);
-        assert_eq!(-1, tvf.get_signed(3).unwrap());
+        assert_eq!(Ok(-1), tvf.get_signed(3));
         tvf.put_float(5, 6.56);
         tvf.put_byte(6, 32u8);
-        tvf.put_bytes(7, Bytes::from(hex::decode("aabb77ff").unwrap()));
-        tvf.put_date(8, NaiveDate::from_ymd_opt(2023, 6, 5).unwrap());
+        tvf.put_bytes(
+            7,
+            Bytes::from(hex::decode("aabb77ff").expect("Hexadecimal should be decode")),
+        );
+        tvf.put_date(
+            8,
+            NaiveDate::from_ymd_opt(2023, 6, 5).expect("NaiveDate should be build"),
+        );
         tvf.put_datetime(
             9,
             NaiveDate::from_ymd_opt(2023, 6, 5)
-                .unwrap()
+                .expect("NaiveDate should be build")
                 .and_hms_opt(15, 2, 0)
-                .unwrap(),
+                .expect("NaiveDateTime should be build"),
         );
         tvf.put_buffer(10, sub_buffer.clone());
         assert_eq!(Err(TvfError::TypeMismatch), tvf.get_unsigned(2));
@@ -316,15 +308,21 @@ mod tests {
         assert_eq!(Ok(6.56), tvf.get_float(5));
         assert_eq!(Ok(32), tvf.get_byte(6));
         assert_eq!(
-            Ok(Cow::Owned(Bytes::from(hex::decode("aabb77ff").unwrap()))),
+            Ok(Cow::Owned(Bytes::from(
+                hex::decode("aabb77ff").expect("Hexadecimal should be decode")
+            ))),
             tvf.get_bytes(7)
         );
         assert_eq!(
-            Ok(NaiveDate::parse_from_str("2023-06-05", SIMPLE_DATE_FMT).unwrap()),
+            Ok(NaiveDate::parse_from_str("2023-06-05", SIMPLE_DATE_FMT)
+                .expect("NaiveDate should be build")),
             tvf.get_date(8)
         );
         assert_eq!(
-            Ok(NaiveDateTime::parse_from_str("2023-06-05T15:02:00", SIMPLE_DATETIME_FMT).unwrap()),
+            Ok(
+                NaiveDateTime::parse_from_str("2023-06-05T15:02:00", SIMPLE_DATETIME_FMT)
+                    .expect("NaiveDateTime should be build")
+            ),
             tvf.get_datetime(9)
         );
         assert_eq!(Ok(Cow::Owned(sub_buffer)), tvf.get_buffer(10));
@@ -350,7 +348,8 @@ mod tests {
         assert_eq!(keys, into_keys);
         assert_eq!(9, keys.len());
         let serial = simple_tvf.serialize();
-        let unserial = SimpleStringTvf::deserialize(&serial).unwrap();
+        let unserial = SimpleStringTvf::deserialize(&serial)
+            .expect("The SimpleStringTvf should be deserialized");
         assert_eq!(simple_tvf, unserial);
 
         assert_eq!(
@@ -395,7 +394,13 @@ mod tests {
 
         simple_tvf = TvfTestFilter::filter(simple_tvf);
         assert_eq!(2, simple_tvf.len());
-        assert_eq!("0000", simple_tvf.get_string(1).unwrap().as_str());
-        assert_eq!("1234", simple_tvf.get_string(2).unwrap().as_str());
+        assert_eq!(
+            Ok("0000"),
+            simple_tvf.get_string(1).map(|v| v.to_string()).as_deref()
+        );
+        assert_eq!(
+            Ok("1234"),
+            simple_tvf.get_string(2).map(|v| v.to_string()).as_deref()
+        );
     }
 }

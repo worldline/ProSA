@@ -183,7 +183,7 @@ macro_rules! spmc {
                             }
                             return val;
                         }
-                        Err(QueueError::Empty) => if self.send_sem.available_permits() == 0 {
+                        Err(QueueError::Empty) if self.send_sem.available_permits() == 0 => {
                             self.send_sem.add_permits(1);
                         }
                         _ => {}

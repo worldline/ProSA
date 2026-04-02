@@ -272,8 +272,15 @@ where
         let serial_number = Asn1Integer::from_bn(&serial_bn)?;
         cert.set_serial_number(&serial_number)?;
 
-        let begin_valid_time =
-            Asn1Time::from_unix(time::UNIX_EPOCH.elapsed().unwrap().as_secs() as i64 - 360)?;
+        let begin_valid_time = Asn1Time::from_unix(
+            time::UNIX_EPOCH
+                .elapsed()
+                .map_err(|e| {
+                    ConfigError::WrongValue("time::UNIX_EPOCH".to_string(), e.to_string())
+                })?
+                .as_secs() as i64
+                - 360,
+        )?;
         cert.set_not_before(&begin_valid_time)?;
         let end_valid_time = Asn1Time::days_from_now(1461)?; // 4 years from now
         cert.set_not_after(&end_valid_time)?;
@@ -346,9 +353,11 @@ where
 
                 let mut current_split = alpn;
                 while let Some(length) = current_split.first() {
-                    if current_split.len() > *length as usize {
-                        let (left, right) = current_split.split_at(*length as usize + 1);
-                        cli_alpn.insert(String::from_utf8(left[1..].to_vec()).unwrap(), &left[1..]);
+                    if current_split.len() > *length as usize
+                        && let (left, right) = current_split.split_at(*length as usize + 1)
+                        && let Ok(alpn_key) = String::from_utf8(left[1..].to_vec())
+                    {
+                        cli_alpn.insert(alpn_key, &left[1..]);
                         current_split = right;
                     } else {
                         return Err(AlpnError::ALERT_FATAL);
@@ -517,10 +526,14 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
             ],
         };
 
-        let certs: HashMap<String, ::openssl::x509::X509> = store_le_x1_x2.get_certs().unwrap();
+        let certs: HashMap<String, ::openssl::x509::X509> = store_le_x1_x2
+            .get_certs()
+            .expect("Certificates should be retrieved");
         assert!(!certs.is_empty());
 
-        let ossl_store: ::openssl::x509::store::X509Store = store_le_x1_x2.get_store().unwrap();
+        let ossl_store: ::openssl::x509::store::X509Store = store_le_x1_x2
+            .get_store()
+            .expect("Certificates store should be retrieved");
         assert!(!ossl_store.all_certificates().is_empty())
     }
 
@@ -534,8 +547,9 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
     #[test]
     fn test_tls_server_context() {
         let ssl_config = SslConfig::default();
-        let ssl_acceptor_builder: ::openssl::ssl::SslAcceptorBuilder =
-            ssl_config.init_tls_server_context(None).unwrap();
+        let ssl_acceptor_builder: ::openssl::ssl::SslAcceptorBuilder = ssl_config
+            .init_tls_server_context(None)
+            .expect("The TLS server context should be init");
         let ssl_acceptor = ssl_acceptor_builder.build();
 
         // Check for self signed certificate

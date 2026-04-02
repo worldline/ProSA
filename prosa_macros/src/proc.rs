@@ -18,8 +18,7 @@ impl ProcParams {
     ) -> syn::parse::Result<()> {
         for meta in args {
             if let syn::Meta::NameValue(v) = meta {
-                if !v.path.segments.is_empty() {
-                    let name = &v.path.segments.first().unwrap().ident;
+                if let Some(name) = v.path.segments.first().map(|s| &s.ident) {
                     if name == "settings" {
                         if let syn::Expr::Path(syn::ExprPath { path, .. }) = &v.value {
                             self.settings = Some(path.clone());
@@ -114,34 +113,29 @@ fn generate_struct(
         // Parameter of the processor
         fields.named.push(
             syn::Field::parse_named
-                .parse2(quote! { proc: std::sync::Arc<prosa::core::proc::ProcParam<M>> })
-                .unwrap(),
+                .parse2(quote! { proc: std::sync::Arc<prosa::core::proc::ProcParam<M>> })?,
         );
 
         // Service table
         fields.named.push(
-            syn::Field::parse_named
-                .parse2(quote! { service: std::sync::Arc<prosa::core::service::ServiceTable<M>> })
-                .unwrap(),
+            syn::Field::parse_named.parse2(
+                quote! { service: std::sync::Arc<prosa::core::service::ServiceTable<M>> },
+            )?,
         );
 
         // Add the receiver queue for processor messaging
         fields.named.push(
             syn::Field::parse_named
                 .parse2(quote! { internal_rx_queue: tokio::sync::mpsc::Receiver<prosa::core::msg::InternalMsg<M>> })
-                .unwrap(),
+                ?,
         );
 
         // Add the processor settings if needed
         if let Some(settings) = &args.settings {
-            fields.named.push(
-                syn::Field::parse_named
-                    .parse2(quote! {
-                        /// Settings of the processor
-                        pub settings: #settings
-                    })
-                    .unwrap(),
-            );
+            fields.named.push(syn::Field::parse_named.parse2(quote! {
+                /// Settings of the processor
+                pub settings: #settings
+            })?);
         }
     }
 

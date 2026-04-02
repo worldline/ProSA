@@ -27,7 +27,11 @@ fn replace_prosa_dependencies(prosa_path: &PathBuf) {
         if let Some(opt) = build_opt {
             cmd.args(opt);
         }
-        cmd.args(["--path", test_prosa_dep.to_str().unwrap(), prosa_dep]);
+        cmd.args([
+            "--path",
+            test_prosa_dep.to_str().expect("PathBuf should be string"),
+            prosa_dep,
+        ]);
         cmd.assert().success();
     }
 }
@@ -175,7 +179,12 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     assert!(!containerfile_path.exists() && !dockerfile_path.exists());
     let mut cmd = cargo_prosa_command();
     cmd.current_dir(&prosa_path);
-    cmd.args(["container", containerfile_path.to_str().unwrap()]);
+    cmd.args([
+        "container",
+        containerfile_path
+            .to_str()
+            .expect("PathBuf should be string"),
+    ]);
     cmd.assert().success().stdout(predicate::str::is_match(
         r"To build your container, use the command:
   `podman build -f .*/dummy-test-prosa/Containerfile -t dummy-test-prosa:0\.1\.0 \.`",
@@ -187,7 +196,7 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
         "container",
         "--docker",
         "-b rust-latest",
-        dockerfile_path.to_str().unwrap(),
+        dockerfile_path.to_str().expect("PathBuf should be string"),
     ]);
     cmd.assert().success().stdout(predicate::str::is_match(
         r"To build your container, use the command:

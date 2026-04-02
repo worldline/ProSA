@@ -102,7 +102,7 @@ mod tests {
     /// Test a ProSA with an injector processor sending transactions to a stub processor
     #[allow(clippy::needless_return)]
     #[tokio::test]
-    async fn prosa() {
+    async fn prosa() -> Result<(), Box<dyn std::error::Error>> {
         let test_settings = TestSettings::new(SERVICE_TEST);
 
         // Create bus and main processor
@@ -118,7 +118,7 @@ mod tests {
             bus.clone(),
             test_settings.stub,
         );
-        Proc::<TestStubAdaptor>::run(stub_proc);
+        Proc::<TestStubAdaptor>::run(stub_proc)?;
 
         // Launch an inj processor
         let inj_proc = InjProc::<SimpleStringTvf>::create(
@@ -127,19 +127,21 @@ mod tests {
             bus.clone(),
             test_settings.inj,
         );
-        Proc::<InjDummyAdaptor>::run(inj_proc);
+        Proc::<InjDummyAdaptor>::run(inj_proc)?;
 
         // Wait before stopping prosa
         tokio::time::sleep(WAIT_TIME).await;
-        bus.stop("ProSA unit test end".into()).await.unwrap();
+        bus.stop("ProSA unit test end".into()).await?;
 
         // Wait on main task to end (should be immediate with the previous stop)
-        main_task.await.unwrap();
+        main_task.await?;
 
         // Check exchanges messages
         let nb_trans = COUNTER.load(Ordering::SeqCst) as u64;
         let estimated_trans = WAIT_TIME.as_secs() * 5;
         assert!(nb_trans > (estimated_trans - 2) && nb_trans < (estimated_trans + 2));
         // Should have a coherent number of transaction with the regulator
+
+        Ok(())
     }
 }

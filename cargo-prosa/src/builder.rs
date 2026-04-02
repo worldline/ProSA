@@ -232,7 +232,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn prosa_desc_toml() {
+    fn prosa_desc_toml() -> io::Result<()> {
         let mut prosa_desc = Desc::default();
         prosa_desc.add_proc(ProcDesc::new(
             "proc".into(),
@@ -249,14 +249,15 @@ proc_name = \"proc\"
 proc = \"crate::proc\"
 adaptor = \"crate::adaptor\"
 ";
-        assert_eq!(prosa_toml, toml::to_string(&prosa_desc).unwrap());
+        assert_eq!(Ok(prosa_toml.to_string()), toml::to_string(&prosa_desc));
 
         // FIXME use environment variable when they will be available for unit tests
         let toml_path_file = Path::new("/tmp/test_prosa_desc.toml");
-        let mut toml_file = fs::File::create(toml_path_file).unwrap();
-        toml_file.write_all(prosa_toml.as_bytes()).unwrap();
+        let mut toml_file = fs::File::create(toml_path_file)?;
+        toml_file.write_all(prosa_toml.as_bytes())?;
 
-        let prosa_desc_from_file = Desc::read(toml_path_file).unwrap();
+        let prosa_desc_from_file = Desc::read(toml_path_file)?;
         assert_eq!(prosa_desc, prosa_desc_from_file);
+        Ok(())
     }
 }
