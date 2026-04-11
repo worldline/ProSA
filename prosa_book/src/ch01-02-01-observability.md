@@ -135,7 +135,7 @@ To set it up, you have to:
 - Use a direct connection with a token
 - Decode the base64-encoded basic authorization token from the `Create an Instrumentation Instance`. You'll get an `id:password` to set OTLP credentials with.
 
-> For the first configuration you may have to set the service name to `my-app` to let Grafana Cloud detect that it's working.
+> If your token contains a trailing `=`, you need to replace it with `%3D` to ensure a correct URL format.
 
 With this information, set up your observability stack (look before if you want to set up traces):
 ```yaml
