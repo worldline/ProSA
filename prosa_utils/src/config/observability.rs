@@ -458,17 +458,27 @@ impl Observability {
         // start with common attributes
         let mut scope_attr = Self::common_scope_attributes(
             self.get_service_name().to_string(),
-            self.attributes.len() + 2,
+            self.attributes.len() + 4,
         );
 
-        if !self.attributes.contains_key("host.name")
-            && let Some(hostname) = super::hostname()
-        {
+        if let Some(hostname) = self.attributes.get("host.name") {
+            if !self.attributes.contains_key("service.instance.id") {
+                scope_attr.push(KeyValue::new("service.instance.id", hostname.clone()));
+            }
+        } else if let Some(hostname) = super::hostname() {
+            if !self.attributes.contains_key("service.instance.id") {
+                scope_attr.push(KeyValue::new("service.instance.id", hostname.clone()));
+            }
+
             scope_attr.push(KeyValue::new("host.name", hostname));
         }
 
         if !self.attributes.contains_key("service.version") {
             scope_attr.push(KeyValue::new("service.version", env!("CARGO_PKG_VERSION")));
+        }
+
+        if !self.attributes.contains_key("service.namespace") {
+            scope_attr.push(KeyValue::new("service.namespace", "prosa"));
         }
 
         // append custom attributes from configuration
