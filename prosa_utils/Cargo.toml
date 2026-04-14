@@ -12,7 +12,7 @@ include.workspace = true
 [features]
 default = ["msg", "config", "config-openssl", "config-observability"]
 msg = []
-config = ["dep:glob","dep:serde","dep:serde_yaml", "dep:base64"]
+config = ["dep:glob","dep:serde","dep:serde_yaml", "dep:base64", "dep:uuid"]
 config-openssl = ["config", "dep:openssl"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:opentelemetry-appender-tracing"]
@@ -42,6 +42,7 @@ glob = { version = "0.3", optional = true }
 serde = { workspace = true, optional = true }
 serde_yaml = { version = "0.9", optional = true }
 base64 = { version = "0.22", optional = true }
+uuid = { version = "1", optional = true, features = ["v1", "v4"] }
 
 # Config OpenSSL
 openssl = { workspace = true, optional = true }
