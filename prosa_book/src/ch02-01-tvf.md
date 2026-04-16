@@ -76,13 +76,14 @@ let message = tvf!(SimpleStringTvf {
 
 Use `as Type` to explicitly set the field type:
 
-| Annotation | Rust type | Example |
-|-----------|-----------|---------|
-| `as Unsigned` | `u64` | `1 as Unsigned` |
-| `as Signed` | `i64` | `-5 as Signed` |
-| `as Float` | `f64` | `3.14 as Float` |
-| `as Bytes` | `Bytes` | `0x01020304 as Bytes` |
-| `as Date` | `NaiveDate` | `"1995-01-10" as Date` |
+| Annotation    | Rust type       | Example                                 |
+|---------------|-----------------|-----------------------------------------|
+| `as Unsigned` | `u64`           | `1 as Unsigned`                         |
+| `as Signed`   | `i64`           | `-5 as Signed`                          |
+| `as Float`    | `f64`           | `3.14 as Float`                         |
+| `as Byte`     | `u8`            | `22 as Byte`                            |
+| `as Bytes`    | `Bytes`         | `0x01020304 as Bytes`                   |
+| `as Date`     | `NaiveDate`     | `"1995-01-10" as Date`                  |
 | `as DateTime` | `NaiveDateTime` | `"2023-06-05 15:02:00.000" as DateTime` |
 
 ### Lists
@@ -109,6 +110,7 @@ let message = tvf!(SimpleStringTvf {
         2 as Float,
         3,
         "four",
+        5 as Byte,
         {
             1 => "nested object",
             2 => 0x00010203 as Bytes,

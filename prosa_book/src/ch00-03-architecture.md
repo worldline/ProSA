@@ -79,7 +79,7 @@ An **Adaptor** is the bridge between a processor and the outside world. It handl
 - **Initialization**: setting up connections and resources when the processor starts
 - **Termination**: cleaning up when the processor shuts down
 
-Each processor handle adaptor as they wish. The adaptor is defined as a trait, so different protocol implementations can be swapped in without changing the processor logic.
+Each processor handle their adaptor as they wish. The adaptor is defined as a trait, so different protocol implementations can be swapped in without changing the processor logic.
 
 Adaptors can return values either synchronously or asynchronously using the [`MaybeAsync`](https://docs.rs/prosa/latest/prosa/core/adaptor/enum.MaybeAsync.html) enum.
 

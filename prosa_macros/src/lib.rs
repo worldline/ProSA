@@ -116,6 +116,7 @@ pub fn io(args: TokenStream, input: TokenStream) -> TokenStream {
 ///     ],
 ///     6 => "2024-01-01" as Date,
 ///     7 => "2024-01-01 12:00:00.000" as DateTime,
+///     8 => 5 as Byte,
 ///     9 => 0x01020304 as Bytes,
 /// } ];
 /// ```

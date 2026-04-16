@@ -16,6 +16,7 @@ mod macro_tests {
                 2 as Float,
                 3,
                 "four",
+                5 as Byte,
                 {
                     1 => "object",
                     2 => 0x00010203_04050607_08090A0B_0C0D0E0F_10111213_14151617_18191A1B_1C1D1E1F as Bytes
@@ -37,9 +38,10 @@ mod macro_tests {
             Ok("four"),
             subbuffer.get_string(4).map(|s| s.to_string()).as_deref()
         );
+        assert_eq!(Ok(5u8), subbuffer.get_byte(5));
 
         let sub = subbuffer
-            .get_buffer(5)
+            .get_buffer(6)
             .expect("TVF should have a sub buffer");
         assert_eq!(
             Ok("object"),
