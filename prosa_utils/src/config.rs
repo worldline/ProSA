@@ -105,11 +105,28 @@ pub fn hostname() -> Option<String> {
 
 /// Method to get a consistant host ID (UUID v1 or UUID v4) useful for `service.instance.id`
 pub fn hostid() -> String {
-    #[cfg(target_family = "unix")]
+    #[cfg(target_os = "linux")]
     if let Ok(machine_id) = std::fs::read_to_string("/etc/machine-id")
         && let Ok(machine_uuid) = Uuid::parse_str(machine_id.trim())
     {
         return machine_uuid.to_string();
+    }
+
+    #[cfg(target_os = "macos")]
+    if let Ok(output) = Command::new("ioreg")
+        .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+        .output()
+        && output.status.success()
+        && let Ok(output_str) = String::from_utf8(output.stdout)
+    {
+        for line in output_str.lines() {
+            if line.contains("IOPlatformUUID")
+                && let Some(value) = line.split('"').nth(3)
+                && let Ok(machine_uuid) = Uuid::parse_str(value.trim())
+            {
+                return machine_uuid.to_string();
+            }
+        }
     }
 
     if let Some(hostname) = hostname() {
