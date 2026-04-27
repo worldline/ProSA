@@ -10,6 +10,7 @@ use std::{
     fs::{self, File},
     io::Write as _,
     net::IpAddr,
+    num::TryFromIntError,
     ops::DerefMut,
     time,
 };
@@ -273,13 +274,17 @@ where
         cert.set_serial_number(&serial_number)?;
 
         let begin_valid_time = Asn1Time::from_unix(
-            time::UNIX_EPOCH
+            (time::UNIX_EPOCH
                 .elapsed()
                 .map_err(|e| {
                     ConfigError::WrongValue("time::UNIX_EPOCH".to_string(), e.to_string())
                 })?
-                .as_secs() as i64
-                - 360,
+                .as_secs()
+                - 360)
+                .try_into()
+                .map_err(|e: TryFromIntError| {
+                    ConfigError::WrongValue("Asn1Time::from_UNIX_EPOCH".to_string(), e.to_string())
+                })?,
         )?;
         cert.set_not_before(&begin_valid_time)?;
         let end_valid_time = Asn1Time::days_from_now(1461)?; // 4 years from now
