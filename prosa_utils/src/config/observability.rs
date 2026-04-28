@@ -458,13 +458,17 @@ impl Observability {
         // start with common attributes
         let mut scope_attr = Self::common_scope_attributes(
             self.get_service_name().to_string(),
-            self.attributes.len() + 2,
+            self.attributes.len() + 3,
         );
 
         if !self.attributes.contains_key("host.name")
             && let Some(hostname) = super::hostname()
         {
             scope_attr.push(KeyValue::new("host.name", hostname));
+        }
+
+        if !self.attributes.contains_key("service.instance.id") {
+            scope_attr.push(KeyValue::new("service.instance.id", super::hostid()));
         }
 
         if !self.attributes.contains_key("service.version") {
