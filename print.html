@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c2e4de.js";
+            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a260a5bf.js"></script>
+        <script src="toc-3494636a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -192,7 +192,7 @@ the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">LGPLv3</a>.</p>
 <p>This license has been chosen to keep the framework and some modules open source, while allowing for other modules to be proprietary.
 In fact, ProSA contains no direct references to Worldline’s private properties.</p>
 <h2 id="version"><a class="header" href="#version">Version</a></h2>
-<p>This book is intended for version 0.4.2 of ProSA.</p>
+<p>This book is intended for version 0.4.3 of ProSA.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="foreword"><a class="header" href="#foreword">Foreword</a></h1>
 <p>While programming languages continue to change and evolve, the foundational architectural concepts in software development remain steadfast.</p>
@@ -238,6 +238,132 @@ It’s important that you understand concepts from previous chapters if you want
 </ul>
 <h2 id="source-code"><a class="header" href="#source-code">Source code</a></h2>
 <p>The source files from which this book is generated can be found on <a href="https://github.com/worldline/ProSA/tree/main/prosa_book">GitHub</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+<p>This chapter provides a high-level overview of the ProSA architecture, explaining how all the components interact to form a working microservice platform.</p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>ProSA follows a <strong>service bus</strong> pattern. At its core, a central <strong>Main</strong> processor routes messages between autonomous <strong>Processors</strong>, each of which communicates with external systems through an <strong>Adaptor</strong>. Messages flow through the system using an internal format called <strong>TVF</strong> (Tag-Value Field).</p>
+<pre class="mermaid">graph TB
+    ext_a(External System A)
+    ext_b(External System B)
+
+    subgraph prosa[ProSA Instance]
+        subgraph main[Main - Service Bus]
+            main_task[Main task]
+            table&gt;Service table]
+            table &lt;--&gt; main_task
+        end
+
+        subgraph proc_a[Processor A]
+            task_a[Task]
+            adaptor_a[Adaptor A]
+            task_a &lt;--&gt; adaptor_a
+        end
+
+        subgraph proc_b[Processor B]
+            task_b[Task]
+            adaptor_b[Adaptor B]
+            task_b &lt;--&gt; adaptor_b
+        end
+
+        table --&gt; task_a
+        table --&gt; task_b
+    end
+
+    ext_a &lt;--&gt; adaptor_a
+    ext_b &lt;--&gt; adaptor_b
+</pre>
+
+<h2 id="components"><a class="header" href="#components">Components</a></h2>
+<h3 id="main-service-bus"><a class="header" href="#main-service-bus">Main (Service Bus)</a></h3>
+<p>The <strong>Main</strong> is the central hub of a ProSA instance. It is responsible for:</p>
+<ul>
+<li><strong>Message routing</strong>: forwarding requests and responses between processors</li>
+<li><strong>Service table management</strong>: maintaining a registry of which processors provide which services</li>
+<li><strong>Processor lifecycle</strong>: tracking processor registration, removal, crashes, and restarts</li>
+<li><strong>Observability</strong>: collecting system-wide metrics (RAM usage, service counts, processor states)</li>
+<li><strong>Shutdown coordination</strong>: propagating shutdown signals to all processors</li>
+</ul>
+<p>There is exactly <strong>one Main</strong> per ProSA instance. It runs on the Tokio async runtime and processes messages from its internal queue.</p>
+<h3 id="processors"><a class="header" href="#processors">Processors</a></h3>
+<p>A <strong>Processor</strong> is an autonomous unit that runs in its own thread(s). Processors:</p>
+<ul>
+<li><strong>Register</strong> with the Main to join the service bus</li>
+<li><strong>Declare services</strong> they can provide (e.g., <code>"PAYMENT"</code>, <code>"AUTH"</code>)</li>
+<li><strong>Send and receive messages</strong> through the Main’s routing system</li>
+<li><strong>Run independently</strong>, each in their own Tokio runtime (configurable: single-thread, multi-thread, or shared with Main)</li>
+</ul>
+<p>Processors communicate exclusively through the Main bus using <strong>internal messages</strong> (<code>InternalMsg</code>):</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Message Type</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Request</code></td><td>Send a transaction to a service for processing</td></tr>
+<tr><td><code>Response</code></td><td>Return the result of a processed request</td></tr>
+<tr><td><code>Error</code></td><td>Return an error for a request (timeout, unreachable, protocol error)</td></tr>
+<tr><td><code>Service</code></td><td>Update the processor’s copy of the service table</td></tr>
+<tr><td><code>Shutdown</code></td><td>Ask the processor to stop gracefully</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="adaptors"><a class="header" href="#adaptors">Adaptors</a></h3>
+<p>An <strong>Adaptor</strong> is the bridge between a processor and the outside world. It handles:</p>
+<ul>
+<li><strong>Protocol translation</strong>: converting external protocol messages (HTTP, TCP, custom binary, etc.) into internal TVF messages</li>
+<li><strong>Initialization</strong>: setting up connections and resources when the processor starts</li>
+<li><strong>Termination</strong>: cleaning up when the processor shuts down</li>
+</ul>
+<p>Each processor handle their adaptor as they wish. The adaptor is defined as a trait, so different protocol implementations can be swapped in without changing the processor logic.</p>
+<p>Adaptors can return values either synchronously or asynchronously using the <a href="https://docs.rs/prosa/latest/prosa/core/adaptor/enum.MaybeAsync.html"><code>MaybeAsync</code></a> enum.</p>
+<h3 id="tvf-tag-value-field"><a class="header" href="#tvf-tag-value-field">TVF (Tag-Value Field)</a></h3>
+<p><strong>TVF</strong> is the internal message format. It is a trait, not a concrete type, which means different implementations can be used depending on performance or protocol requirements.</p>
+<p>The TVF trait provides a key-value interface where fields are identified by numeric IDs and can hold various types: strings, integers, floats, bytes, dates, and nested TVF buffers.</p>
+<p><code>SimpleStringTvf</code> is the built-in reference implementation. See the <a href="#tvf">TVF chapter</a> for details.</p>
+<h3 id="service-table"><a class="header" href="#service-table">Service Table</a></h3>
+<p>The <strong>Service Table</strong> is maintained by Main and distributed to all processors. It maps service names (strings) to processor queues. When multiple processors provide the same service, requests are distributed using <strong>round-robin</strong> load balancing.</p>
+<p>When the service table changes, Main notifies all processors with an updated copy.</p>
+<h2 id="message-flow"><a class="header" href="#message-flow">Message Flow</a></h2>
+<p>Here is the typical flow of a request through ProSA:</p>
+<pre class="mermaid">sequenceDiagram
+    participant ExtA as External System A
+    participant ProcA as Processor A (Consume service)
+    participant Main as Main (Service Bus)
+    participant ProcB as Processor B (Expose service)
+    participant ExtB as External System B
+
+    ProcB--&gt;&gt;Main: Register service
+    Note over Main: Service table update
+    ExtA-&gt;&gt;ProcA: Protocol message
+    Note over ProcA: Adaptor converts to TVF
+    ProcA-&gt;&gt;Main: Lookup service
+    ProcA-&gt;&gt;ProcB: RequestMsg (via service queue)
+    Note over ProcB: Adaptor processes request
+    ProcB-&gt;&gt;ExtB: Protocol message (optional)
+    ExtB-&gt;&gt;ProcB: Protocol response (optional)
+    ProcB-&gt;&gt;ProcA: ResponseMsg
+    Note over ProcA: Adaptor converts from TVF
+    ProcA-&gt;&gt;ExtA: Protocol response
+</pre>
+
+<p>Note that processors send requests <strong>directly</strong> to the target processor’s queue (looked up from the service table). They do not go through Main for every transaction — Main is only involved in service registration and table distribution.</p>
+<h2 id="processor-lifecycle"><a class="header" href="#processor-lifecycle">Processor Lifecycle</a></h2>
+<ol>
+<li><strong>Creation</strong>: <code>ProcConfig::create()</code> — allocates the processor with its settings and Main bus reference</li>
+<li><strong>Run</strong>: <code>Proc::run()</code> — spawns the processor in its own thread/runtime</li>
+<li><strong>Registration</strong>: <code>proc.add_proc()</code> — notifies Main that the processor is active</li>
+<li><strong>Service declaration</strong>: <code>proc.add_service_proc(names)</code> — registers the services this processor provides</li>
+<li><strong>Processing loop</strong>: <code>internal_run()</code> — the main event loop, receiving and processing messages</li>
+<li><strong>Shutdown</strong>: on <code>InternalMsg::Shutdown</code>, the processor calls <code>adaptor.terminate()</code> and <code>proc.remove_proc()</code></li>
+</ol>
+<h3 id="error-recovery"><a class="header" href="#error-recovery">Error Recovery</a></h3>
+<p>If a processor’s <code>internal_run()</code> returns an error:</p>
+<ul>
+<li><strong>Recoverable errors</strong>: the processor restarts after a delay (exponential backoff up to a configured maximum)</li>
+<li><strong>Fatal errors</strong>: the processor is marked as crashed and does not restart</li>
+<li>If ProSA is shutting down, no restart is attempted</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="ops"><a class="header" href="#ops">OPS</a></h1>
 <p>This chapter is for people who want to know how to deploy a ProSA.</p>
@@ -607,7 +733,7 @@ To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource
 <li>Decode the base64-encoded basic authorization token from the <code>Create an Instrumentation Instance</code>. You’ll get an <code>id:password</code> to set OTLP credentials with.</li>
 </ul>
 <blockquote>
-<p>For the first configuration you may have to set the service name to <code>my-app</code> to let Grafana Cloud detect that it’s working.</p>
+<p>If your token contains a trailing <code>=</code>, you need to replace it with <code>%3D</code> to ensure a correct URL format.</p>
 </blockquote>
 <p>With this information, set up your observability stack (look before if you want to set up traces):</p>
 <pre><code class="language-yaml">observability:
@@ -781,6 +907,7 @@ Additionally, you can specify a proxy if needed:</p>
 <p>Once you have created a binary using <code>cargo-prosa</code>, the next step is to run this binary.</p>
 <p>If you’ve installed a package or a container, you don’t need to worry about the inner workings.
 However, if you want to execute the binary manually, this section explains the available parameters.</p>
+<h2 id="command-line-options"><a class="header" href="#command-line-options">Command-Line Options</a></h2>
 <p>When you run <code>prosa_binary -h</code>, you’ll see output like the following:</p>
 <pre><code>Usage: prosa_binary [OPTIONS]
 
@@ -792,16 +919,41 @@ Options:
   -h, --help                      Print help
   -V, --version                   Print version
 </code></pre>
-<p>Based on this, you have several options:</p>
+<h2 id="dry-run"><a class="header" href="#dry-run">Dry Run</a></h2>
+<p>Use <code>--dry_run</code> to validate your configuration without actually starting ProSA:</p>
+<pre><code class="language-bash">prosa_binary -c config.yaml --dry_run
+</code></pre>
+<p>This will:</p>
+<ol>
+<li>Parse and validate your configuration file</li>
+<li>If the configuration file <strong>does not exist</strong>, write a default one with all your processors’ default settings</li>
+<li>Display how ProSA would run (which processors, which adaptors)</li>
+<li>Exit without starting any processor</li>
+</ol>
+<p>This is particularly useful for:</p>
 <ul>
-<li>dry_run: Use this option to test your configuration file or create it if it doesn’t exist.</li>
-<li>config: Specify the path to your configuration folder/file.</li>
-<li>name: Override the name in your prosa settings. This sets the name of your ProSA instance.</li>
-<li>worker_threads: Specify the number of threads allocated for ProSA. Each processor can launch threads individually; thus, this option may have varying effects depending on your processor’s capabilities.</li>
-<li>version: Provides information about the binary crate version as well as the versions of all components used. For example:</li>
+<li>Generating a starter configuration file for a new ProSA instance</li>
+<li>Validating configuration changes before applying them in production</li>
 </ul>
+<h2 id="configuration-path"><a class="header" href="#configuration-path">Configuration Path</a></h2>
+<p>The <code>-c</code> / <code>--config</code> option accepts either a <strong>single file</strong> or a <strong>directory</strong>:</p>
+<pre><code class="language-bash"># Single configuration file
+prosa_binary -c /etc/prosa.yml
+
+# Directory containing multiple configuration files
+prosa_binary -c /etc/myprosa/
+</code></pre>
+<p>When pointing to a directory, both YAML/TOML files in that directory are merged together. This lets you split configuration across multiple files (e.g., one for observability, one per processor). See the <a href="#configuration-1">Configuration</a> chapter for details.</p>
+<h2 id="environment-variables-1"><a class="header" href="#environment-variables-1">Environment Variables</a></h2>
+<p>Configuration values can also be set through environment variables. For example:</p>
+<pre><code class="language-bash">PROSA_NAME="my-prosa" prosa_binary -c config.yaml
+</code></pre>
+<p>This is useful in containerized environments where configuration is injected via environment variables.</p>
+<h2 id="version-information"><a class="header" href="#version-information">Version Information</a></h2>
+<p>The <code>-V</code> flag provides a short version, while <code>--version</code> shows detailed component information:</p>
 <pre><code class="language-bash">$ prosa_binary -V
 prosa 0.1.0
+
 $ prosa_binary --version
 prosa 0.1.0 - core::main::MainProc = { crate = prosa, version = 0.2.0 }
   inj
@@ -811,6 +963,26 @@ prosa 0.1.0 - core::main::MainProc = { crate = prosa, version = 0.2.0 }
     Processor: stub::proc::StubProc = { crate = prosa, version = 0.2.0 }
     Adaptor  : stub::adaptor::StubParotAdaptor = { crate = prosa, version = 0.2.0 }
 </code></pre>
+<p>The verbose output shows:</p>
+<ul>
+<li>The <strong>Main</strong> processor type and its crate/version</li>
+<li>Each <strong>Processor</strong> instance with its name, type, crate, and version</li>
+<li>Each <strong>Adaptor</strong> associated with its processor</li>
+</ul>
+<p>This is valuable for debugging version mismatches or verifying that the correct components are compiled in.</p>
+<h2 id="worker-threads"><a class="header" href="#worker-threads">Worker Threads</a></h2>
+<p>The <code>-t</code> / <code>--worker_threads</code> option controls the number of threads for the <strong>Main</strong> task’s Tokio runtime (default: 1).</p>
+<p>Note that each processor runs in its own thread(s) independently — see <a href="#threads">Threads</a> for details on per-processor thread configuration.</p>
+<h2 id="graceful-shutdown"><a class="header" href="#graceful-shutdown">Graceful Shutdown</a></h2>
+<p>ProSA handles <code>Ctrl+C</code> (SIGINT) for graceful shutdown:</p>
+<ol>
+<li>The Main processor receives the signal</li>
+<li>A <code>Shutdown</code> message is sent to every registered processor</li>
+<li>Each processor calls <code>adaptor.terminate()</code> to clean up resources</li>
+<li>Each processor deregisters from the Main bus</li>
+<li>The Main processor exits once all processors have stopped</li>
+</ol>
+<p>This ensures that in-flight transactions are not abruptly terminated and that resources (connections, files, etc.) are properly released.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="monitoring"><a class="header" href="#monitoring">Monitoring</a></h1>
 <p>If you configured <a href="#observability">Observability</a>, ProSA offers observability data out of the box.</p>
@@ -1000,6 +1172,79 @@ Select a base image that suits your PaaS requirements and push the generated ima
 <h1 id="clever-cloud"><a class="header" href="#clever-cloud">Clever Cloud</a></h1>
 <p>TODO</p>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="putting-it-all-together"><a class="header" href="#putting-it-all-together">Putting It All Together</a></h1>
+<p>Now that you’re familiar with <a href="#cargo-prosa">Cargo-ProSA</a>, <a href="#configuration-1">configuration</a>, <a href="#observability">observability</a>, and <a href="#run-prosa">running ProSA</a>, let’s walk through a complete example from scratch using the built-in processors.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>You need <a href="https://doc.rust-lang.org/cargo/getting-started/installation.html">Rust and Cargo</a> installed, along with <code>cargo-prosa</code>:</p>
+<pre><code class="language-bash">cargo install cargo-prosa
+</code></pre>
+<h2 id="create-and-scaffold-a-project"><a class="header" href="#create-and-scaffold-a-project">Create and scaffold a project</a></h2>
+<pre><code class="language-bash">cargo prosa new my-first-prosa
+cd my-first-prosa
+</code></pre>
+<p>This generates a Rust project with a <code>ProSA.toml</code> descriptor, a <code>build.rs</code>, and a <code>main.rs</code> that will be auto-generated from your ProSA configuration.</p>
+<p>You can inspect the available components with:</p>
+<pre><code class="language-bash">cargo prosa list
+</code></pre>
+<p>This shows all discovered components: Main, TVF, Processors, and Adaptors.</p>
+<h2 id="add-processors"><a class="header" href="#add-processors">Add processors</a></h2>
+<p>Add a <strong>stub</strong> processor that will respond to requests, and an <strong>injector</strong> that will send requests:</p>
+<pre><code class="language-bash">cargo prosa add -n stub-1 -a StubParotAdaptor stub
+cargo prosa add -n inj-1 -a InjDummyAdaptor inj
+</code></pre>
+<ul>
+<li><code>-n</code> sets the processor instance name (used in configuration)</li>
+<li><code>-a</code> selects which adaptor to use</li>
+</ul>
+<p>Your <code>ProSA.toml</code> file now contains the processor configuration. You can also edit this file manually.</p>
+<h2 id="generate-and-edit-the-configuration"><a class="header" href="#generate-and-edit-the-configuration">Generate and edit the configuration</a></h2>
+<p>Build the project and retrieve the generated configuration from <em>target/config.yml</em> (or <em>target/config.toml</em>).</p>
+<p>You can also generate a default configuration using <code>--dry_run</code> (see <a href="#run-prosa">Run ProSA</a> for details on this flag):</p>
+<pre><code class="language-bash">cargo run -- -c config.yaml --dry_run
+</code></pre>
+<p>Then edit <code>config.yaml</code> to wire the injector to the stub. The stub needs to declare a service name, and the injector needs to target that same service:</p>
+<pre><code class="language-yaml">name: "my-first-prosa"
+observability:
+  level: debug
+  metrics:
+    stdout:
+      level: info
+  traces:
+    stdout:
+      level: debug
+
+stub_1:
+  service_names:
+    - "TEST_SERVICE"
+
+inj_1:
+  service_name: "TEST_SERVICE"
+  max_speed: 1.0
+</code></pre>
+<p>This configures:</p>
+<ul>
+<li>The stub to respond to requests on <code>"TEST_SERVICE"</code></li>
+<li>The injector to send 2 transactions per second to <code>"TEST_SERVICE"</code></li>
+<li><a href="#observability">Observability</a> output to stdout so you can see what’s happening</li>
+</ul>
+<h2 id="run-it"><a class="header" href="#run-it">Run it</a></h2>
+<pre><code class="language-bash">cargo run -- -n "MyFirstProSA" -c config.yaml
+</code></pre>
+<p>You should see log output showing:</p>
+<ol>
+<li>ProSA starting with the configured name</li>
+<li>The stub processor registering <code>TEST_SERVICE</code></li>
+<li>The injector discovering the service and starting to send transactions</li>
+<li>Responses flowing back from the stub to the injector</li>
+</ol>
+<p>Press <code>Ctrl+C</code> to stop (see <a href="#graceful-shutdown">Graceful Shutdown</a>).</p>
+<h2 id="whats-next"><a class="header" href="#whats-next">What’s next?</a></h2>
+<p>You now know how to build and operate a ProSA instance. The next chapters cover how to develop your own components:</p>
+<ul>
+<li><strong><a href="#adaptor">Adaptor</a></strong> — write custom protocol adaptors</li>
+<li><strong><a href="#processor">Processor</a></strong> — write custom processors with their own business logic</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="adaptor"><a class="header" href="#adaptor">Adaptor</a></h1>
 <p>This chapter is for application developers who want to know how to build an application using existing ProSA processors.</p>
 <p>This chapter will be the most abtract of all, as the Adaptor’s implementation is up to the processor developer.
@@ -1063,6 +1308,69 @@ where
 <blockquote>
 <p>Good to have are <code>Clone</code> and <code>Debug</code> for your TVF. When TVFs are used for messaging, <code>Send</code> and <code>Sync</code> are essential to safely move them across threads.</p>
 </blockquote>
+<h2 id="constructing-tvf-messages-with-the-tvf-macro"><a class="header" href="#constructing-tvf-messages-with-the-tvf-macro">Constructing TVF Messages with the <code>tvf!</code> Macro</a></h2>
+<p>Instead of manually calling <code>put_*</code> methods one by one, you can use the <code>tvf!</code> procedural macro to construct TVF messages with a concise syntax.</p>
+<h3 id="basic-usage-map"><a class="header" href="#basic-usage-map">Basic usage (map)</a></h3>
+<p>Create a TVF with key-value pairs using <code>=&gt;</code>:</p>
+<pre><code class="language-rust noplayground">use prosa_macros::tvf;
+use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+
+let message = tvf!(SimpleStringTvf {
+    1 =&gt; "hello",
+    2 =&gt; 42,
+    3 =&gt; 3.14,
+});</code></pre>
+<p>Integer values are inferred as signed (<code>i64</code>) by default. Use type suffixes or <code>as</code> casts to specify other types:</p>
+<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+    1 =&gt; 2,              // signed (i64)
+    2 =&gt; 4usize,         // also signed
+    3 =&gt; 1 as Unsigned,  // unsigned (u64)
+    4 =&gt; 2.5 as Float,   // float (f64)
+});</code></pre>
+<h3 id="type-annotations"><a class="header" href="#type-annotations">Type annotations</a></h3>
+<p>Use <code>as Type</code> to explicitly set the field type:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Annotation</th><th>Rust type</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>as Unsigned</code></td><td><code>u64</code></td><td><code>1 as Unsigned</code></td></tr>
+<tr><td><code>as Signed</code></td><td><code>i64</code></td><td><code>-5 as Signed</code></td></tr>
+<tr><td><code>as Float</code></td><td><code>f64</code></td><td><code>3.14 as Float</code></td></tr>
+<tr><td><code>as Byte</code></td><td><code>u8</code></td><td><code>22 as Byte</code></td></tr>
+<tr><td><code>as Bytes</code></td><td><code>Bytes</code></td><td><code>0x01020304 as Bytes</code></td></tr>
+<tr><td><code>as Date</code></td><td><code>NaiveDate</code></td><td><code>"1995-01-10" as Date</code></td></tr>
+<tr><td><code>as DateTime</code></td><td><code>NaiveDateTime</code></td><td><code>"2023-06-05 15:02:00.000" as DateTime</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="lists"><a class="header" href="#lists">Lists</a></h3>
+<p>Use <code>[ ]</code> to create sequential fields indexed starting from 1:</p>
+<pre><code class="language-rust noplayground">let list = tvf!(SimpleStringTvf [
+    "first element",   // index 1
+    "second element",  // index 2
+    42,                // index 3
+]);</code></pre>
+<h3 id="nested-buffers"><a class="header" href="#nested-buffers">Nested buffers</a></h3>
+<p>Nest TVF structures inside other TVF messages:</p>
+<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+    1 =&gt; 2,
+    5 =&gt; [
+        1 as Unsigned,
+        2 as Float,
+        3,
+        "four",
+        5 as Byte,
+        {
+            1 =&gt; "nested object",
+            2 =&gt; 0x00010203 as Bytes,
+        }
+    ],
+    6 =&gt; "1995-01-10" as Date,
+    200 =&gt; "2023-06-05 15:02:00.000" as DateTime,
+});</code></pre>
+<p>Lists can contain nested maps (<code>{ }</code>), and maps can contain nested lists (<code>[ ]</code>), allowing arbitrary depth.</p>
 <h2 id="implement-your-own-tvf"><a class="header" href="#implement-your-own-tvf">Implement your own TVF</a></h2>
 <p>If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:</p>
 <pre><code class="language-rust noplayground">impl Tvf for MyOwnTvf {
@@ -1963,6 +2271,159 @@ However, the behavior can be changed by implementing the <a href="https://docs.r
 <p>If you wish for your processor to run on the main runtime, you can return <code>0</code>.</p>
 <p>Finally, if you want to allocate multiple threads for your processor, you can return the desired number of threads to spawn from this method.
 Of course, if you implement it, you can get the number of threads from your processor settings by adding a field for it.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="built-in-processors"><a class="header" href="#built-in-processors">Built-in Processors</a></h1>
+<p>ProSA ships with two built-in processors designed for testing and development: <strong>InjProc</strong> (Injector) and <strong>StubProc</strong> (Stub). Together, they let you validate your ProSA setup without writing any custom processor code.</p>
+<h2 id="injproc--injector"><a class="header" href="#injproc--injector">InjProc — Injector</a></h2>
+<p>The injector processor sends transactions to a target service at a regulated speed. It is useful for <strong>load testing</strong> and <strong>functional validation</strong>.</p>
+<h3 id="how-it-works"><a class="header" href="#how-it-works">How it works</a></h3>
+<ol>
+<li>Waits for the target service to appear in the service table</li>
+<li>Calls the adaptor’s <code>build_transaction()</code> to create a message</li>
+<li>Sends the message to the target service at a controlled rate</li>
+<li>Receives responses and calls the adaptor’s <code>process_response()</code></li>
+<li>Handles errors: timeouts and unreachable services trigger a cooldown; other errors stop the processor</li>
+</ol>
+<h3 id="settings-1"><a class="header" href="#settings-1">Settings</a></h3>
+<p>Configure the injector through <code>InjSettings</code> in your YAML:</p>
+<pre><code class="language-yaml">inj-1:
+  service_name: "MY_SERVICE"  # Target service name to inject into
+  max_speed: 5.0              # Maximum transactions per second (default: 5.0)
+  timeout_threshold:
+    secs: 10                  # Cooldown duration on timeout/unreachable (default: 10s)
+    nanos: 0
+  max_concurrents_send: 1     # Max parallel transactions (default: 1)
+  speed_interval: 15          # Number of samples for speed calculation (default: 15)
+</code></pre>
+<h3 id="injadaptor-trait"><a class="header" href="#injadaptor-trait">InjAdaptor Trait</a></h3>
+<p>To customize what the injector sends and how it processes responses, implement the <code>InjAdaptor</code> trait:</p>
+<pre><code class="language-rust noplayground">pub trait InjAdaptor&lt;M&gt;
+where
+    M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
+{
+    /// Called once when the processor starts
+    fn new(proc: &amp;InjProc&lt;M&gt;) -&gt; Result&lt;Self, Box&lt;dyn ProcError + Send + Sync&gt;&gt;
+    where
+        Self: Sized;
+
+    /// Build the next transaction to inject
+    fn build_transaction(&amp;mut self) -&gt; M;
+
+    /// Process the response (optional — default ignores responses)
+    fn process_response(
+        &amp;mut self,
+        response: M,
+        service_name: &amp;str,
+    ) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+        Ok(())
+    }
+}</code></pre>
+<h3 id="injdummyadaptor"><a class="header" href="#injdummyadaptor">InjDummyAdaptor</a></h3>
+<p>The built-in <code>InjDummyAdaptor</code> creates minimal messages with <code>"DUMMY"</code> in field 1. It is useful for quick smoke tests:</p>
+<pre><code class="language-rust noplayground">#[derive(Adaptor)]
+pub struct InjDummyAdaptor {}
+
+impl&lt;M&gt; InjAdaptor&lt;M&gt; for InjDummyAdaptor
+where
+    M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
+{
+    fn new(_proc: &amp;InjProc&lt;M&gt;) -&gt; Result&lt;Self, Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+        Ok(Self {})
+    }
+
+    fn build_transaction(&amp;mut self) -&gt; M {
+        let mut msg = M::default();
+        msg.put_string(1, "DUMMY");
+        msg
+    }
+}</code></pre>
+<h3 id="metrics-2"><a class="header" href="#metrics-2">Metrics</a></h3>
+<p>The injector exposes a histogram metric <code>prosa_inj_request_duration</code> (in seconds) with attributes:</p>
+<ul>
+<li><code>proc</code>: processor name</li>
+<li><code>service</code>: target service name</li>
+<li><code>err_code</code>: <code>"0"</code> for success, or the service error code</li>
+</ul>
+<hr>
+<h2 id="stubproc--stub"><a class="header" href="#stubproc--stub">StubProc — Stub</a></h2>
+<p>The stub processor responds to incoming requests. It is useful for <strong>mocking services</strong> during development or testing.</p>
+<h3 id="how-it-works-1"><a class="header" href="#how-it-works-1">How it works</a></h3>
+<ol>
+<li>Registers for the configured service names</li>
+<li>Receives incoming <code>Request</code> messages</li>
+<li>Calls the adaptor’s <code>process_request()</code> to produce a response</li>
+<li>Returns the response to the caller</li>
+</ol>
+<h3 id="settings-1-1"><a class="header" href="#settings-1-1">Settings</a></h3>
+<p>Configure the stub through <code>StubSettings</code> in your YAML:</p>
+<pre><code class="language-yaml">stub-1:
+  service_names:
+    - "MY_SERVICE"
+    - "ANOTHER_SERVICE"
+</code></pre>
+<h3 id="stubadaptor-trait"><a class="header" href="#stubadaptor-trait">StubAdaptor Trait</a></h3>
+<p>To customize how the stub responds, implement the <code>StubAdaptor</code> trait:</p>
+<pre><code class="language-rust noplayground">pub trait StubAdaptor&lt;M&gt;
+where
+    M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
+{
+    /// Called once when the processor starts
+    fn new(proc: &amp;StubProc&lt;M&gt;) -&gt; Result&lt;Self, Box&lt;dyn ProcError + Send + Sync&gt;&gt;
+    where
+        Self: Sized;
+
+    /// Process an incoming request and return a response
+    fn process_request(
+        &amp;self,
+        service_name: &amp;str,
+        request: M,
+    ) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt;;
+}</code></pre>
+<p>The return type <code>MaybeAsync</code> lets you choose between synchronous and asynchronous processing.</p>
+<h3 id="synchronous-response"><a class="header" href="#synchronous-response">Synchronous response</a></h3>
+<p>Return a value directly using <code>.into()</code>:</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    // Echo the request back
+    Ok(request).into()
+}</code></pre>
+<h3 id="asynchronous-response"><a class="header" href="#asynchronous-response">Asynchronous response</a></h3>
+<p>Use the <code>maybe_async!</code> macro for async processing:</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    let service_name = service_name.to_string();
+    maybe_async!(async move {
+        // Simulate async work (e.g., call an external API)
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let mut msg = request.clone();
+        msg.put_string(1, format!("response for {}", service_name));
+        Ok(msg)
+    })
+}</code></pre>
+<h3 id="built-in-adaptors"><a class="header" href="#built-in-adaptors">Built-in Adaptors</a></h3>
+<p><strong>StubParotAdaptor</strong> — echoes the request back as-is (synchronous):</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    Ok(request.clone()).into()
+}</code></pre>
+<p><strong>StubAsyncParotAdaptor</strong> — echoes the request back after a 100ms delay (asynchronous):</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    maybe_async!(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        Ok(request)
+    })
+}</code></pre>
+<hr>
+<h2 id="using-injector-and-stub-together"><a class="header" href="#using-injector-and-stub-together">Using Injector and Stub Together</a></h2>
+<p>The injector and stub pair is ideal for validating your ProSA setup. Wire them together by pointing the injector’s <code>service_name</code> at a service declared by the stub:</p>
+<pre><code class="language-yaml"># Stub responds to "TEST_SERVICE"
+stub-1:
+  service_names:
+    - "TEST_SERVICE"
+
+# Injector sends to "TEST_SERVICE"
+inj-1:
+  service_name: "TEST_SERVICE"
+  max_speed: 10.0
+</code></pre>
+<p>When you run ProSA with this configuration, the injector will continuously send messages to the stub, which echoes them back. You can observe the transaction flow through metrics and traces.</p>
 
                     </main>
 

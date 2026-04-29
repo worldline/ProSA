@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>GCP - Cloud Run - ProSA - Protocol Service Adaptor</title>
+        <title>Built-in Processors - ProSA - Protocol Service Adaptor</title>
 
 
         <!-- Custom HTML head -->
@@ -178,20 +178,167 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="gcp---cloud-run"><a class="header" href="#gcp---cloud-run">GCP - Cloud Run</a></h1>
-<p>TODO</p>
+                        <h1 id="built-in-processors"><a class="header" href="#built-in-processors">Built-in Processors</a></h1>
+<p>ProSA ships with two built-in processors designed for testing and development: <strong>InjProc</strong> (Injector) and <strong>StubProc</strong> (Stub). Together, they let you validate your ProSA setup without writing any custom processor code.</p>
+<h2 id="injproc--injector"><a class="header" href="#injproc--injector">InjProc — Injector</a></h2>
+<p>The injector processor sends transactions to a target service at a regulated speed. It is useful for <strong>load testing</strong> and <strong>functional validation</strong>.</p>
+<h3 id="how-it-works"><a class="header" href="#how-it-works">How it works</a></h3>
+<ol>
+<li>Waits for the target service to appear in the service table</li>
+<li>Calls the adaptor’s <code>build_transaction()</code> to create a message</li>
+<li>Sends the message to the target service at a controlled rate</li>
+<li>Receives responses and calls the adaptor’s <code>process_response()</code></li>
+<li>Handles errors: timeouts and unreachable services trigger a cooldown; other errors stop the processor</li>
+</ol>
+<h3 id="settings"><a class="header" href="#settings">Settings</a></h3>
+<p>Configure the injector through <code>InjSettings</code> in your YAML:</p>
+<pre><code class="language-yaml">inj-1:
+  service_name: "MY_SERVICE"  # Target service name to inject into
+  max_speed: 5.0              # Maximum transactions per second (default: 5.0)
+  timeout_threshold:
+    secs: 10                  # Cooldown duration on timeout/unreachable (default: 10s)
+    nanos: 0
+  max_concurrents_send: 1     # Max parallel transactions (default: 1)
+  speed_interval: 15          # Number of samples for speed calculation (default: 15)
+</code></pre>
+<h3 id="injadaptor-trait"><a class="header" href="#injadaptor-trait">InjAdaptor Trait</a></h3>
+<p>To customize what the injector sends and how it processes responses, implement the <code>InjAdaptor</code> trait:</p>
+<pre><code class="language-rust noplayground">pub trait InjAdaptor&lt;M&gt;
+where
+    M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
+{
+    /// Called once when the processor starts
+    fn new(proc: &amp;InjProc&lt;M&gt;) -&gt; Result&lt;Self, Box&lt;dyn ProcError + Send + Sync&gt;&gt;
+    where
+        Self: Sized;
+
+    /// Build the next transaction to inject
+    fn build_transaction(&amp;mut self) -&gt; M;
+
+    /// Process the response (optional — default ignores responses)
+    fn process_response(
+        &amp;mut self,
+        response: M,
+        service_name: &amp;str,
+    ) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+        Ok(())
+    }
+}</code></pre>
+<h3 id="injdummyadaptor"><a class="header" href="#injdummyadaptor">InjDummyAdaptor</a></h3>
+<p>The built-in <code>InjDummyAdaptor</code> creates minimal messages with <code>"DUMMY"</code> in field 1. It is useful for quick smoke tests:</p>
+<pre><code class="language-rust noplayground">#[derive(Adaptor)]
+pub struct InjDummyAdaptor {}
+
+impl&lt;M&gt; InjAdaptor&lt;M&gt; for InjDummyAdaptor
+where
+    M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
+{
+    fn new(_proc: &amp;InjProc&lt;M&gt;) -&gt; Result&lt;Self, Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+        Ok(Self {})
+    }
+
+    fn build_transaction(&amp;mut self) -&gt; M {
+        let mut msg = M::default();
+        msg.put_string(1, "DUMMY");
+        msg
+    }
+}</code></pre>
+<h3 id="metrics"><a class="header" href="#metrics">Metrics</a></h3>
+<p>The injector exposes a histogram metric <code>prosa_inj_request_duration</code> (in seconds) with attributes:</p>
+<ul>
+<li><code>proc</code>: processor name</li>
+<li><code>service</code>: target service name</li>
+<li><code>err_code</code>: <code>"0"</code> for success, or the service error code</li>
+</ul>
+<hr>
+<h2 id="stubproc--stub"><a class="header" href="#stubproc--stub">StubProc — Stub</a></h2>
+<p>The stub processor responds to incoming requests. It is useful for <strong>mocking services</strong> during development or testing.</p>
+<h3 id="how-it-works-1"><a class="header" href="#how-it-works-1">How it works</a></h3>
+<ol>
+<li>Registers for the configured service names</li>
+<li>Receives incoming <code>Request</code> messages</li>
+<li>Calls the adaptor’s <code>process_request()</code> to produce a response</li>
+<li>Returns the response to the caller</li>
+</ol>
+<h3 id="settings-1"><a class="header" href="#settings-1">Settings</a></h3>
+<p>Configure the stub through <code>StubSettings</code> in your YAML:</p>
+<pre><code class="language-yaml">stub-1:
+  service_names:
+    - "MY_SERVICE"
+    - "ANOTHER_SERVICE"
+</code></pre>
+<h3 id="stubadaptor-trait"><a class="header" href="#stubadaptor-trait">StubAdaptor Trait</a></h3>
+<p>To customize how the stub responds, implement the <code>StubAdaptor</code> trait:</p>
+<pre><code class="language-rust noplayground">pub trait StubAdaptor&lt;M&gt;
+where
+    M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
+{
+    /// Called once when the processor starts
+    fn new(proc: &amp;StubProc&lt;M&gt;) -&gt; Result&lt;Self, Box&lt;dyn ProcError + Send + Sync&gt;&gt;
+    where
+        Self: Sized;
+
+    /// Process an incoming request and return a response
+    fn process_request(
+        &amp;self,
+        service_name: &amp;str,
+        request: M,
+    ) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt;;
+}</code></pre>
+<p>The return type <code>MaybeAsync</code> lets you choose between synchronous and asynchronous processing.</p>
+<h3 id="synchronous-response"><a class="header" href="#synchronous-response">Synchronous response</a></h3>
+<p>Return a value directly using <code>.into()</code>:</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    // Echo the request back
+    Ok(request).into()
+}</code></pre>
+<h3 id="asynchronous-response"><a class="header" href="#asynchronous-response">Asynchronous response</a></h3>
+<p>Use the <code>maybe_async!</code> macro for async processing:</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    let service_name = service_name.to_string();
+    maybe_async!(async move {
+        // Simulate async work (e.g., call an external API)
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let mut msg = request.clone();
+        msg.put_string(1, format!("response for {}", service_name));
+        Ok(msg)
+    })
+}</code></pre>
+<h3 id="built-in-adaptors"><a class="header" href="#built-in-adaptors">Built-in Adaptors</a></h3>
+<p><strong>StubParotAdaptor</strong> — echoes the request back as-is (synchronous):</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    Ok(request.clone()).into()
+}</code></pre>
+<p><strong>StubAsyncParotAdaptor</strong> — echoes the request back after a 100ms delay (asynchronous):</p>
+<pre><code class="language-rust noplayground">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    maybe_async!(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        Ok(request)
+    })
+}</code></pre>
+<hr>
+<h2 id="using-injector-and-stub-together"><a class="header" href="#using-injector-and-stub-together">Using Injector and Stub Together</a></h2>
+<p>The injector and stub pair is ideal for validating your ProSA setup. Wire them together by pointing the injector’s <code>service_name</code> at a service declared by the stub:</p>
+<pre><code class="language-yaml"># Stub responds to "TEST_SERVICE"
+stub-1:
+  service_names:
+    - "TEST_SERVICE"
+
+# Injector sends to "TEST_SERVICE"
+inj-1:
+  service_name: "TEST_SERVICE"
+  max_speed: 10.0
+</code></pre>
+<p>When you run ProSA with this configuration, the injector will continuously send messages to the stub, which echoes them back. You can observe the transaction flow through metrics and traces.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="ch01-05-cloud.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="ch03-08-threads.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="ch01-05-02-clever_cloud.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -199,13 +346,10 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="ch01-05-cloud.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="ch03-08-threads.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="ch01-05-02-clever_cloud.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                    </a>
             </nav>
 
         </div>

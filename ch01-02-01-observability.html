@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c2e4de.js";
+            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a260a5bf.js"></script>
+        <script src="toc-3494636a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -289,7 +289,7 @@ To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource
 <li>Decode the base64-encoded basic authorization token from the <code>Create an Instrumentation Instance</code>. You’ll get an <code>id:password</code> to set OTLP credentials with.</li>
 </ul>
 <blockquote>
-<p>For the first configuration you may have to set the service name to <code>my-app</code> to let Grafana Cloud detect that it’s working.</p>
+<p>If your token contains a trailing <code>=</code>, you need to replace it with <code>%3D</code> to ensure a correct URL format.</p>
 </blockquote>
 <p>With this information, set up your observability stack (look before if you want to set up traces):</p>
 <pre><code class="language-yaml">observability:

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>GCP - Cloud Run - ProSA - Protocol Service Adaptor</title>
+        <title>Putting It All Together - ProSA - Protocol Service Adaptor</title>
 
 
         <!-- Custom HTML head -->
@@ -178,18 +178,88 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="gcp---cloud-run"><a class="header" href="#gcp---cloud-run">GCP - Cloud Run</a></h1>
-<p>TODO</p>
+                        <h1 id="putting-it-all-together"><a class="header" href="#putting-it-all-together">Putting It All Together</a></h1>
+<p>Now that you’re familiar with <a href="ch01-01-cargo-prosa.html">Cargo-ProSA</a>, <a href="ch01-02-config.html">configuration</a>, <a href="ch01-02-01-observability.html">observability</a>, and <a href="ch01-02-04-run.html">running ProSA</a>, let’s walk through a complete example from scratch using the built-in processors.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<p>You need <a href="https://doc.rust-lang.org/cargo/getting-started/installation.html">Rust and Cargo</a> installed, along with <code>cargo-prosa</code>:</p>
+<pre><code class="language-bash">cargo install cargo-prosa
+</code></pre>
+<h2 id="create-and-scaffold-a-project"><a class="header" href="#create-and-scaffold-a-project">Create and scaffold a project</a></h2>
+<pre><code class="language-bash">cargo prosa new my-first-prosa
+cd my-first-prosa
+</code></pre>
+<p>This generates a Rust project with a <code>ProSA.toml</code> descriptor, a <code>build.rs</code>, and a <code>main.rs</code> that will be auto-generated from your ProSA configuration.</p>
+<p>You can inspect the available components with:</p>
+<pre><code class="language-bash">cargo prosa list
+</code></pre>
+<p>This shows all discovered components: Main, TVF, Processors, and Adaptors.</p>
+<h2 id="add-processors"><a class="header" href="#add-processors">Add processors</a></h2>
+<p>Add a <strong>stub</strong> processor that will respond to requests, and an <strong>injector</strong> that will send requests:</p>
+<pre><code class="language-bash">cargo prosa add -n stub-1 -a StubParotAdaptor stub
+cargo prosa add -n inj-1 -a InjDummyAdaptor inj
+</code></pre>
+<ul>
+<li><code>-n</code> sets the processor instance name (used in configuration)</li>
+<li><code>-a</code> selects which adaptor to use</li>
+</ul>
+<p>Your <code>ProSA.toml</code> file now contains the processor configuration. You can also edit this file manually.</p>
+<h2 id="generate-and-edit-the-configuration"><a class="header" href="#generate-and-edit-the-configuration">Generate and edit the configuration</a></h2>
+<p>Build the project and retrieve the generated configuration from <em>target/config.yml</em> (or <em>target/config.toml</em>).</p>
+<p>You can also generate a default configuration using <code>--dry_run</code> (see <a href="ch01-02-04-run.html">Run ProSA</a> for details on this flag):</p>
+<pre><code class="language-bash">cargo run -- -c config.yaml --dry_run
+</code></pre>
+<p>Then edit <code>config.yaml</code> to wire the injector to the stub. The stub needs to declare a service name, and the injector needs to target that same service:</p>
+<pre><code class="language-yaml">name: "my-first-prosa"
+observability:
+  level: debug
+  metrics:
+    stdout:
+      level: info
+  traces:
+    stdout:
+      level: debug
+
+stub_1:
+  service_names:
+    - "TEST_SERVICE"
+
+inj_1:
+  service_name: "TEST_SERVICE"
+  max_speed: 1.0
+</code></pre>
+<p>This configures:</p>
+<ul>
+<li>The stub to respond to requests on <code>"TEST_SERVICE"</code></li>
+<li>The injector to send 2 transactions per second to <code>"TEST_SERVICE"</code></li>
+<li><a href="ch01-02-01-observability.html">Observability</a> output to stdout so you can see what’s happening</li>
+</ul>
+<h2 id="run-it"><a class="header" href="#run-it">Run it</a></h2>
+<pre><code class="language-bash">cargo run -- -n "MyFirstProSA" -c config.yaml
+</code></pre>
+<p>You should see log output showing:</p>
+<ol>
+<li>ProSA starting with the configured name</li>
+<li>The stub processor registering <code>TEST_SERVICE</code></li>
+<li>The injector discovering the service and starting to send transactions</li>
+<li>Responses flowing back from the stub to the injector</li>
+</ol>
+<p>Press <code>Ctrl+C</code> to stop (see <a href="ch01-02-04-run.html#graceful-shutdown">Graceful Shutdown</a>).</p>
+<h2 id="whats-next"><a class="header" href="#whats-next">What’s next?</a></h2>
+<p>You now know how to build and operate a ProSA instance. The next chapters cover how to develop your own components:</p>
+<ul>
+<li><strong><a href="ch02-00-adaptor.html">Adaptor</a></strong> — write custom protocol adaptors</li>
+<li><strong><a href="ch03-00-proc.html">Processor</a></strong> — write custom processors with their own business logic</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="ch01-05-cloud.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="ch01-05-02-clever_cloud.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="ch01-05-02-clever_cloud.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="ch02-00-adaptor.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -199,11 +269,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="ch01-05-cloud.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="ch01-05-02-clever_cloud.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="ch01-05-02-clever_cloud.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="ch02-00-adaptor.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

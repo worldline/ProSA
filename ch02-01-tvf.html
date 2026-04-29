@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c2e4de.js";
+            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a260a5bf.js"></script>
+        <script src="toc-3494636a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -217,6 +217,69 @@ where
 <blockquote>
 <p>Good to have are <code>Clone</code> and <code>Debug</code> for your TVF. When TVFs are used for messaging, <code>Send</code> and <code>Sync</code> are essential to safely move them across threads.</p>
 </blockquote>
+<h2 id="constructing-tvf-messages-with-the-tvf-macro"><a class="header" href="#constructing-tvf-messages-with-the-tvf-macro">Constructing TVF Messages with the <code>tvf!</code> Macro</a></h2>
+<p>Instead of manually calling <code>put_*</code> methods one by one, you can use the <code>tvf!</code> procedural macro to construct TVF messages with a concise syntax.</p>
+<h3 id="basic-usage-map"><a class="header" href="#basic-usage-map">Basic usage (map)</a></h3>
+<p>Create a TVF with key-value pairs using <code>=&gt;</code>:</p>
+<pre><code class="language-rust noplayground">use prosa_macros::tvf;
+use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+
+let message = tvf!(SimpleStringTvf {
+    1 =&gt; "hello",
+    2 =&gt; 42,
+    3 =&gt; 3.14,
+});</code></pre>
+<p>Integer values are inferred as signed (<code>i64</code>) by default. Use type suffixes or <code>as</code> casts to specify other types:</p>
+<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+    1 =&gt; 2,              // signed (i64)
+    2 =&gt; 4usize,         // also signed
+    3 =&gt; 1 as Unsigned,  // unsigned (u64)
+    4 =&gt; 2.5 as Float,   // float (f64)
+});</code></pre>
+<h3 id="type-annotations"><a class="header" href="#type-annotations">Type annotations</a></h3>
+<p>Use <code>as Type</code> to explicitly set the field type:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Annotation</th><th>Rust type</th><th>Example</th></tr>
+</thead>
+<tbody>
+<tr><td><code>as Unsigned</code></td><td><code>u64</code></td><td><code>1 as Unsigned</code></td></tr>
+<tr><td><code>as Signed</code></td><td><code>i64</code></td><td><code>-5 as Signed</code></td></tr>
+<tr><td><code>as Float</code></td><td><code>f64</code></td><td><code>3.14 as Float</code></td></tr>
+<tr><td><code>as Byte</code></td><td><code>u8</code></td><td><code>22 as Byte</code></td></tr>
+<tr><td><code>as Bytes</code></td><td><code>Bytes</code></td><td><code>0x01020304 as Bytes</code></td></tr>
+<tr><td><code>as Date</code></td><td><code>NaiveDate</code></td><td><code>"1995-01-10" as Date</code></td></tr>
+<tr><td><code>as DateTime</code></td><td><code>NaiveDateTime</code></td><td><code>"2023-06-05 15:02:00.000" as DateTime</code></td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="lists"><a class="header" href="#lists">Lists</a></h3>
+<p>Use <code>[ ]</code> to create sequential fields indexed starting from 1:</p>
+<pre><code class="language-rust noplayground">let list = tvf!(SimpleStringTvf [
+    "first element",   // index 1
+    "second element",  // index 2
+    42,                // index 3
+]);</code></pre>
+<h3 id="nested-buffers"><a class="header" href="#nested-buffers">Nested buffers</a></h3>
+<p>Nest TVF structures inside other TVF messages:</p>
+<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+    1 =&gt; 2,
+    5 =&gt; [
+        1 as Unsigned,
+        2 as Float,
+        3,
+        "four",
+        5 as Byte,
+        {
+            1 =&gt; "nested object",
+            2 =&gt; 0x00010203 as Bytes,
+        }
+    ],
+    6 =&gt; "1995-01-10" as Date,
+    200 =&gt; "2023-06-05 15:02:00.000" as DateTime,
+});</code></pre>
+<p>Lists can contain nested maps (<code>{ }</code>), and maps can contain nested lists (<code>[ ]</code>), allowing arbitrary depth.</p>
 <h2 id="implement-your-own-tvf"><a class="header" href="#implement-your-own-tvf">Implement your own TVF</a></h2>
 <p>If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:</p>
 <pre><code class="language-rust noplayground">impl Tvf for MyOwnTvf {

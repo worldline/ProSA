@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d1c2e4de.js";
+            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a260a5bf.js"></script>
+        <script src="toc-3494636a.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -182,6 +182,7 @@
 <p>Once you have created a binary using <code>cargo-prosa</code>, the next step is to run this binary.</p>
 <p>If you’ve installed a package or a container, you don’t need to worry about the inner workings.
 However, if you want to execute the binary manually, this section explains the available parameters.</p>
+<h2 id="command-line-options"><a class="header" href="#command-line-options">Command-Line Options</a></h2>
 <p>When you run <code>prosa_binary -h</code>, you’ll see output like the following:</p>
 <pre><code>Usage: prosa_binary [OPTIONS]
 
@@ -193,16 +194,41 @@ Options:
   -h, --help                      Print help
   -V, --version                   Print version
 </code></pre>
-<p>Based on this, you have several options:</p>
+<h2 id="dry-run"><a class="header" href="#dry-run">Dry Run</a></h2>
+<p>Use <code>--dry_run</code> to validate your configuration without actually starting ProSA:</p>
+<pre><code class="language-bash">prosa_binary -c config.yaml --dry_run
+</code></pre>
+<p>This will:</p>
+<ol>
+<li>Parse and validate your configuration file</li>
+<li>If the configuration file <strong>does not exist</strong>, write a default one with all your processors’ default settings</li>
+<li>Display how ProSA would run (which processors, which adaptors)</li>
+<li>Exit without starting any processor</li>
+</ol>
+<p>This is particularly useful for:</p>
 <ul>
-<li>dry_run: Use this option to test your configuration file or create it if it doesn’t exist.</li>
-<li>config: Specify the path to your configuration folder/file.</li>
-<li>name: Override the name in your prosa settings. This sets the name of your ProSA instance.</li>
-<li>worker_threads: Specify the number of threads allocated for ProSA. Each processor can launch threads individually; thus, this option may have varying effects depending on your processor’s capabilities.</li>
-<li>version: Provides information about the binary crate version as well as the versions of all components used. For example:</li>
+<li>Generating a starter configuration file for a new ProSA instance</li>
+<li>Validating configuration changes before applying them in production</li>
 </ul>
+<h2 id="configuration-path"><a class="header" href="#configuration-path">Configuration Path</a></h2>
+<p>The <code>-c</code> / <code>--config</code> option accepts either a <strong>single file</strong> or a <strong>directory</strong>:</p>
+<pre><code class="language-bash"># Single configuration file
+prosa_binary -c /etc/prosa.yml
+
+# Directory containing multiple configuration files
+prosa_binary -c /etc/myprosa/
+</code></pre>
+<p>When pointing to a directory, both YAML/TOML files in that directory are merged together. This lets you split configuration across multiple files (e.g., one for observability, one per processor). See the <a href="ch01-02-config.html">Configuration</a> chapter for details.</p>
+<h2 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h2>
+<p>Configuration values can also be set through environment variables. For example:</p>
+<pre><code class="language-bash">PROSA_NAME="my-prosa" prosa_binary -c config.yaml
+</code></pre>
+<p>This is useful in containerized environments where configuration is injected via environment variables.</p>
+<h2 id="version-information"><a class="header" href="#version-information">Version Information</a></h2>
+<p>The <code>-V</code> flag provides a short version, while <code>--version</code> shows detailed component information:</p>
 <pre><code class="language-bash">$ prosa_binary -V
 prosa 0.1.0
+
 $ prosa_binary --version
 prosa 0.1.0 - core::main::MainProc = { crate = prosa, version = 0.2.0 }
   inj
@@ -212,6 +238,26 @@ prosa 0.1.0 - core::main::MainProc = { crate = prosa, version = 0.2.0 }
     Processor: stub::proc::StubProc = { crate = prosa, version = 0.2.0 }
     Adaptor  : stub::adaptor::StubParotAdaptor = { crate = prosa, version = 0.2.0 }
 </code></pre>
+<p>The verbose output shows:</p>
+<ul>
+<li>The <strong>Main</strong> processor type and its crate/version</li>
+<li>Each <strong>Processor</strong> instance with its name, type, crate, and version</li>
+<li>Each <strong>Adaptor</strong> associated with its processor</li>
+</ul>
+<p>This is valuable for debugging version mismatches or verifying that the correct components are compiled in.</p>
+<h2 id="worker-threads"><a class="header" href="#worker-threads">Worker Threads</a></h2>
+<p>The <code>-t</code> / <code>--worker_threads</code> option controls the number of threads for the <strong>Main</strong> task’s Tokio runtime (default: 1).</p>
+<p>Note that each processor runs in its own thread(s) independently — see <a href="ch03-08-threads.html">Threads</a> for details on per-processor thread configuration.</p>
+<h2 id="graceful-shutdown"><a class="header" href="#graceful-shutdown">Graceful Shutdown</a></h2>
+<p>ProSA handles <code>Ctrl+C</code> (SIGINT) for graceful shutdown:</p>
+<ol>
+<li>The Main processor receives the signal</li>
+<li>A <code>Shutdown</code> message is sent to every registered processor</li>
+<li>Each processor calls <code>adaptor.terminate()</code> to clean up resources</li>
+<li>Each processor deregisters from the Main bus</li>
+<li>The Main processor exits once all processors have stopped</li>
+</ol>
+<p>This ensures that in-flight transactions are not abruptly terminated and that resources (connections, files, etc.) are properly released.</p>
 
                     </main>
 
