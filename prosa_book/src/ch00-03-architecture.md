@@ -117,10 +117,10 @@ sequenceDiagram
     ProcA->>ProcB: RequestMsg (via service queue)
     Note over ProcB: Adaptor processes request
     ProcB->>ExtB: Protocol message (optional)
-    ExtB-->>ProcB: Protocol response (optional)
-    ProcB-->>ProcA: ResponseMsg
+    ExtB->>ProcB: Protocol response (optional)
+    ProcB->>ProcA: ResponseMsg
     Note over ProcA: Adaptor converts from TVF
-    ProcA-->>ExtA: Protocol response
+    ProcA->>ExtA: Protocol response
 ```
 
 Note that processors send requests **directly** to the target processor's queue (looked up from the service table). They do not go through Main for every transaction — Main is only involved in service registration and table distribution.
