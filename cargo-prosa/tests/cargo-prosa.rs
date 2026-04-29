@@ -237,7 +237,7 @@ If you have an external git dependency, specify your ssh agent with:
     cmd.args(["completion", "bash"]);
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("cargo__prosa"));
+        .stdout(predicate::str::contains("cargo__subcmd__prosa"));
 
     // Get Zsh command completion
     let mut cmd = cargo_prosa_command();
@@ -245,7 +245,7 @@ If you have an external git dependency, specify your ssh agent with:
     cmd.args(["completion", "zsh"]);
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("cargo__prosa"));
+        .stdout(predicate::str::contains("cargo__subcmd__prosa"));
 
     Ok(())
 }

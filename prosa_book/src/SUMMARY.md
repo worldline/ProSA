@@ -3,6 +3,7 @@
 [ProSA - Protocol Service Adaptor](ch00-00-prosa.md)
 [Foreword](ch00-01-foreword.md)
 [Introduction](ch00-02-introduction.md)
+[Architecture](ch00-03-architecture.md)
 
 - [OPS](ch01-00-ops.md)
   - [Cargo-ProSA](ch01-01-cargo-prosa.md)
@@ -16,6 +17,7 @@
   - [Cloud](ch01-05-cloud.md)
     - [GCP - Cloud Run](ch01-05-01-gcp-cloud_run.md)
     - [Clever Cloud](ch01-05-02-clever_cloud.md)
+  - [Putting It All Together](ch01-06-sumup.md)
 
 - [Adaptor](ch02-00-adaptor.md)
   - [TVF](ch02-01-tvf.md)
@@ -32,3 +34,4 @@
   - [Events](ch03-06-events.md)
   - [I/O](ch03-07-io.md)
   - [Threads](ch03-08-threads.md)
+  - [Built-in Processors](ch03-09-builtin.md)

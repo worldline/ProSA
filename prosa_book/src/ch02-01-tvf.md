@@ -42,6 +42,87 @@ where
 
 > Good to have are `Clone` and `Debug` for your TVF. When TVFs are used for messaging, `Send` and `Sync` are essential to safely move them across threads.
 
+## Constructing TVF Messages with the `tvf!` Macro
+
+Instead of manually calling `put_*` methods one by one, you can use the `tvf!` procedural macro to construct TVF messages with a concise syntax.
+
+### Basic usage (map)
+
+Create a TVF with key-value pairs using `=>`:
+
+```rust,noplayground
+use prosa_macros::tvf;
+use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+
+let message = tvf!(SimpleStringTvf {
+    1 => "hello",
+    2 => 42,
+    3 => 3.14,
+});
+```
+
+Integer values are inferred as signed (`i64`) by default. Use type suffixes or `as` casts to specify other types:
+
+```rust,noplayground
+let message = tvf!(SimpleStringTvf {
+    1 => 2,              // signed (i64)
+    2 => 4usize,         // also signed
+    3 => 1 as Unsigned,  // unsigned (u64)
+    4 => 2.5 as Float,   // float (f64)
+});
+```
+
+### Type annotations
+
+Use `as Type` to explicitly set the field type:
+
+| Annotation    | Rust type       | Example                                 |
+|---------------|-----------------|-----------------------------------------|
+| `as Unsigned` | `u64`           | `1 as Unsigned`                         |
+| `as Signed`   | `i64`           | `-5 as Signed`                          |
+| `as Float`    | `f64`           | `3.14 as Float`                         |
+| `as Byte`     | `u8`            | `22 as Byte`                            |
+| `as Bytes`    | `Bytes`         | `0x01020304 as Bytes`                   |
+| `as Date`     | `NaiveDate`     | `"1995-01-10" as Date`                  |
+| `as DateTime` | `NaiveDateTime` | `"2023-06-05 15:02:00.000" as DateTime` |
+
+### Lists
+
+Use `[ ]` to create sequential fields indexed starting from 1:
+
+```rust,noplayground
+let list = tvf!(SimpleStringTvf [
+    "first element",   // index 1
+    "second element",  // index 2
+    42,                // index 3
+]);
+```
+
+### Nested buffers
+
+Nest TVF structures inside other TVF messages:
+
+```rust,noplayground
+let message = tvf!(SimpleStringTvf {
+    1 => 2,
+    5 => [
+        1 as Unsigned,
+        2 as Float,
+        3,
+        "four",
+        5 as Byte,
+        {
+            1 => "nested object",
+            2 => 0x00010203 as Bytes,
+        }
+    ],
+    6 => "1995-01-10" as Date,
+    200 => "2023-06-05 15:02:00.000" as DateTime,
+});
+```
+
+Lists can contain nested maps (`{ }`), and maps can contain nested lists (`[ ]`), allowing arbitrary depth.
+
 ## Implement your own TVF
 
 If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:
