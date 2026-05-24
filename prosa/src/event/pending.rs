@@ -343,11 +343,8 @@ where
                     timer.sleep().await;
                 }
 
-                if let Some(time) = self.timers.pop() {
-                    return self.pull_msg(time.get_timer_id());
-                } else {
-                    return None;
-                }
+                let time = self.timers.pop()?;
+                return self.pull_msg(time.get_timer_id());
             } else {
                 self.timers.pop();
             }
@@ -505,7 +502,7 @@ mod tests {
         assert!(pending_msg.is_empty());
         assert!(pending_msg.capacity() >= capacity);
 
-        let mut pending_timer: Timers<u64> = Timers::with_capacity(capacity);
+        let pending_timer: Timers<u64> = Timers::with_capacity(capacity);
         assert_eq!(pending_timer.len(), 0);
         assert!(pending_timer.is_empty());
         assert!(pending_timer.capacity() >= capacity);
