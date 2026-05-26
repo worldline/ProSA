@@ -35,8 +35,8 @@ toml = "0.9"
 
 # Config Observability
 log = "0.4"
-opentelemetry = { version = "0.31.0", features = ["metrics", "trace", "logs"] }
-opentelemetry_sdk = { version = "0.31.0", features = ["metrics", "trace", "logs", "rt-tokio"] }
+opentelemetry = { version = "0.32", features = ["metrics", "trace", "logs"] }
+opentelemetry_sdk = { version = "0.32", features = ["metrics", "trace", "logs", "rt-tokio"] }
 prometheus = { version = "0.14", default-features = false }
 
 # Config SSL
