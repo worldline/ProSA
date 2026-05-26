@@ -35,3 +35,5 @@
   - [I/O](ch03-07-io.md)
   - [Threads](ch03-08-threads.md)
   - [Built-in Processors](ch03-09-builtin.md)
+
+- [Vibe](ch04-00-vibe.md)
