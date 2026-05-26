@@ -72,7 +72,7 @@ Troubleshoot, debug, and tune ProSA applications.
 |------|-------------|
 | `diag/health-status.md` | Processor states (green/orange/grey/red), service availability |
 | `diag/error-recovery.md` | ProcError, restart logic, backoff, common error patterns |
-| `diag/troubleshooting.md` | Config validation (--dry_run), common pitfalls, log analysis |
+| `diag/troubleshooting.md` | Config validation, common pitfalls, log analysis, runtime/config/compilation/architecture diagnostics |
 | `diag/performance.md` | PendingMsgs tuning, Regulator flow control, queue diagnostics |
 
 ## Critical Rules

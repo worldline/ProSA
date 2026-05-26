@@ -136,3 +136,12 @@ Key features to consider for deployment:
 | `openssl` | OpenSSL for TLS (default) |
 | `openssl-vendored` | Statically linked OpenSSL |
 | `queue` | Queue implementations |
+
+## Cloud Deployment
+
+ProSA binaries can be deployed to any cloud platform:
+
+- **Docker-based PaaS** (Cloud Run, ECS, Kubernetes): use `cargo prosa container` to generate the image, push to registry, deploy
+- **Rust-native PaaS** (Clever Cloud): deploy directly with the Rust runtime — set `CC_RUN_COMMAND` to the binary with `-c` and `-n` flags
+- **Configuration injection**: mount config files as volumes, or use `PROSA_*` environment variables to override settings at runtime
+- **Health checks**: use `--dry_run` as a startup probe to validate configuration before accepting traffic

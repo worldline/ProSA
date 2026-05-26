@@ -2,6 +2,30 @@
 
 Patterns for timeout tracking, flow control, service registration, and multi-subtask processors.
 
+## InternalMsg Variants
+
+| Variant | Direction | Purpose |
+|---------|-----------|---------|
+| `Request(RequestMsg<M>)` | Sender → Listener | Service request with TVF payload |
+| `Response(ResponseMsg<M>)` | Listener → Sender | Successful response |
+| `Error(ErrorMsg)` | Listener → Sender | Error response with `ServiceError` |
+| `Command(CommandMsg)` | Any → Any | Control commands (status, reload) |
+| `Config` | Main → Proc | Configuration reload signal |
+| `Service(Arc<ServiceTable>)` | Main → All | Updated service routing table |
+| `Shutdown` | Main → All | Graceful shutdown signal |
+
+## Message Flow
+
+1. Processor registers with `add_proc()` — Main adds it to the bus
+2. Processor declares services with `add_service_proc()` — Main updates the service table
+3. Main broadcasts `Service(table)` to all processors
+4. Sender looks up a service in its local `ServiceTable`
+5. `ServiceTable` returns target processor queue (round-robin if multiple listeners)
+6. Sender pushes `Request` directly to the target's queue — **Main is not involved in message routing**
+7. Target processes the request via its adaptor
+8. Target sends `Response` or `Error` back to the sender's queue
+9. On shutdown, Main sends `Shutdown` to all registered processors
+
 ## PendingMsgs — Timeout Tracking
 
 Track in-flight messages and handle timeouts. Essential for production processors that send requests to other services.
@@ -292,3 +316,7 @@ tokio::spawn(async move {
     }
 });
 ```
+
+## TimedQueue — SPMC with Deadline
+
+`TimedQueue` is a single-producer, multiple-consumer queue with deadline enforcement. Messages not consumed before their deadline are returned to the sender. Useful for distributing work across multiple consumers with time constraints.

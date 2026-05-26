@@ -27,8 +27,8 @@ When `internal_run()` returns an error:
 
 ```yaml
 my_proc:
-  proc_restart_duration_period: 50    # seconds between restart attempts
-  proc_max_restart_period: 300        # max seconds to wait (5 min cap)
+  proc_restart_duration_period: 50    # milliseconds between restart attempts (default: 50ms)
+  proc_max_restart_period: 300        # max backoff multiplier (default: 300)
 ```
 
 These fields are auto-added by the `#[proc_settings]` macro.

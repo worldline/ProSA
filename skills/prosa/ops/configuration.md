@@ -98,8 +98,10 @@ Shows the Main processor type, every processor instance, and their adaptors with
 Every processor settings struct gets these fields automatically:
 
 - `adaptor_config_path` — path to adaptor-specific config file
-- `proc_restart_duration_period` — seconds between restart attempts
-- `proc_max_restart_period` — max seconds to wait between restarts
+- `proc_restart_duration_period` — milliseconds between restart attempts (default: 50ms)
+- `proc_max_restart_period` — max multiplier for backoff (default: 300)
+
+**Naming gotcha**: processor instance names use dashes in code (`"stub-1"`) but the YAML section key uses underscores (`stub_1:`). Mismatches cause settings to silently use defaults.
 
 ```yaml
 proc-1:

@@ -223,13 +223,12 @@ Implement `TvfFilter` to mask fields like PAN, CVV before logging:
 use prosa_utils::msg::tvf::TvfFilter;
 
 impl TvfFilter for MyTvf {
-    fn filter(&self) -> Self {
-        let mut filtered = self.clone();
-        // Mask sensitive fields
-        if filtered.contains(10) {
-            filtered.put_string(10, "****");
+    fn filter<T: Tvf>(mut buf: T) -> T {
+        // Mask sensitive fields before logging
+        if buf.contains(10) {
+            buf.put_string(10, "****");
         }
-        filtered
+        buf
     }
 }
 ```

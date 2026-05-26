@@ -193,6 +193,82 @@ where
 }
 ```
 
+### Production pattern: `tokio::select!` with PendingMsgs
+
+For processors that send requests to other services, use `tokio::select!` to handle both incoming messages and timeout expiration:
+
+```rust
+use prosa::event::pending::PendingMsgs;
+use prosa::core::service::ServiceError;
+
+async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    let adaptor = A::new(self)?;
+    self.proc.add_proc().await?;
+    self.proc
+        .add_service_proc(self.settings.service_names.clone())
+        .await?;
+
+    let mut pending_msgs: PendingMsgs<RequestMsg<M>, M> = Default::default();
+
+    loop {
+        tokio::select! {
+            Some(msg) = self.internal_rx_queue.recv() => {
+                match msg {
+                    InternalMsg::Request(mut msg) => {
+                        let _enter = msg.enter_span();
+                        // Forward to another service, track with timeout
+                        pending_msgs.push(msg, Duration::from_millis(500));
+                    }
+                    InternalMsg::Response(msg) => {
+                        let _enter = msg.enter_span();
+                        if let Some(original) = pending_msgs.pull_msg(msg.get_id()) {
+                            // Correlate response with original request
+                        }
+                    }
+                    InternalMsg::Error(err) => {
+                        let _enter = err.enter_span();
+                        let _ = pending_msgs.pull_msg(err.get_id());
+                    }
+                    InternalMsg::Command(_) => {}
+                    InternalMsg::Config => {}
+                    InternalMsg::Service(table) => self.service = table,
+                    InternalMsg::Shutdown => {
+                        adaptor.terminate();
+                        self.proc.remove_proc(None).await?;
+                        return Ok(());
+                    }
+                }
+            }
+            Some(timed_out) = pending_msgs.pull(), if !pending_msgs.is_empty() => {
+                let svc = timed_out.get_service().clone();
+                let _ = timed_out.return_error_to_sender(
+                    None, ServiceError::Timeout(svc, 500)
+                ).await;
+            }
+        }
+    }
+}
+```
+
+### TVF-locked processor
+
+To lock a processor to a specific TVF type (bypassing the generic `M`):
+
+```rust
+use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+
+#[proc]
+impl<A> Proc<A> for MyProc<SimpleStringTvf>
+where
+    A: Adaptor + std::marker::Send + std::marker::Sync,
+{
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+        // M is now SimpleStringTvf — can use type-specific methods directly
+        // ...
+    }
+}
+```
+
 ## 4. Cargo.toml Metadata
 
 Declare the processor for `cargo-prosa` discovery:

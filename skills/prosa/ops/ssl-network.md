@@ -58,6 +58,14 @@ ssl:
   passphrase: "p12_passphrase"
 ```
 
+### SSL URL scheme detection
+
+URLs enable SSL automatically when the scheme ends with `+ssl` or `+tls`, or is exactly `ssl`, `tls`, `https`, or `wss`.
+
+### DER format
+
+Files with a `.der` extension are read as DER-encoded. All other files are treated as PEM.
+
 ### Self-signed certificate
 
 If `ssl://` or `+ssl://` protocol is used without specifying cert/key, ProSA generates a self-signed certificate. To export it:
