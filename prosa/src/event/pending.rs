@@ -111,9 +111,21 @@ where
         self.timers.len()
     }
 
+    /// Returns the capacity of the internal timer list.
+    pub fn capacity(&self) -> usize {
+        self.timers.capacity()
+    }
+
     /// Returns true if there is no pending timer
     pub fn is_empty(&self) -> bool {
         self.timers.is_empty()
+    }
+
+    /// Method to create a new pending timer with a specific capacity
+    pub fn with_capacity(capacity: usize) -> Self {
+        Timers {
+            timers: Vec::with_capacity(capacity),
+        }
     }
 
     /// Method to push a pending timer
@@ -259,9 +271,27 @@ where
         self.pending_messages.len()
     }
 
+    /// Returns the capacity of the internal message map.
+    pub fn capacity(&self) -> usize {
+        self.pending_messages.capacity()
+    }
+
     /// Returns true if there is no pending message
     pub fn is_empty(&self) -> bool {
         self.pending_messages.is_empty()
+    }
+
+    /// Method to create a new pending message list with a specific capacity
+    pub fn with_capacity(capacity: usize) -> Self
+    where
+        T: Msg<M>,
+        M: Sized + Clone + Tvf,
+    {
+        PendingMsgs {
+            pending_messages: HashMap::with_capacity(capacity),
+            timers: Timers::with_capacity(capacity),
+            phantom: PhantomData,
+        }
     }
 
     /// Method to push a pending message
@@ -313,11 +343,8 @@ where
                     timer.sleep().await;
                 }
 
-                if let Some(time) = self.timers.pop() {
-                    return self.pull_msg(time.get_timer_id());
-                } else {
-                    return None;
-                }
+                let time = self.timers.pop()?;
+                return self.pull_msg(time.get_timer_id());
             } else {
                 self.timers.pop();
             }
@@ -464,6 +491,21 @@ mod tests {
                 Ok(())
             }
         }
+    }
+
+    #[test]
+    fn test_with_capacity() {
+        let capacity = 10;
+        let pending_msg: PendingMsgs<RequestMsg<SimpleStringTvf>, SimpleStringTvf> =
+            PendingMsgs::with_capacity(capacity);
+        assert_eq!(pending_msg.len(), 0);
+        assert!(pending_msg.is_empty());
+        assert!(pending_msg.capacity() >= capacity);
+
+        let pending_timer: Timers<u64> = Timers::with_capacity(capacity);
+        assert_eq!(pending_timer.len(), 0);
+        assert!(pending_timer.is_empty());
+        assert!(pending_timer.capacity() >= capacity);
     }
 
     #[tokio::test]
