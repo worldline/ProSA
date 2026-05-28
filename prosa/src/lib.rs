@@ -19,8 +19,10 @@ pub mod inj;
 pub mod stub;
 
 // Expose crate to avoir adding them into Cargo.toml
-pub use tracing::{debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span};
-pub use opentelemetry::{metrics, Key, KeyValue, SpanId, StringValue, TraceId, Value};
+pub use opentelemetry::{Key, KeyValue, SpanId, StringValue, TraceId, Value, metrics};
+pub use tracing::{
+    debug, debug_span, error, error_span, info, info_span, trace, trace_span, warn, warn_span,
+};
 
 #[cfg(test)]
 mod tests {
