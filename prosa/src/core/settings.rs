@@ -13,6 +13,9 @@ use config::{Config, ConfigBuilder, builder::DefaultState};
 use prosa_utils::config::observability::Observability;
 use serde::Serialize;
 
+/// Re-export of prosa_utils for observability config
+pub use prosa_utils::config::{observability, tracing};
+
 /// Implement the trait [`Settings`]
 pub use prosa_macros::settings;
 
@@ -45,8 +48,7 @@ pub use prosa_macros::settings;
 /// is equivalent to
 ///
 /// ```
-/// use prosa::core::settings::Settings;
-/// use prosa_utils::config::observability::Observability;
+/// use prosa::core::settings::{Settings, observability::Observability};
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Debug, Deserialize, Serialize)]

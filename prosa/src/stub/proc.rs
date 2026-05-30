@@ -39,13 +39,18 @@ impl StubSettings {
 /// Stub processor to respond to a request
 ///
 /// ```
-/// use prosa::core::main::{MainProc, MainRunnable};
-/// use prosa::core::proc::{proc, Proc, ProcBusParam, ProcConfig};
-/// use prosa::stub::adaptor::StubParotAdaptor;
-/// use prosa::stub::proc::{StubProc, StubSettings};
-/// use prosa_utils::config::observability::Observability;
+/// use prosa::{
+///     core::{
+///         main::{MainProc, MainRunnable},
+///         proc::{proc, Proc, ProcBusParam, ProcConfig},
+///         settings::{settings, observability::Observability},
+///     },
+///     stub::{
+///         adaptor::StubParotAdaptor,
+///         proc::{StubProc, StubSettings},
+///     },
+/// };
 /// use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
-/// use prosa::core::settings::settings;
 /// use serde::Serialize;
 ///
 /// // Main settings

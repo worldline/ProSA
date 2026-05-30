@@ -101,13 +101,18 @@ impl Default for InjSettings {
 /// Inj processor to inject transactions
 ///
 /// ```
-/// use prosa::core::main::{MainProc, MainRunnable};
-/// use prosa::core::proc::{proc, Proc, ProcBusParam, ProcConfig};
-/// use prosa::inj::adaptor::InjDummyAdaptor;
-/// use prosa::inj::proc::{InjProc, InjSettings};
-/// use prosa_utils::config::observability::Observability;
+/// use prosa::{
+///     core::{
+///         main::{MainProc, MainRunnable},
+///         proc::{proc, Proc, ProcBusParam, ProcConfig},
+///         settings::{settings, observability::Observability},
+///     },
+///     inj::{
+///         adaptor::InjDummyAdaptor,
+///         proc::{InjProc, InjSettings},
+///     },
+/// };
 /// use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
-/// use prosa::core::settings::settings;
 /// use serde::Serialize;
 ///
 /// // Main settings
