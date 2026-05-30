@@ -208,8 +208,11 @@ impl Stream {
     /// ```
     /// use tokio::io;
     /// use url::Url;
-    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
-    /// use prosa::io::stream::Stream;
+    /// use prosa::io::{
+    ///     SslConfig,
+    ///     SslConfigContext,
+    ///     stream::Stream,
+    /// };
     ///
     /// async fn connecting() -> Result<(), io::Error> {
     ///     let ssl_config = SslConfig::default();
@@ -332,8 +335,11 @@ impl Stream {
     /// ```
     /// use tokio::io;
     /// use url::Url;
-    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
-    /// use prosa::io::stream::Stream;
+    /// use prosa::io::{
+    ///     SslConfig,
+    ///     SslConfigContext,
+    ///     stream::Stream,
+    /// };
     ///
     /// async fn connecting() -> Result<(), io::Error> {
     ///     let proxy_url = Url::parse("http://user:pwd@proxy:3128").unwrap();

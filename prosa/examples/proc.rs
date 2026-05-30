@@ -6,16 +6,16 @@ use prosa::core::msg::{InternalMsg, Msg, RequestMsg};
 use prosa::core::proc::{Proc, ProcBusParam, ProcConfig, proc};
 use prosa::core::settings::Settings;
 use prosa::core::settings::settings;
+use prosa::core::settings::tracing::TelemetryFilter;
 use prosa::event::pending::PendingMsgs;
 use prosa::stub::adaptor::StubParotAdaptor;
 use prosa::stub::proc::{StubProc, StubSettings};
-use prosa_utils::config::tracing::TelemetryFilter;
+use prosa::{debug, info, warn};
 use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time;
 use tracing::metadata::LevelFilter;
-use tracing::{debug, info, warn};
 
 #[derive(Default, Adaptor)]
 struct MyAdaptor {}

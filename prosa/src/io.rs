@@ -9,7 +9,7 @@ use std::{
 use url::Url;
 
 pub use prosa_macros::io;
-pub use prosa_utils::config::ssl::SslConfig;
+pub use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 
 pub mod listener;
 pub mod stream;
