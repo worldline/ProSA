@@ -8,10 +8,10 @@ When you create an adaptor, you may want to generate custom metrics, traces or l
 
 It is important to understand how to implement these features within ProSA, as ProSA handles much of the integration for you.
 
-For convenience, ProSA re-exports the most common OpenTelemetry items (`KeyValue`, `metrics`, ...) and the `tracing` macros (`info!`, `debug!`, ...), so for most adaptors you don't need to add any dependency:
+For convenience, ProSA re-exports the OpenTelemetry items (`KeyValue`, `metrics`, ...) and the `tracing` macros (`info!`, `debug!`, ...), so for most adaptors you don't need to add any dependency:
 ```rust,noplayground
-use prosa::{KeyValue, metrics};
-use prosa::{debug, error, info, trace, warn};
+use prosa::otel::{KeyValue, metrics};
+use prosa::tracing::{debug, error, info, trace, warn};
 ```
 
 If you need types that aren't re-exported, add the OpenTelemetry dependency to your project (keep the version aligned with ProSA):

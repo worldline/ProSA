@@ -1,9 +1,9 @@
 use std::time::Duration;
 
-use opentelemetry::{KeyValue, metrics::Histogram};
+use crate::otel::{KeyValue, metrics::Histogram};
+use crate::tracing::debug;
 use prosa_macros::{proc, proc_settings};
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
 use crate::{
     core::{
@@ -101,17 +101,7 @@ impl Default for InjSettings {
 /// Inj processor to inject transactions
 ///
 /// ```
-/// use prosa::{
-///     core::{
-///         main::{MainProc, MainRunnable},
-///         proc::{proc, Proc, ProcBusParam, ProcConfig},
-///         settings::{settings, observability::Observability},
-///     },
-///     inj::{
-///         adaptor::InjDummyAdaptor,
-///         proc::{InjProc, InjSettings},
-///     },
-/// };
+/// use prosa::{core::{main::*, proc::*, settings::*}, inj::{adaptor::*, proc::*}};
 /// use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
 /// use serde::Serialize;
 ///

@@ -10,7 +10,7 @@ use crate::{
     maybe_async,
 };
 extern crate self as prosa;
-use opentelemetry::metrics::Meter;
+use crate::otel::metrics::Meter;
 
 /// Adaptator trait for the stub processor
 ///

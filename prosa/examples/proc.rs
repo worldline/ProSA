@@ -10,7 +10,7 @@ use prosa::core::settings::tracing::TelemetryFilter;
 use prosa::event::pending::PendingMsgs;
 use prosa::stub::adaptor::StubParotAdaptor;
 use prosa::stub::proc::{StubProc, StubSettings};
-use prosa::{debug, info, warn};
+use prosa::tracing::{debug, info, warn};
 use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

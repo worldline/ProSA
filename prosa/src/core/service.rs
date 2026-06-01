@@ -4,7 +4,7 @@ use super::{
     msg::InternalMsg,
     proc::{ProcBusParam, ProcParam},
 };
-use opentelemetry::{KeyValue, metrics::AsyncInstrument};
+use crate::otel::{KeyValue, metrics::AsyncInstrument};
 use prosa_utils::msg::tvf::{Tvf, TvfError};
 use std::{
     collections::{HashMap, HashSet},
