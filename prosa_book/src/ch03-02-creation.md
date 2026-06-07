@@ -57,8 +57,9 @@ where
                     InternalMsg::Error(err) => {
                         // TODO: process the error
                     }
-                    InternalMsg::Command(_) => todo!(),
-                    InternalMsg::Config => todo!(),
+                    InternalMsg::Config(config) => {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
                         adaptor.terminate();
@@ -71,6 +72,8 @@ where
     }
 }
 ```
+
+When receiving `InternalMsg::Config(config)`, call `config.get_proc(self.proc.as_ref())?` to deserialize the section matching the processor configuration key (the processor name with `-` replaced by `_`) into the processor settings type. The main task only sends this message to processors whose own configuration section changed.
 
 The generic parameter `A` represents the adaptor type your processor uses.
 Specify in the _where_ clause which traits your adaptor must implement (commonly, [`Adaptor`](https://docs.rs/prosa/latest/prosa/core/adaptor/trait.Adaptor.html) plus `Send` and `Sync`)

@@ -197,8 +197,11 @@ impl InjProc {
                 // Build the next transaction
                 let _ = next_transaction.get_or_insert(adaptor.build_transaction());
             }
-            InternalMsg::Command(_) => todo!(),
-            InternalMsg::Config => todo!(),
+            InternalMsg::Config(config) => {
+                let settings = config.get_proc::<InjSettings>(self.proc.as_ref())?;
+                *regulator = settings.get_regulator();
+                self.settings = settings;
+            }
             InternalMsg::Service(table) => self.service = table,
             InternalMsg::Shutdown => {
                 adaptor.terminate();

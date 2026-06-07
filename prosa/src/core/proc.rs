@@ -115,8 +115,9 @@
 //!                     InternalMsg::Error(err) => {
 //!                        // TODO process the error
 //!                     },
-//!                     InternalMsg::Command(_) => todo!(),
-//!                     InternalMsg::Config => todo!(),
+//!                     InternalMsg::Config(config) => {
+//!                         self.settings = config.get_proc(&self.proc)?;
+//!                     },
 //!                     InternalMsg::Service(table) => self.service = table,
 //!                     InternalMsg::Shutdown => {
 //!                         adaptor.terminate();
@@ -217,6 +218,11 @@ pub trait ProcBusParam {
 
     /// Provide the processor name
     fn name(&self) -> &str;
+
+    /// Provide the processor configuration key
+    fn get_proc_config_key(&self) -> String {
+        self.name().replace('-', "_")
+    }
 }
 
 impl Debug for dyn ProcBusParam {

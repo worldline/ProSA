@@ -523,6 +523,11 @@ impl Observability {
         }
     }
 
+    /// Getter of the global telemetry level
+    pub fn get_level(&self) -> TelemetryLevel {
+        self.level
+    }
+
     /// Meter provider builder
     #[cfg(feature = "config-observability-prometheus")]
     pub fn build_meter_provider(&self, registry: &prometheus::Registry) -> SdkMeterProvider {
@@ -607,8 +612,8 @@ impl Observability {
 
     /// Method to init `tracing`
     pub fn tracing_init(&self, filter: &TelemetryFilter) -> Result<(), TryInitError> {
-        let global_level: filter::LevelFilter = self.level.into();
-        let subscriber = tracing_subscriber::registry().with(global_level);
+        filter.set_level(self.level.into());
+        let subscriber = tracing_subscriber::registry().with(filter::LevelFilter::TRACE);
 
         if let Some(traces) = &self.traces {
             if let Some(otlp) = &traces.otlp {

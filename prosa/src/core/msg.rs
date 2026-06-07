@@ -7,6 +7,7 @@ use super::{
     error::{BusError, ProcError},
     queue::{InternalMsgQueue, SendError},
     service::{ProcService, ServiceError, ServiceTable},
+    settings::ProsaConfig,
 };
 use tracing::{Level, Span, event, info_span, span};
 
@@ -33,8 +34,8 @@ where
     DeleteProcService(Vec<String>, u32),
     /// Message to unregister service(s) for a processor queue. Message that contain service(s) name(s), the processor id, and the queue id
     DeleteService(Vec<String>, u32, u32),
-    /// Command to ask an action or a status to the main processor
-    Command(String),
+    /// Message to notify processors that the configuration changed
+    Config(Arc<ProsaConfig>),
     /// Internal call for shutdown (with a reason)
     Shutdown(String),
 }
@@ -51,10 +52,8 @@ where
     Response(ResponseMsg<M>),
     /// Response of a data request message by an error
     Error(ErrorMsg<M>),
-    /// Command to ask an actiion or a status to the processor
-    Command(String),
     /// Message to ask the processor to reload its configuration
-    Config,
+    Config(Arc<ProsaConfig>),
     /// Message to ask the processor to reload its service table
     Service(Arc<ServiceTable<M>>),
     /// Message to ask the processor to shutdown

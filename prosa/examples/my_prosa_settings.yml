@@ -1,10 +1,22 @@
 name: my-prosa
 
 observability:
-  level: DEBUG
+  level: INFO
   metrics:
     prometheus:
       endpoint: 0.0.0.0:9100
   traces:
     stdout:
       level: debug
+
+stub_proc:
+  service_names:
+    - STUB_TEST
+
+proc_1:
+  service_name: PROC_TEST
+  tick_secs: 4
+
+proc_2:
+  service_name: PROC_TEST_2
+  tick_secs: 4

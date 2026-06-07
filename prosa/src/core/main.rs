@@ -14,7 +14,7 @@ use super::{
     msg::{InternalMainMsg, InternalMsg, Tvf},
     proc::ProcBusParam,
     service::{ProcService, ServiceTable},
-    settings::Settings,
+    settings::{ProsaConfig, Settings},
 };
 use crate::otel::metrics::{Meter, MeterProvider as _};
 use crate::otel::trace::TracerProvider as _;
@@ -228,6 +228,17 @@ where
             .await?)
     }
 
+    /// Method to notify processors that the configuration changed
+    pub async fn update_config(
+        &self,
+        config: Arc<ProsaConfig>,
+    ) -> Result<(), SendError<InternalMainMsg<M>>> {
+        Ok(self
+            .internal_tx_queue
+            .send(InternalMainMsg::Config(config))
+            .await?)
+    }
+
     /// Provide the ProSA name based on ProSA settings
     pub fn name(&self) -> &String {
         &self.name
@@ -256,6 +267,7 @@ where
     name: String,
     processors: HashMap<u32, HashMap<u32, ProcService<M>>>,
     services: Arc<ServiceTable<M>>,
+    config: Option<Arc<ProsaConfig>>,
     internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
     meter: Meter,
     stop: Arc<AtomicBool>,
@@ -329,6 +341,58 @@ where
         Ok(())
     }
 
+    /// Method to notify processors whose configuration has changed
+    async fn notify_config_proc_queue(&mut self, config: Arc<ProsaConfig>) -> Result<(), BusError> {
+        let current = self.config.as_deref();
+        for proc in self.processors.values() {
+            for proc_service in proc.values() {
+                if current.is_some_and(|current_config| {
+                    !current_config.has_proc_changed(&config, &proc_service.get_proc_config_key())
+                }) {
+                    continue;
+                }
+
+                if let Err(e) = proc_service
+                    .proc_queue
+                    .send(InternalMsg::Config(config.clone()))
+                    .await
+                {
+                    return Err(BusError::ProcComm(
+                        proc_service.get_proc_id(),
+                        proc_service.get_queue_id(),
+                        e.to_string(),
+                    ));
+                }
+            }
+        }
+
+        self.config = Some(config);
+
+        Ok(())
+    }
+
+    /// Method to notify one processor queue with the current configuration
+    async fn notify_config_proc_service(
+        &self,
+        proc_service: &ProcService<M>,
+    ) -> Result<(), BusError> {
+        if let Some(config) = &self.config {
+            proc_service
+                .proc_queue
+                .send(InternalMsg::Config(config.clone()))
+                .await
+                .map_err(|e| {
+                    BusError::ProcComm(
+                        proc_service.get_proc_id(),
+                        proc_service.get_queue_id(),
+                        e.to_string(),
+                    )
+                })?;
+        }
+
+        Ok(())
+    }
+
     /// Method to notify all processor that the service table have changed
     async fn notify_srv_proc(&mut self) -> bool {
         if let Err(BusError::ProcComm(proc_id, queue_id, _)) = self.notify_srv_proc_queue().await {
@@ -392,6 +456,7 @@ where
                     name,
                     processors,
                     services: Arc::new(ServiceTable::default()),
+                    config: None,
                     internal_rx_queue,
                     meter,
                     stop,
@@ -520,6 +585,7 @@ where
                             let proc_id = proc.get_proc_id();
                             let queue_id = proc.get_queue_id();
                             let proc_queue = proc.proc_queue.clone();
+                            let proc_config = proc.clone();
                             if let Some(proc_service) = self.processors.get_mut(&proc_id) {
                                 proc_service.insert(queue_id, proc);
                             } else {
@@ -531,6 +597,14 @@ where
 
                             // Ask to the processor to load the service table
                             if proc_queue.send(InternalMsg::Service(self.services.clone())).await.is_err() {
+                                if let Some(proc_service) = self.processors.get_mut(&proc_id) {
+                                    let _ = proc_service.remove(&queue_id);
+                                } else {
+                                    let _ = self.processors.remove(&proc_id);
+                                }
+                            }
+
+                            if self.notify_config_proc_service(&proc_config).await.is_err() {
                                 if let Some(proc_service) = self.processors.get_mut(&proc_id) {
                                     let _ = proc_service.remove(&queue_id);
                                 } else {
@@ -608,8 +682,15 @@ where
                             let _ = service_update.send(self.services.clone());
                             prosa_main_update_srv!();
                         },
-                        InternalMainMsg::Command(cmd)=> {
-                            info!("Wan't to execute the command {}", cmd);
+                        InternalMainMsg::Config(config) => {
+                            info!("Reload ProSA configuration");
+                            if let Err(BusError::ProcComm(proc_id, queue_id, _)) = self.notify_config_proc_queue(config).await {
+                                if queue_id > 0 {
+                                    self.remove_proc_queue(proc_id, queue_id).await;
+                                } else {
+                                    self.remove_proc(proc_id).await;
+                                }
+                            }
                         },
                         InternalMainMsg::Shutdown(reason) => {
                             warn!("ProSA need to stop: {}", reason);

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use crate::tracing::debug;
 use prosa_macros::proc_settings;
@@ -117,8 +117,31 @@ where
                         self.get_proc_id(),
                         err
                     ),
-                    InternalMsg::Command(_) => todo!(),
-                    InternalMsg::Config => todo!(),
+                    InternalMsg::Config(config) => {
+                        let settings = config.get_proc::<StubSettings>(self.proc.as_ref())?;
+
+                        let current_services =
+                            self.settings.service_names.iter().collect::<HashSet<_>>();
+                        let new_services = settings.service_names.iter().collect::<HashSet<_>>();
+
+                        let services_to_remove = current_services
+                            .difference(&new_services)
+                            .map(|service| (*service).clone())
+                            .collect::<Vec<_>>();
+                        if !services_to_remove.is_empty() {
+                            self.proc.remove_service_proc(services_to_remove).await?;
+                        }
+
+                        let services_to_add = new_services
+                            .difference(&current_services)
+                            .map(|service| (*service).clone())
+                            .collect::<Vec<_>>();
+                        if !services_to_add.is_empty() {
+                            self.proc.add_service_proc(services_to_add).await?;
+                        }
+
+                        self.settings = settings;
+                    }
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
                         adaptor.terminate();
