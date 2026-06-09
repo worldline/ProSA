@@ -1,0 +1,20 @@
+graph LR
+    table>Service table]
+    main_queue[(Main queue)]
+    main_task[Main task]
+    proc_queue[(Processor queue)]
+    proc_task[Processor task]
+    proc_io[Processor IOs]
+
+    table <--> main_task
+    table --> proc_task
+    proc_task --> main_queue
+
+    subgraph main[ProSA Main processor]
+    main_queue --> main_task
+    end
+
+    subgraph proc[ProSA Processor]
+    proc_queue --> proc_task
+    proc_task <--> proc_io
+    end

@@ -1,0 +1,7 @@
+graph LR
+    client[Client]
+    server[Server]
+    proxy[Proxy]
+
+    client -- TCP+TLS --> proxy
+    proxy --> server

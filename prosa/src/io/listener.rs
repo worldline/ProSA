@@ -86,16 +86,9 @@ impl StreamListener {
         }
     }
 
-    #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Accept TCP connections from clients
     ///
-    /// ```mermaid
-    /// graph LR
-    ///     clients[Clients]
-    ///     server[Server]
-    ///
-    ///     clients -- TCP --> server
-    /// ```
+    #[doc = simple_mermaid::mermaid!("diagrams/listener_tcp.mmd")]
     ///
     /// ```
     /// use tokio::io;
@@ -118,17 +111,10 @@ impl StreamListener {
     }
 
     #[cfg(feature = "openssl")]
-    #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Set an OpenSSL acceptor to accept SSL connections from clients
     /// By default, the SSL connect timeout is 3 seconds
     ///
-    /// ```mermaid
-    /// graph LR
-    ///     clients[Clients]
-    ///     server[Server]
-    ///
-    ///     clients -- TLS --> server
-    /// ```
+    #[doc = simple_mermaid::mermaid!("diagrams/listener_tls.mmd")]
     ///
     /// ```
     /// use tokio::io;

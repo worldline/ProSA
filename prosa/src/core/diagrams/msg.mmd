@@ -1,0 +1,7 @@
+sequenceDiagram
+    Client->>Service: RequestMsg
+    alt is ok
+        Service->>Client: ResponseMsg
+    else is error
+        Service->>Client: ErrorMsg
+    end
