@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
+use crate::tracing::debug;
 use prosa_macros::proc_settings;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
 use crate::core::adaptor::{Adaptor, MaybeAsync};
 use crate::core::error::{BusError, ProcError};
@@ -39,13 +39,8 @@ impl StubSettings {
 /// Stub processor to respond to a request
 ///
 /// ```
-/// use prosa::core::main::{MainProc, MainRunnable};
-/// use prosa::core::proc::{proc, Proc, ProcBusParam, ProcConfig};
-/// use prosa::stub::adaptor::StubParotAdaptor;
-/// use prosa::stub::proc::{StubProc, StubSettings};
-/// use prosa_utils::config::observability::Observability;
+/// use prosa::{core::{main::*, proc::*, settings::*}, stub::{adaptor::*, proc::*}};
 /// use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
-/// use prosa::core::settings::settings;
 /// use serde::Serialize;
 ///
 /// // Main settings

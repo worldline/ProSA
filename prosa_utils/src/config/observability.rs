@@ -1,9 +1,7 @@
 //! Definition of Opentelemetry configuration
 
 use opentelemetry::{KeyValue, trace::TracerProvider as _};
-use opentelemetry_otlp::{
-    ExportConfig, ExporterBuildError, Protocol, WithExportConfig, WithHttpConfig,
-};
+use opentelemetry_otlp::{ExporterBuildError, Protocol, WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::{
     logs::SdkLoggerProvider,
     metrics::SdkMeterProvider,
@@ -29,6 +27,23 @@ pub(crate) struct OTLPExporterCfg {
 }
 
 impl OTLPExporterCfg {
+    /// Get the sanitized endpoint string (without credentials)
+    pub(crate) fn get_endpoint(&self) -> String {
+        let mut endpoint = self.endpoint.clone();
+        if !endpoint.username().is_empty() {
+            let _ = endpoint.set_username("");
+        }
+        if endpoint.password().is_some() {
+            let _ = endpoint.set_password(None);
+        }
+        endpoint.to_string()
+    }
+
+    /// Get the timeout duration if configured
+    pub(crate) fn get_timeout(&self) -> Option<Duration> {
+        self.timeout_sec.map(Duration::from_secs)
+    }
+
     pub(crate) fn get_protocol(&self) -> Protocol {
         match self.endpoint.scheme().to_lowercase().as_str() {
             "grpc" => Protocol::Grpc,
@@ -60,25 +75,6 @@ impl OTLPExporterCfg {
                 opentelemetry::Value::I64(std::process::id() as i64),
             ))
             .build()
-    }
-}
-
-impl From<OTLPExporterCfg> for ExportConfig {
-    fn from(value: OTLPExporterCfg) -> Self {
-        let protocol = value.get_protocol();
-        let mut endpoint = value.endpoint;
-        if !endpoint.username().is_empty() {
-            let _ = endpoint.set_username("");
-        }
-        if endpoint.password().is_some() {
-            let _ = endpoint.set_password(None);
-        }
-
-        ExportConfig {
-            endpoint: Some(endpoint.to_string()),
-            timeout: value.timeout_sec.map(Duration::from_secs),
-            protocol,
-        }
     }
 }
 
@@ -215,16 +211,24 @@ impl TelemetryMetrics {
         let mut meter_provider = SdkMeterProvider::builder();
         if let Some(s) = &self.otlp {
             let exporter = if s.get_protocol() == Protocol::Grpc {
-                opentelemetry_otlp::MetricExporter::builder()
+                let mut builder = opentelemetry_otlp::MetricExporter::builder()
                     .with_tonic()
-                    .with_export_config(s.clone().into())
-                    .build()
+                    .with_endpoint(s.get_endpoint())
+                    .with_protocol(s.get_protocol());
+                if let Some(timeout) = s.get_timeout() {
+                    builder = builder.with_timeout(timeout);
+                }
+                builder.build()
             } else {
-                opentelemetry_otlp::MetricExporter::builder()
+                let mut builder = opentelemetry_otlp::MetricExporter::builder()
                     .with_http()
                     .with_headers(s.get_header())
-                    .with_export_config(s.clone().into())
-                    .build()
+                    .with_endpoint(s.get_endpoint())
+                    .with_protocol(s.get_protocol());
+                if let Some(timeout) = s.get_timeout() {
+                    builder = builder.with_timeout(timeout);
+                }
+                builder.build()
             }?;
             meter_provider = meter_provider.with_periodic_exporter(exporter);
         }
@@ -290,16 +294,24 @@ impl TelemetryData {
         let logs_provider = SdkLoggerProvider::builder();
         if let Some(s) = &self.otlp {
             let exporter = if s.get_protocol() == Protocol::Grpc {
-                opentelemetry_otlp::LogExporter::builder()
+                let mut builder = opentelemetry_otlp::LogExporter::builder()
                     .with_tonic()
-                    .with_export_config(s.clone().into())
-                    .build()
+                    .with_endpoint(s.get_endpoint())
+                    .with_protocol(s.get_protocol());
+                if let Some(timeout) = s.get_timeout() {
+                    builder = builder.with_timeout(timeout);
+                }
+                builder.build()
             } else {
-                opentelemetry_otlp::LogExporter::builder()
+                let mut builder = opentelemetry_otlp::LogExporter::builder()
                     .with_http()
                     .with_headers(s.get_header())
-                    .with_export_config(s.clone().into())
-                    .build()
+                    .with_endpoint(s.get_endpoint())
+                    .with_protocol(s.get_protocol());
+                if let Some(timeout) = s.get_timeout() {
+                    builder = builder.with_timeout(timeout);
+                }
+                builder.build()
             }?;
             Ok((
                 logs_provider
@@ -328,16 +340,24 @@ impl TelemetryData {
         let mut trace_provider = SdkTracerProvider::builder();
         if let Some(s) = &self.otlp {
             let exporter = if s.get_protocol() == Protocol::Grpc {
-                opentelemetry_otlp::SpanExporter::builder()
+                let mut builder = opentelemetry_otlp::SpanExporter::builder()
                     .with_tonic()
-                    .with_export_config(s.clone().into())
-                    .build()
+                    .with_endpoint(s.get_endpoint())
+                    .with_protocol(s.get_protocol());
+                if let Some(timeout) = s.get_timeout() {
+                    builder = builder.with_timeout(timeout);
+                }
+                builder.build()
             } else {
-                opentelemetry_otlp::SpanExporter::builder()
+                let mut builder = opentelemetry_otlp::SpanExporter::builder()
                     .with_http()
                     .with_headers(s.get_header())
-                    .with_export_config(s.clone().into())
-                    .build()
+                    .with_endpoint(s.get_endpoint())
+                    .with_protocol(s.get_protocol());
+                if let Some(timeout) = s.get_timeout() {
+                    builder = builder.with_timeout(timeout);
+                }
+                builder.build()
             }?;
 
             trace_provider = trace_provider

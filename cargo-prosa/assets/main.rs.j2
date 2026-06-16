@@ -4,11 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use tokio::runtime;
 
-use prosa_utils::config::tracing::TelemetryFilter;
 use prosa::core::{
     main::MainRunnable,
     proc::ProcConfig,
-    settings::Settings
+    settings::{Settings, tracing::TelemetryFilter},
 };
 {% endraw %}
 // Include settings

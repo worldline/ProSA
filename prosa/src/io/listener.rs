@@ -118,8 +118,11 @@ impl StreamListener {
     ///
     /// ```
     /// use tokio::io;
-    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
-    /// use prosa::io::listener::StreamListener;
+    /// use prosa::io::{
+    ///     listener::StreamListener,
+    ///     SslConfig,
+    ///     SslConfigContext,
+    /// };
     ///
     /// async fn accepting() -> Result<(), io::Error> {
     ///     let ssl_acceptor = SslConfig::default().init_tls_server_context(None).unwrap().build();
@@ -159,8 +162,11 @@ impl StreamListener {
     ///
     /// ```
     /// use tokio::io;
-    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
-    /// use prosa::io::listener::StreamListener;
+    /// use prosa::io::{
+    ///     listener::StreamListener,
+    ///     SslConfig,
+    ///     SslConfigContext,
+    /// };
     ///
     /// # #[cfg(feature="openssl")]
     /// async fn accepting() -> Result<(), io::Error> {
@@ -216,8 +222,11 @@ impl StreamListener {
     ///
     /// ```
     /// use tokio::io;
-    /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
-    /// use prosa::io::listener::StreamListener;
+    /// use prosa::io::{
+    ///     listener::StreamListener,
+    ///     SslConfig,
+    ///     SslConfigContext,
+    /// };
     ///
     /// # #[cfg(feature="openssl")]
     /// async fn accepting() -> Result<(), io::Error> {

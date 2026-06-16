@@ -18,6 +18,10 @@ pub mod io;
 pub mod inj;
 pub mod stub;
 
+// Expose crate to avoid adding them into Cargo.toml
+pub use opentelemetry as otel;
+pub use tracing;
+
 #[cfg(test)]
 mod tests {
     use std::{

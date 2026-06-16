@@ -16,9 +16,10 @@ use super::{
     service::{ProcService, ServiceTable},
     settings::Settings,
 };
-use opentelemetry::metrics::{Meter, MeterProvider as _};
-use opentelemetry::trace::TracerProvider as _;
-use opentelemetry::{InstrumentationScope, KeyValue};
+use crate::otel::metrics::{Meter, MeterProvider as _};
+use crate::otel::trace::TracerProvider as _;
+use crate::otel::{InstrumentationScope, KeyValue};
+use crate::tracing::{debug, info, warn};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -26,7 +27,6 @@ use std::sync::{
 use std::{borrow::Cow, collections::HashSet};
 use std::{collections::HashMap, fmt::Debug};
 use tokio::{signal, sync::mpsc};
-use tracing::{debug, info, warn};
 
 /// Trait to define a ProSA main processor that is runnable
 pub trait MainRunnable<M>

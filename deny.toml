@@ -11,6 +11,7 @@ allow = [
     "MIT",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    "CDLA-Permissive-2.0",
     "ISC",
     "Zlib",
     "Unicode-3.0",
