@@ -169,7 +169,7 @@ impl SslStore<X509, X509Store> for Store {
                                 .subject_name()
                                 .entries_by_nid(Nid::COMMONNAME)
                                 .last()
-                                .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
+                                .and_then(|cn| cn.data().to_string().ok())
                             {
                                 certs_map.insert(name, cert);
                             } else if let Some(cert_name) = cert_path.to_str().and_then(|p| {
@@ -194,7 +194,7 @@ impl SslStore<X509, X509Store> for Store {
                         .subject_name()
                         .entries_by_nid(Nid::COMMONNAME)
                         .last()
-                        .and_then(|cn| cn.data().as_utf8().map(|cn| cn.to_string()).ok())
+                        .and_then(|cn| cn.data().to_string().ok())
                     {
                         certs_map.insert(name, cert);
                     }

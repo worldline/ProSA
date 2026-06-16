@@ -224,7 +224,7 @@ mod tests {
     use listener::StreamListener;
 
     #[cfg(feature = "openssl")]
-    use prosa_utils::config::ssl::{SslConfig, SslConfigContext as _, Store};
+    use prosa_utils::config::ssl::{SslConfig, Store};
 
     use std::{io, os::fd::AsRawFd as _};
     use stream::Stream;
