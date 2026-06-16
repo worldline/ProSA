@@ -61,18 +61,9 @@ where
     Shutdown,
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Trait that define a ProSA Msg use to send transactions
 ///
-/// ```mermaid
-/// sequenceDiagram
-///     Client->>Service: RequestMsg
-///     alt is ok
-///         Service->>Client: ResponseMsg
-///     else is error
-///         Service->>Client: ErrorMsg
-///     end
-/// ```
+#[doc = simple_mermaid::mermaid!("diagrams/msg.mmd")]
 pub trait Msg<M>
 where
     M: Sized + Clone + Tvf,

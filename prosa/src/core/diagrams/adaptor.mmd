@@ -1,0 +1,8 @@
+graph LR
+    task[Task]
+    adaptor[Adaptor]
+    bus([Internal service bus])
+    adaptor <--> bus
+    subgraph proc[ProSA Processor]
+    task <--> adaptor
+    end

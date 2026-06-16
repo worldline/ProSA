@@ -41,34 +41,12 @@ where
     fn run(self) -> impl std::future::Future<Output = ()> + Send;
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Main ProSA task to handle every task spawn in the ProSA
 /// Use an internal ProSA service bus
 /// Must be run only one time in the ProSA
 ///
 /// This is the core strucutre of ProSA.
-/// ```mermaid
-/// graph LR
-///     table>Service table]
-///     main_queue[(Main queue)]
-///     main_task[Main task]
-///     proc_queue[(Processor queue)]
-///     proc_task[Processor task]
-///     proc_io[Processor IOs]
-///
-///     table <--> main_task
-///     table --> proc_task
-///     proc_task --> main_queue
-///
-///     subgraph main[ProSA Main processor]
-///     main_queue --> main_task
-///     end
-///
-///     subgraph proc[ProSA Processor]
-///     proc_queue --> proc_task
-///     proc_task <--> proc_io
-///     end
-/// ```
+#[doc = simple_mermaid::mermaid!("diagrams/main_bus.mmd")]
 #[derive(Clone, Debug)]
 pub struct Main<M>
 where

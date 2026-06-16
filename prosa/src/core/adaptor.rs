@@ -19,20 +19,10 @@ use std::{fmt, pin::Pin};
 /// Implement the trait [`Adaptor`].
 pub use prosa_macros::Adaptor;
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Generic ProSA Adaptor.
 /// Define generic function call that are use by every processor.
 ///
-/// ```mermaid
-/// graph LR
-///     task[Task]
-///     adaptor[Adaptor]
-///     bus([Internal service bus])
-///     adaptor <--> bus
-///     subgraph proc[ProSA Processor]
-///     task <--> adaptor
-///     end
-/// ```
+#[doc = simple_mermaid::mermaid!("diagrams/adaptor.mmd")]
 ///
 /// To implement the adaptor without init or terminate function you derive it by default:
 /// ```

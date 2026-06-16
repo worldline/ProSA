@@ -107,16 +107,9 @@ impl Stream {
     }
 
     #[cfg(target_family = "unix")]
-    #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Connect a UNIX socket on a path
     ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///
-    ///     client -- UNIX --> server
-    /// ```
+    #[doc = simple_mermaid::mermaid!("diagrams/stream_unix.mmd")]
     ///
     /// ```
     /// use tokio::io;
@@ -138,16 +131,9 @@ impl Stream {
         Ok(Stream::Unix(tokio::net::UnixStream::connect(path).await?))
     }
 
-    #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Connect a TCP socket to a distant
     ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///
-    ///     client -- TCP --> server
-    /// ```
+    #[doc = simple_mermaid::mermaid!("diagrams/stream_tcp.mmd")]
     ///
     /// ```
     /// use tokio::io;
@@ -194,16 +180,9 @@ impl Stream {
     }
 
     #[cfg(feature = "openssl")]
-    #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Connect an OpenSSL socket to a distant
     ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///
-    ///     client -- TCP+TLS --> server
-    /// ```
+    #[doc = simple_mermaid::mermaid!("diagrams/stream_openssl.mmd")]
     ///
     /// ```
     /// use tokio::io;
@@ -278,18 +257,9 @@ impl Stream {
     }
 
     #[cfg(feature = "http-proxy")]
-    #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Connect a TCP socket to a distant through an HTTP proxy
     ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///     proxy[Proxy]
-    ///
-    ///     client -- TCP --> proxy
-    ///     proxy --> server
-    /// ```
+    #[doc = simple_mermaid::mermaid!("diagrams/stream_tcp_proxy.mmd")]
     ///
     /// ```
     /// use tokio::io;
@@ -316,18 +286,9 @@ impl Stream {
     }
 
     #[cfg(all(feature = "openssl", feature = "http-proxy"))]
-    #[cfg_attr(doc, aquamarine::aquamarine)]
     /// Connect an OpenSSL socket to a distant through an HTTP proxy
     ///
-    /// ```mermaid
-    /// graph LR
-    ///     client[Client]
-    ///     server[Server]
-    ///     proxy[Proxy]
-    ///
-    ///     client -- TCP+TLS --> proxy
-    ///     proxy --> server
-    /// ```
+    #[doc = simple_mermaid::mermaid!("diagrams/stream_openssl_proxy.mmd")]
     ///
     /// ```
     /// use tokio::io;

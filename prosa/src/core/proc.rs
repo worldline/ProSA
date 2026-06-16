@@ -537,24 +537,10 @@ macro_rules! proc_run {
     };
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// Generic trait to define ProSA processor
 ///
 /// It regroup several composant:
-/// ```mermaid
-/// graph LR
-///     bus([Internal service bus])
-///     queue[(Processor queue)]
-///     adaptor[Adaptor]
-///     task[Task]
-///     ext(External system)
-///     bus <--> adaptor
-///     task <--> ext
-///     subgraph proc[ProSA Processor]
-///     queue <--> task
-///     adaptor <--> task
-///     end
-/// ```
+#[doc = simple_mermaid::mermaid!("diagrams/proc.mmd")]
 pub trait Proc<A>: ProcBusParam + ProcEpilogue
 where
     A: Adaptor,
