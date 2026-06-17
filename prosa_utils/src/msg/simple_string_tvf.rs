@@ -1,7 +1,8 @@
 //! Implementation of a simple String TVF
 
 use crate::msg::{
-    Bytes, NaiveDate, NaiveDateTime,
+    bytes::Bytes,
+    chrono::{NaiveDate, NaiveDateTime},
     tvf::{Tvf, TvfError},
 };
 use std::{borrow::Cow, collections::hash_map::HashMap};
