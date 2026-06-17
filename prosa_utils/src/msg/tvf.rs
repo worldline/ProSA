@@ -7,8 +7,7 @@
 //!
 //! [^tvfnote]: **T**ag **V**alue **F**ormat
 
-use bytes::Bytes;
-use chrono::{NaiveDate, NaiveDateTime};
+use crate::msg::{Bytes, NaiveDate, NaiveDateTime};
 use std::borrow::Cow;
 use std::fmt::Debug;
 use thiserror::Error;

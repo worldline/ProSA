@@ -1,9 +1,9 @@
 //! Implementation of a simple String TVF
 
-use bytes::Bytes;
-use chrono::{NaiveDate, NaiveDateTime};
-
-use crate::msg::tvf::{Tvf, TvfError};
+use crate::msg::{
+    Bytes, NaiveDate, NaiveDateTime,
+    tvf::{Tvf, TvfError},
+};
 use std::{borrow::Cow, collections::hash_map::HashMap};
 
 /// Struct that define a simple string TVF
