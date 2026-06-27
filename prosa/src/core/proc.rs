@@ -95,7 +95,7 @@
 //! {
 //!     async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
 //!         // Initiate an adaptor
-//!         let mut adaptor = A::new(self)?;
+//!         let adaptor = A::new(self)?;
 //!
 //!         // Declare the processor
 //!         self.proc.add_proc().await?;
@@ -116,7 +116,8 @@
 //!                        // TODO process the error
 //!                     },
 //!                     InternalMsg::Config(config) => {
-//!                         self.settings = config.get_proc(&self.proc)?;
+//!                         self.settings = config.get_proc(self.proc.as_ref())?;
+//!                         adaptor.reload_config(config.get_adaptor_config(self.proc.as_ref()))?;
 //!                     },
 //!                     InternalMsg::Service(table) => self.service = table,
 //!                     InternalMsg::Shutdown => {
@@ -138,13 +139,9 @@ use super::{
     msg::{InternalMsg, Tvf},
     service::ProcService,
 };
-use config::{Config, ConfigError, File};
-use glob::glob;
+use config::ConfigError;
 use log::{error, info, warn};
-use std::borrow::Cow;
-use std::fmt::Debug;
-use std::io;
-use std::time::Duration;
+use std::{borrow::Cow, fmt::Debug, io, time::Duration};
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 use tokio::{runtime, spawn};
@@ -190,19 +187,8 @@ pub trait ProcSettings {
         C: serde::de::Deserialize<'static>,
     {
         if let Some(config_path) = &self.get_adaptor_config_path() {
-            Config::builder()
-                .add_source(
-                    glob(config_path)
-                        .map_err(|e| {
-                            ConfigError::Message(format!(
-                                "Wrong adaptor config path pattern `{config_path}`: `{e}`"
-                            ))
-                        })?
-                        .filter_map(|path| path.ok().map(File::from))
-                        .collect::<Vec<_>>(),
-                )
-                .build()?
-                .try_deserialize()
+            let (config, _) = crate::core::settings::ProsaConfig::load_adaptor_config(config_path)?;
+            config.try_deserialize()
         } else {
             Err(ConfigError::NotFound(
                 "No configuration set for processor's adaptor".to_string(),
@@ -480,7 +466,7 @@ where
 macro_rules! proc_run {
     ( $self:ident ) => {
         info!(
-            "Run processor[{}] {} on {} threads",
+            "Running processor[{}] {} on {} threads",
             $self.get_proc_id(),
             $self.name(),
             $self.get_proc_threads()
@@ -502,7 +488,7 @@ macro_rules! proc_run {
                 // Log and restart if needed
                 if proc_err.recoverable() {
                     warn!(
-                        "Processor[{}] {} encounter an error `{}`. Will restart after {}ms",
+                        "Processor[{}] {} encountered an error `{}`. Restarting after {}ms",
                         $self.get_proc_id(),
                         $self.name(),
                         proc_err,
@@ -515,7 +501,7 @@ macro_rules! proc_run {
                     }
                 } else {
                     error!(
-                        "Processor[{}] {} encounter a fatal error `{}`",
+                        "Processor[{}] {} encountered a fatal error `{}`",
                         $self.get_proc_id(),
                         $self.name(),
                         proc_err

@@ -55,8 +55,38 @@ pub use prosa_macros::Adaptor;
 /// }
 /// ```
 pub trait Adaptor {
+    /// Method call when the adaptor configuration is loaded or reloaded.
+    ///
+    /// Adaptors that need a dedicated configuration file can deserialize this
+    /// config and update their internal state. The default implementation keeps
+    /// existing adaptors compatible by ignoring the configuration.
+    ///
+    /// Processor implementations should call this from their loop when they
+    /// receive [`InternalMsg::Config`](crate::core::msg::InternalMsg::Config):
+    ///
+    /// ```rust,ignore
+    /// InternalMsg::Config(config) => {
+    ///     self.settings = config.get_proc(self.proc.as_ref())?;
+    ///     adaptor.reload_config(config.get_adaptor_config(self.proc.as_ref()))?;
+    /// }
+    /// ```
+    fn reload_config(&self, _config: Option<&config::Config>) -> Result<(), config::ConfigError> {
+        Ok(())
+    }
+
     /// Method call when the ProSA need to shut down.
     /// This method is call only once so the processing will be thread safe.
+    ///
+    /// Processor implementations should call this from their loop when they
+    /// receive [`InternalMsg::Shutdown`](crate::core::msg::InternalMsg::Shutdown):
+    ///
+    /// ```rust,ignore
+    /// InternalMsg::Shutdown => {
+    ///     adaptor.terminate();
+    ///     self.proc.remove_proc(None).await?;
+    ///     return Ok(());
+    /// }
+    /// ```
     fn terminate(&self);
 }
 

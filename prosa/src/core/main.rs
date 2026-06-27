@@ -320,7 +320,8 @@ where
     }
 
     /// Method to notify all processor that the service table have changed
-    async fn notify_srv_proc_queue(&self) -> Result<(), BusError> {
+    async fn notify_srv_proc_queue(&self) -> Vec<BusError> {
+        let mut errors = Vec::new();
         for proc in self.processors.values() {
             for proc_service in proc.values() {
                 if let Err(e) = proc_service
@@ -328,8 +329,7 @@ where
                     .send(InternalMsg::Service(self.services.clone()))
                     .await
                 {
-                    // FIXME match the error. If it's a capacity error, don't drop the processor do something else
-                    return Err(BusError::ProcComm(
+                    errors.push(BusError::ProcComm(
                         proc_service.get_proc_id(),
                         proc_service.get_queue_id(),
                         e.to_string(),
@@ -338,26 +338,23 @@ where
             }
         }
 
-        Ok(())
+        errors
     }
 
     /// Method to notify processors whose configuration has changed
-    async fn notify_config_proc_queue(&mut self, config: Arc<ProsaConfig>) -> Result<(), BusError> {
+    async fn notify_config_proc_queue(&mut self, config: Arc<ProsaConfig>) -> Vec<BusError> {
         let current = self.config.as_deref();
+        let mut errors = Vec::new();
         for proc in self.processors.values() {
             for proc_service in proc.values() {
-                if current.is_some_and(|current_config| {
-                    !current_config.has_proc_changed(&config, &proc_service.get_proc_config_key())
-                }) {
-                    continue;
-                }
-
-                if let Err(e) = proc_service
+                if current.is_none_or(|current_config| {
+                    current_config.has_proc_changed(&config, &proc_service.get_proc_config_key())
+                }) && let Err(e) = proc_service
                     .proc_queue
                     .send(InternalMsg::Config(config.clone()))
                     .await
                 {
-                    return Err(BusError::ProcComm(
+                    errors.push(BusError::ProcComm(
                         proc_service.get_proc_id(),
                         proc_service.get_queue_id(),
                         e.to_string(),
@@ -368,7 +365,7 @@ where
 
         self.config = Some(config);
 
-        Ok(())
+        errors
     }
 
     /// Method to notify one processor queue with the current configuration
@@ -394,18 +391,17 @@ where
     }
 
     /// Method to notify all processor that the service table have changed
-    async fn notify_srv_proc(&mut self) -> bool {
-        if let Err(BusError::ProcComm(proc_id, queue_id, _)) = self.notify_srv_proc_queue().await {
+    async fn notify_srv_proc(&mut self) {
+        for error in self.notify_srv_proc_queue().await {
             // The processor doesn't exist anymore so remove it
-            if queue_id > 0 {
-                self.remove_proc_queue(proc_id, queue_id).await;
-            } else {
-                self.remove_proc(proc_id).await;
+            if let BusError::ProcComm(proc_id, queue_id, _) = error {
+                if queue_id > 0 {
+                    self.remove_proc_queue(proc_id, queue_id).await;
+                } else {
+                    warn!("Processor {proc_id} stopped during service table reload");
+                    self.remove_proc(proc_id).await;
+                }
             }
-
-            false
-        } else {
-            true
         }
     }
 
@@ -416,7 +412,10 @@ where
         for proc in self.processors.values() {
             for proc_service in proc.values() {
                 if let Err(e) = proc_service.proc_queue.send(InternalMsg::Shutdown).await {
-                    debug!("The {:?} seems already stopped: {}", proc_service, e);
+                    debug!(
+                        "Processor service {:?} seems to have already stopped: {}",
+                        proc_service, e
+                    );
                 } else {
                     is_stopped = false;
                 }
@@ -520,15 +519,6 @@ where
             .with_description("Processors declared to the main task")
             .build();
 
-        /// Macro to notify processors for a change about service list
-        macro_rules! prosa_main_update_srv {
-            ( ) => {
-                if !self.notify_srv_proc().await {
-                    self.notify_srv_proc().await;
-                }
-            };
-        }
-
         /// Macro to record a change to the processors
         macro_rules! prosa_main_record_proc {
             ( ) => {
@@ -600,6 +590,7 @@ where
                                 if let Some(proc_service) = self.processors.get_mut(&proc_id) {
                                     let _ = proc_service.remove(&queue_id);
                                 } else {
+                                    warn!("Processor {proc_id} stopped while loading the service table");
                                     let _ = self.processors.remove(&proc_id);
                                 }
                             }
@@ -608,6 +599,7 @@ where
                                 if let Some(proc_service) = self.processors.get_mut(&proc_id) {
                                     let _ = proc_service.remove(&queue_id);
                                 } else {
+                                    warn!("Processor {proc_id} stopped while loading configuration");
                                     let _ = self.processors.remove(&proc_id);
                                 }
                             }
@@ -616,7 +608,7 @@ where
                         },
                         InternalMainMsg::DeleteProc(proc_id, proc_err) => {
                             if self.remove_proc(proc_id).await.is_some() {
-                                prosa_main_update_srv!();
+                                self.notify_srv_proc().await;
                             }
 
                             if let Some(err) = proc_err {
@@ -635,7 +627,7 @@ where
                         },
                         InternalMainMsg::DeleteProcQueue(proc_id, queue_id) => {
                             if self.remove_proc_queue(proc_id, queue_id).await.is_some() {
-                                prosa_main_update_srv!();
+                                self.notify_srv_proc().await;
                             }
 
                             prosa_main_record_proc!();
@@ -650,7 +642,7 @@ where
                                 }
                                 self.services = Arc::new(new_services);
                                 let _ = service_update.send(self.services.clone());
-                                prosa_main_update_srv!();
+                                self.notify_srv_proc().await;
                             }
                         },
                         InternalMainMsg::NewService(names, proc_id, queue_id) => {
@@ -661,7 +653,7 @@ where
                                 }
                                 self.services = Arc::new(new_services);
                                 let _ = service_update.send(self.services.clone());
-                                prosa_main_update_srv!();
+                                self.notify_srv_proc().await;
                             }
                         },
                         InternalMainMsg::DeleteProcService(names, proc_id) => {
@@ -671,7 +663,7 @@ where
                             }
                             self.services = Arc::new(new_services);
                             let _ = service_update.send(self.services.clone());
-                            prosa_main_update_srv!();
+                            self.notify_srv_proc().await;
                         },
                         InternalMainMsg::DeleteService(names, proc_id, queue_id) => {
                             let mut new_services = (*self.services).clone();
@@ -680,20 +672,23 @@ where
                             }
                             self.services = Arc::new(new_services);
                             let _ = service_update.send(self.services.clone());
-                            prosa_main_update_srv!();
+                            self.notify_srv_proc().await;
                         },
                         InternalMainMsg::Config(config) => {
-                            info!("Reload ProSA configuration");
-                            if let Err(BusError::ProcComm(proc_id, queue_id, _)) = self.notify_config_proc_queue(config).await {
-                                if queue_id > 0 {
-                                    self.remove_proc_queue(proc_id, queue_id).await;
-                                } else {
-                                    self.remove_proc(proc_id).await;
+                            info!("Reloading ProSA configuration");
+                            for error in self.notify_config_proc_queue(config).await {
+                                if let BusError::ProcComm(proc_id, queue_id, _) = error {
+                                    if queue_id > 0 {
+                                        self.remove_proc_queue(proc_id, queue_id).await;
+                                    } else {
+                                        warn!("Processor {proc_id} stopped during configuration reload");
+                                        self.remove_proc(proc_id).await;
+                                    }
                                 }
                             }
                         },
                         InternalMainMsg::Shutdown(reason) => {
-                            warn!("ProSA need to stop: {}", reason);
+                            warn!("ProSA is stopping: {}", reason);
                             self.stop().await;
 
                             // The shutdown mecanism will be implemented later
@@ -702,7 +697,7 @@ where
                     }
                 },
                 _ = signal::ctrl_c() => {
-                    warn!("ProSA need to stop");
+                    warn!("ProSA is stopping");
                     self.stop().await;
 
                     // The shutdown mecanism will be implemented later

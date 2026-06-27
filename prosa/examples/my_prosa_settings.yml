@@ -10,6 +10,7 @@ observability:
       level: debug
 
 stub_proc:
+  adaptor_config_path: examples/stub_async_parot_adaptor.yml
   service_names:
     - STUB_TEST
 

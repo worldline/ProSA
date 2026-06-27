@@ -187,8 +187,14 @@ impl TelemetryFilter {
 
     /// Method to update the dynamic default telemetry level
     pub fn set_level(&self, level: filter::LevelFilter) {
+        let mut level_changed = false;
         if let Ok(mut inner) = self.inner.write() {
+            level_changed = inner.level != level;
             inner.level = level;
+        }
+
+        if level_changed {
+            tracing_core::callsite::rebuild_interest_cache();
         }
     }
 

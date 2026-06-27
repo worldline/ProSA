@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
-use crate::tracing::debug;
+use crate::tracing::{debug, info, warn};
 use prosa_macros::proc_settings;
 use serde::{Deserialize, Serialize};
 
@@ -118,7 +118,23 @@ where
                         err
                     ),
                     InternalMsg::Config(config) => {
-                        let settings = config.get_proc::<StubSettings>(self.proc.as_ref())?;
+                        let settings = match config.get_proc::<StubSettings>(self.proc.as_ref()) {
+                            Ok(settings) => settings,
+                            Err(err) => {
+                                warn!("Can't reload settings for processor {}: {err}", self.name());
+                                continue;
+                            }
+                        };
+
+                        if let Err(err) =
+                            adaptor.reload_config(config.get_adaptor_config(self.proc.as_ref()))
+                        {
+                            warn!(
+                                "Can't reload adaptor configuration for processor {}: {err}",
+                                self.name()
+                            );
+                            continue;
+                        }
 
                         let current_services =
                             self.settings.service_names.iter().collect::<HashSet<_>>();
@@ -140,6 +156,11 @@ where
                             self.proc.add_service_proc(services_to_add).await?;
                         }
 
+                        info!(
+                            "{} reloaded settings for services: {}",
+                            self.name(),
+                            settings.service_names.join(", ")
+                        );
                         self.settings = settings;
                     }
                     InternalMsg::Service(table) => self.service = table,

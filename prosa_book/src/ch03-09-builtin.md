@@ -175,12 +175,25 @@ fn process_request(&self, _service_name: &str, request: M) -> MaybeAsync<Result<
 }
 ```
 
-**StubAsyncParotAdaptor** — echoes the request back after a 100ms delay (asynchronous):
+**StubAsyncParotAdaptor** — echoes the request back after a configurable delay (100ms by default, using `sleep_ms` in the adaptor config):
+
+```yaml
+stub_1:
+  service_names:
+    - "TEST_SERVICE"
+  adaptor_config_path: /etc/prosa/stub-1-adaptor.yml
+
+# /etc/prosa/stub-1-adaptor.yml
+sleep_ms: 250
+```
 
 ```rust,noplayground
 fn process_request(&self, _service_name: &str, request: M) -> MaybeAsync<Result<M, ServiceError>> {
+    let sleep_duration = std::time::Duration::from_millis(
+        self.sleep_ms.load(std::sync::atomic::Ordering::Relaxed),
+    );
     maybe_async!(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(sleep_duration).await;
         Ok(request)
     })
 }

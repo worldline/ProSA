@@ -14,6 +14,10 @@ use tracing::{Level, Span, event, info_span, span};
 /// Expose Tvf trait
 pub use prosa_utils::msg::tvf::Tvf;
 
+// re-export types used by TVF trait
+pub use prosa_utils::msg::bytes;
+pub use prosa_utils::msg::chrono;
+
 /// Internal ProSA message that define all message type that can be received by the main ProSA processor
 #[derive(Debug)]
 pub enum InternalMainMsg<M>

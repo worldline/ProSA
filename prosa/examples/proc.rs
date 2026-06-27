@@ -3,10 +3,10 @@ use prosa::core::error::ProcError;
 use prosa::core::main::{MainProc, MainRunnable};
 use prosa::core::msg::{InternalMsg, Msg, RequestMsg};
 use prosa::core::proc::{Proc, ProcBusParam, ProcConfig, proc};
-use prosa::core::settings::{ProsaConfig, Settings, settings};
 use prosa::core::settings::tracing::TelemetryFilter;
+use prosa::core::settings::{ProsaConfig, Settings, settings};
 use prosa::event::pending::PendingMsgs;
-use prosa::stub::adaptor::StubParotAdaptor;
+use prosa::stub::adaptor::StubAsyncParotAdaptor;
 use prosa::stub::proc::{StubProc, StubSettings};
 use prosa::tracing::{debug, info, warn};
 use prosa_macros::proc_settings;
@@ -64,7 +64,7 @@ where
                 Some(msg) = self.internal_rx_queue.recv() => {
                     match msg {
                         InternalMsg::Request(msg) => {
-                            info!("Proc {} receive a request: {:?}", self.get_proc_id(), msg);
+                            info!("Proc {} received a request: {:?}", self.get_proc_id(), msg);
 
                             // Push in the pending message
                             pending_msgs.push(msg, Duration::from_millis(200));
@@ -72,11 +72,11 @@ where
                         },
                         InternalMsg::Response(msg) => {
                             let _enter = msg.enter_span();
-                            info!("Proc {} receive a response: {:?}", self.get_proc_id(), msg);
+                            info!("Proc {} received a response: {:?}", self.get_proc_id(), msg);
                         },
                         InternalMsg::Error(err) => {
                             let _enter = err.enter_span();
-                            info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
+                            info!("Proc {} received an error: {:?}", self.get_proc_id(), err);
                         },
                         InternalMsg::Config(config) => {
                             let settings = config.get_proc::<MyProcSettings>(self.proc.as_ref())?;
@@ -103,7 +103,7 @@ where
                         },
                         InternalMsg::Shutdown => {
                             adaptor.terminate();
-                            warn!("The processor will shut down");
+                            warn!("The processor is shutting down");
                         },
                     }
                 },
@@ -116,12 +116,12 @@ where
 
                     let stub_service_name = String::from("STUB_TEST");
                     if let Some(service) = self.service.get_proc_service(&stub_service_name) {
-                        debug!("The service is find: {:?}", service);
+                        debug!("Service found: {:?}", service);
                         let _ = service.proc_queue.send(InternalMsg::Request(RequestMsg::new(stub_service_name, tvf.clone(), self.proc.get_service_queue()))).await;
                     }
 
                     if let Some(service) = self.service.get_proc_service(&self.settings.service_name) {
-                        debug!("The service is find: {:?}", service);
+                        debug!("Service found: {:?}", service);
                         let _ = service.proc_queue.send(InternalMsg::Request(RequestMsg::new(self.settings.service_name.clone(), tvf, self.proc.get_service_queue()))).await;
                     }
                 },
@@ -202,7 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bus.clone(),
         my_settings.stub_proc.clone(),
     );
-    Proc::<StubParotAdaptor>::run(stub_proc)?;
+    Proc::<StubAsyncParotAdaptor>::run(stub_proc)?;
 
     // Launch the test processor
     let proc = MyProcClass::<SimpleStringTvf>::create(
