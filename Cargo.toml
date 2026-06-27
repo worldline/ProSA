@@ -24,7 +24,7 @@ include = [
 
 [workspace.dependencies]
 prosa-utils = { version = "0.5.0", path = "prosa_utils" }
-prosa-macros = { version = "0.4.2", path = "prosa_macros" }
+prosa-macros = { version = "0.5.0", path = "prosa_macros" }
 thiserror = "2"
 simple-mermaid = "0.2"
 bytes = "1"
