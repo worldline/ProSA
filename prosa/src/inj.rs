@@ -13,3 +13,6 @@ pub mod proc;
 #[doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/doc_assets/adaptor.svg"))]
 /// </svg>
 pub mod adaptor;
+
+/// Definition of configurable scenarii for the injector adaptor
+pub mod scenarii;
