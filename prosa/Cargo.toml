@@ -71,6 +71,8 @@ memory-stats = { version = "1", optional = true }
 
 # Scenario
 rand = "0.10"
+strum = { version = "0.28", features = ["derive"] }
+formatx = "0.3"
 
 [dev-dependencies]
 futures-util = { version = "0.3", default-features = false }

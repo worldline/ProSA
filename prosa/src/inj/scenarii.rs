@@ -1,16 +1,23 @@
 /// Rules for generating numeric values
 pub mod numeric;
 
+/// Rules for generating date & time values
+pub mod datetime;
+
+/// Rules for generating string values
+pub mod string;
+
 /// Utility functions for parsing ranges
 pub mod util;
 
+use prosa_utils::msg::{chrono, tvf::Tvf};
 use std::{
     collections::HashMap,
     num::{ParseFloatError, ParseIntError},
 };
 
 /// Generic scenario with an introduction, a middle looping part and a ending.
-pub struct Scenario<T> {
+pub struct Scenario<T: Tvf> {
     /// List of messages to send
     messages: Vec<Message<T>>,
 
@@ -24,7 +31,7 @@ pub struct Scenario<T> {
 }
 
 /// Generic message
-pub struct Message<T> {
+pub struct Message<T: Tvf> {
     /// Template buffer with predefined fields
     template: T,
 
@@ -33,7 +40,7 @@ pub struct Message<T> {
 }
 
 /// Generic rule to insert a TVF field in a buffer
-pub trait Rule<T> {
+pub trait Rule<T: Tvf> {
     /// Insert a dynamically generated value into the provided TVF buffer
     fn insert(&mut self, tag: usize, buffer: &mut T);
 }
@@ -44,8 +51,11 @@ pub trait RuleParse: Sized {
     const LABEL: &'static str;
 
     /// Parse a string to deduce a rule
-    fn parse(expr: &str) -> Result<Self, ParseError>;
+    fn parse(expr: &str) -> ParseResult<Self>;
 }
+
+/// Alias for Result<T, ParseError>`.
+pub type ParseResult<T> = Result<T, ParseError>;
 
 /// Errors encountered when trying to parse a rule
 #[derive(thiserror::Error, Debug, Clone)]
@@ -65,4 +75,8 @@ pub enum ParseError {
     /// Error when parsing a floating point number
     #[error("Error parsing a floating point number")]
     ParseFloat(#[from] ParseFloatError),
+
+    /// Error when parsing a datetime
+    #[error("Error parsing a date & time")]
+    ParseDateTime(#[from] chrono::ParseError),
 }

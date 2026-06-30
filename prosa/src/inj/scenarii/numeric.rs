@@ -9,6 +9,14 @@ use rand::{
 };
 use std::ops::{AddAssign, Range};
 
+// MARK: traits
+
+/// Generate a number
+pub trait MakeNumber<N> {
+    /// Generate a number
+    fn make_number(&mut self) -> N;
+}
+
 // MARK: random number
 
 /// Generate random integer values in the specified range
@@ -21,6 +29,32 @@ pub struct RuleRandom<N> {
     max: N,
 }
 
+macro_rules! impl_default {
+    ( $num:ty ) => {
+        impl Default for RuleRandom<$num> {
+            #[inline]
+            fn default() -> Self {
+                Self {
+                    min: <$num>::MIN,
+                    max: <$num>::MAX,
+                }
+            }
+        }
+    };
+}
+impl_default!(u8);
+impl_default!(u16);
+impl_default!(u32);
+impl_default!(u64);
+impl_default!(usize);
+impl_default!(i8);
+impl_default!(i16);
+impl_default!(i32);
+impl_default!(i64);
+impl_default!(isize);
+impl_default!(f32);
+impl_default!(f64);
+
 impl<N> RuleRandom<N>
 where
     N: Copy + SampleUniform,
@@ -31,6 +65,18 @@ where
     pub fn random(&self) -> N {
         let mut rng = rand::rng();
         rng.random_range(self.min..self.max)
+    }
+}
+
+impl<N> MakeNumber<N> for RuleRandom<N>
+where
+    N: Copy + SampleUniform,
+    Range<N>: SampleRange<N>,
+{
+    /// Generate a random number in the specified range
+    #[inline]
+    fn make_number(&mut self) -> N {
+        self.random()
     }
 }
 
@@ -101,6 +147,16 @@ where
             self.current = self.min;
         }
         value
+    }
+}
+
+impl<N> MakeNumber<N> for RuleRoundRobin<N>
+where
+    N: Copy + AddAssign + PartialOrd,
+{
+    /// Generate a random number in the specified range
+    fn make_number(&mut self) -> N {
+        self.next()
     }
 }
 
