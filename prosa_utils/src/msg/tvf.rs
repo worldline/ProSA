@@ -160,3 +160,27 @@ pub trait TvfFilter {
         tvf
     }
 }
+
+/// Trait to define a TVF[^tvfnote] dictionary.
+/// Useful to map numerical tags with text-based field identifiers.
+///
+/// [^tvfnote]: **T**ag **V**alue **F**ormat
+pub trait TvfDict<'d> {
+    /// Given a numerical tag, return the corresponding text mnemonic
+    fn get_mnemo(&self, id: usize) -> Option<&str>;
+
+    /// Given a text mnemonic, return the corresponding numerical tag
+    fn get_id(&self, mnemo: &str) -> Option<usize>;
+
+    /// Given a numerical tag, return the corresponding sub dictionary
+    #[inline]
+    fn sub_dict(&self, _id: usize) -> Option<&Self> {
+        None
+    }
+
+    /// Given a text mnemonic, return the corresponding sub dictionary
+    #[inline]
+    fn sub_dict_from_mnemo(&'d self, mnemo: &str) -> Option<&'d Self> {
+        self.get_id(mnemo).and_then(|id| self.sub_dict(id))
+    }
+}
