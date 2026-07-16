@@ -41,8 +41,9 @@ To start listening to a specific service, call [`add_service_proc()`](https://do
                     InternalMsg::Error(err) => {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Command(_) => todo!(),
-                    InternalMsg::Config => todo!(),
+                    InternalMsg::Config(config) => {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
                         self.proc.remove_proc(None).await?;
@@ -107,8 +108,9 @@ In this case, you can declare multiple listener subtasks, each of which subscrib
                         InternalMsg::Error(err) => {
                             // Handle errors as if they were responses
                         },
-                        InternalMsg::Command(_) => todo!(),
-                        InternalMsg::Config => todo!(),
+                        InternalMsg::Config(config) => {
+                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        },
                         InternalMsg::Service(table) => service = table,
                         InternalMsg::Shutdown => {
                             self.proc.remove_proc(None).await?;
@@ -131,8 +133,9 @@ In this case, you can declare multiple listener subtasks, each of which subscrib
                     InternalMsg::Error(err) => {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Command(_) => todo!(),
-                    InternalMsg::Config => todo!(),
+                    InternalMsg::Config(config) => {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
                         self.proc.remove_proc(None).await?;
@@ -178,8 +181,9 @@ After that, you are free to call any services.
                     InternalMsg::Error(err) => {
                         // Handle errors
                     },
-                    InternalMsg::Command(_) => todo!(),
-                    InternalMsg::Config => todo!(),
+                    InternalMsg::Config(config) => {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
                         self.proc.remove_proc(None).await?;
@@ -244,8 +248,9 @@ The logic is similar to single senders, but you specify the queue when sending m
                         InternalMsg::Error(err) => {
                             // Handle errors for this subtask
                         },
-                        InternalMsg::Command(_) => todo!(),
-                        InternalMsg::Config => todo!(),
+                        InternalMsg::Config(config) => {
+                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        },
                         InternalMsg::Service(table) => self.service = table,
                         InternalMsg::Shutdown => {
                             self.proc.remove_proc(None).await?;

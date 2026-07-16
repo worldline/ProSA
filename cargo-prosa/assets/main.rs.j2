@@ -53,7 +53,8 @@ async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
             {{ '}' }}
         {{ '}' }}
     {{ '}' }} else {{ '{' }}
-        let mut prosa_settings = prosa_config(&matches)?.try_deserialize::<RunSettings>()?;
+        let prosa_config_cache = prosa_config(&matches)?;
+        let mut prosa_settings = prosa_config_cache.try_deserialize::<RunSettings>()?;
 
         // Provide ProSA name if set in command line
         if let Some(name) = matches.get_one::<String>("name") {{ '{' }}
@@ -69,6 +70,43 @@ async fn prosa_main(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
         // Create bus and main processor
         log::info!("Starting ProSA {} - {}", env!("CARGO_PKG_NAME"), PROSA_VERSIONS);
         let (bus, main) = new_main(&prosa_settings);
+        bus.update_config(std::sync::Arc::new(prosa_config_cache.clone())).await?;
+
+        // Watch effective configuration changes and notify processors only when it changes
+        let reload_bus = bus.clone();
+        let reload_filter = filter.clone();
+        let reload_config_path = matches
+            .get_one::<String>("config")
+            .ok_or_else(|| ::config::ConfigError::NotFound("config".to_string()))?
+            .clone();
+        let reload_name = matches.get_one::<String>("name").cloned();
+        tokio::spawn(async move {{ '{' }}
+            prosa::core::settings::watch_config_reload::<RunSettings, _, _, _>(
+                reload_config_path,
+                prosa_config_cache,
+                ::prosa::core::settings::ProsaConfig::from_path,
+                move |mut settings, new_config| {{ '{' }}
+                    let reload_bus = reload_bus.clone();
+                    let reload_filter = reload_filter.clone();
+                    let reload_name = reload_name.clone();
+
+                    async move {{ '{' }}
+                        if let Some(name) = &reload_name {{ '{' }}
+                            settings.set_prosa_name(name.clone());
+                        {{ '}' }}
+
+                        reload_filter.set_level(settings.get_observability().get_level().into());
+                        if let Err(err) = reload_bus.update_config(std::sync::Arc::new(new_config)).await {{ '{' }}
+                            log::warn!("Can't notify processors of configuration reload: {{ '{err}' }}");
+                            false
+                        {{ '}' }} else {{ '{' }}
+                            true
+                        {{ '}' }}
+                    {{ '}' }}
+                {{ '}' }},
+            )
+            .await;
+        {{ '}' }});
 
         // Launch the main task
         let main_task = main.run();

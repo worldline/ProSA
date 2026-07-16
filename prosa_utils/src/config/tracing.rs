@@ -8,8 +8,9 @@ use serde::de::Unexpected;
 use serde::de::Visitor;
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::{Arc, RwLock};
 use tracing_core::Event;
-use tracing_core::{Metadata, subscriber::Interest};
+use tracing_core::Metadata;
 use tracing_subscriber::filter;
 use tracing_subscriber::layer;
 
@@ -154,54 +155,99 @@ impl<'de> Deserialize<'de> for TelemetryLevel {
 /// ```
 #[derive(Debug, Clone)]
 pub struct TelemetryFilter {
+    inner: Arc<RwLock<TelemetryFilterInner>>,
+    max_level: Option<filter::LevelFilter>,
+}
+
+#[derive(Debug, Clone)]
+struct TelemetryFilterInner {
     proc_levels: HashMap<String, filter::LevelFilter>,
-    pub(crate) level: filter::LevelFilter,
+    level: filter::LevelFilter,
 }
 
 impl TelemetryFilter {
     /// Method to create a new telemetry filter
     pub fn new(level: filter::LevelFilter) -> TelemetryFilter {
         TelemetryFilter {
-            proc_levels: HashMap::new(),
-            level,
+            inner: Arc::new(RwLock::new(TelemetryFilterInner {
+                proc_levels: HashMap::new(),
+                level,
+            })),
+            max_level: None,
         }
     }
 
     /// Method to clone the telemetry filter and change its default level if it's less verbose
     pub fn clone_with_level(&self, level: TelemetryLevel) -> TelemetryFilter {
-        let mut filter = self.clone();
-        let level: filter::LevelFilter = level.into();
-        if level < filter.level {
-            filter.level = level;
+        TelemetryFilter {
+            inner: self.inner.clone(),
+            max_level: Some(level.into()),
+        }
+    }
+
+    /// Method to update the dynamic default telemetry level
+    pub fn set_level(&self, level: filter::LevelFilter) {
+        let mut level_changed = false;
+        if let Ok(mut inner) = self.inner.write() {
+            level_changed = inner.level != level;
+            inner.level = level;
         }
 
-        filter
+        if level_changed {
+            tracing_core::callsite::rebuild_interest_cache();
+        }
+    }
+
+    /// Getter of the current dynamic default telemetry level
+    pub fn level(&self) -> filter::LevelFilter {
+        let mut level = self
+            .inner
+            .read()
+            .map(|inner| inner.level)
+            .unwrap_or(filter::LevelFilter::OFF);
+
+        if let Some(max_level) = self.max_level
+            && max_level < level
+        {
+            level = max_level;
+        }
+
+        level
     }
 
     /// Method to add a filter on a specific processor
-    pub fn add_proc_filter(&mut self, proc_name: String, level: filter::LevelFilter) {
-        self.proc_levels.insert(proc_name, level);
+    pub fn add_proc_filter(&self, proc_name: String, level: filter::LevelFilter) {
+        if let Ok(mut inner) = self.inner.write() {
+            inner.proc_levels.insert(proc_name, level);
+        }
     }
 
     fn is_enabled(&self, metadata: &Metadata<'_>) -> bool {
-        let level = if let Some(value) = self.proc_levels.get(metadata.name()) {
-            value
-        } else if let Some(value) = self.proc_levels.get(metadata.target()) {
-            value
-        } else {
-            &self.level
+        let Ok(inner) = self.inner.read() else {
+            return false;
         };
 
-        metadata.level() <= level
+        let mut level = if let Some(value) = inner.proc_levels.get(metadata.name()) {
+            *value
+        } else if let Some(value) = inner.proc_levels.get(metadata.target()) {
+            *value
+        } else {
+            inner.level
+        };
+
+        if let Some(max_level) = self.max_level
+            && max_level < level
+        {
+            level = max_level;
+        }
+
+        metadata.level() <= &level
     }
 }
 
 impl Default for TelemetryFilter {
     fn default() -> TelemetryFilter {
-        TelemetryFilter {
-            proc_levels: HashMap::new(),
-            level: filter::LevelFilter::TRACE,
-        }
+        TelemetryFilter::new(filter::LevelFilter::TRACE)
     }
 }
 
@@ -210,20 +256,12 @@ impl<S> layer::Filter<S> for TelemetryFilter {
         self.is_enabled(metadata)
     }
 
-    fn callsite_enabled(&self, metadata: &'static Metadata<'static>) -> Interest {
-        if self.is_enabled(metadata) {
-            Interest::always()
-        } else {
-            Interest::never()
-        }
-    }
-
     fn event_enabled(&self, event: &Event<'_>, _: &layer::Context<'_, S>) -> bool {
         self.is_enabled(event.metadata())
     }
 
     fn max_level_hint(&self) -> Option<filter::LevelFilter> {
-        Some(self.level)
+        Some(self.level())
     }
 }
 

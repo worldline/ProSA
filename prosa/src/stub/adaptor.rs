@@ -4,13 +4,38 @@ use crate::{
         adaptor::{Adaptor, MaybeAsync},
         error::ProcError,
         msg::Tvf,
-        proc::ProcConfig,
+        proc::{ProcConfig, ProcSettings},
         service::ServiceError,
     },
     maybe_async,
 };
 extern crate self as prosa;
 use crate::otel::metrics::Meter;
+use serde::Deserialize;
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
+
+const DEFAULT_STUB_ASYNC_PAROT_SLEEP_MS: u64 = 100;
+
+fn default_stub_async_parot_sleep_ms() -> u64 {
+    DEFAULT_STUB_ASYNC_PAROT_SLEEP_MS
+}
+
+#[derive(Debug, Deserialize)]
+struct StubAsyncParotConfig {
+    #[serde(default = "default_stub_async_parot_sleep_ms", alias = "sleep_millis")]
+    sleep_ms: u64,
+}
+
+impl Default for StubAsyncParotConfig {
+    fn default() -> Self {
+        StubAsyncParotConfig {
+            sleep_ms: DEFAULT_STUB_ASYNC_PAROT_SLEEP_MS,
+        }
+    }
+}
 
 /// Adaptator trait for the stub processor
 ///
@@ -146,9 +171,28 @@ where
     }
 }
 
-/// Parot adaptor for the stub processor. Use to respond to a request with the same message
-#[derive(Adaptor)]
-pub struct StubAsyncParotAdaptor {}
+/// Parot adaptor for the stub processor. Use to respond asynchronously after a configurable delay.
+///
+/// The adaptor configuration accepts `sleep_ms` (or `sleep_millis`) and defaults to 100ms.
+pub struct StubAsyncParotAdaptor {
+    sleep_ms: AtomicU64,
+}
+
+impl Adaptor for StubAsyncParotAdaptor {
+    fn reload_config(&self, config: Option<&config::Config>) -> Result<(), config::ConfigError> {
+        let config = if let Some(config) = config {
+            config.clone().try_deserialize::<StubAsyncParotConfig>()?
+        } else {
+            StubAsyncParotConfig {
+                sleep_ms: DEFAULT_STUB_ASYNC_PAROT_SLEEP_MS,
+            }
+        };
+        self.sleep_ms.store(config.sleep_ms, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn terminate(&self) {}
+}
 
 impl<M> StubAdaptor<M> for StubAsyncParotAdaptor
 where
@@ -161,8 +205,22 @@ where
         + Tvf
         + std::default::Default,
 {
-    fn new(_proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
-        Ok(Self {})
+    fn new(proc: &StubProc<M>) -> Result<Self, Box<dyn ProcError + Send + Sync>> {
+        let sleep_ms = match proc.settings.get_adaptor_config::<StubAsyncParotConfig>() {
+            Ok(config) => config.sleep_ms,
+            Err(err) => {
+                if proc.settings.get_adaptor_config_path().is_some() {
+                    log::warn!(
+                        "Can't load StubAsyncParotAdaptor configuration: {err}. Using default sleep of {DEFAULT_STUB_ASYNC_PAROT_SLEEP_MS}ms"
+                    );
+                }
+                DEFAULT_STUB_ASYNC_PAROT_SLEEP_MS
+            }
+        };
+
+        Ok(Self {
+            sleep_ms: AtomicU64::new(sleep_ms),
+        })
     }
 
     fn process_request(
@@ -170,9 +228,31 @@ where
         _service_name: &str,
         request: M,
     ) -> MaybeAsync<Result<M, ServiceError>> {
+        let sleep_duration = Duration::from_millis(self.sleep_ms.load(Ordering::Relaxed));
         maybe_async!(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(sleep_duration).await;
             Ok(request)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stub_async_parot_reload_config_updates_sleep() -> Result<(), config::ConfigError> {
+        let adaptor = StubAsyncParotAdaptor {
+            sleep_ms: AtomicU64::new(DEFAULT_STUB_ASYNC_PAROT_SLEEP_MS),
+        };
+        let config = config::Config::builder()
+            .set_override("sleep_ms", 25_u64)?
+            .build()?;
+
+        adaptor.reload_config(Some(&config))?;
+
+        assert_eq!(25, adaptor.sleep_ms.load(Ordering::Relaxed));
+
+        Ok(())
     }
 }

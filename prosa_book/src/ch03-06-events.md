@@ -54,8 +54,9 @@ There are three important methods you need to use for this object:
                             let _enter = err.enter_span();
                             info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
                         },
-                        InternalMsg::Command(_) => todo!(),
-                        InternalMsg::Config => todo!(),
+                        InternalMsg::Config(config) => {
+                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        },
                         InternalMsg::Service(table) => {
                             debug!("New service table received:\n{}\n", table);
                             self.service = table;

@@ -36,6 +36,12 @@ impl ProcError for ConfigError {
     }
 }
 
+impl ProcError for ::config::ConfigError {
+    fn recoverable(&self) -> bool {
+        false
+    }
+}
+
 impl ProcError for tokio::task::JoinError {
     fn recoverable(&self) -> bool {
         self.is_cancelled()
