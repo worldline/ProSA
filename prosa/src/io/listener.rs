@@ -383,22 +383,21 @@ pub struct ListenerSetting {
 }
 
 impl ListenerSetting {
-    #[cfg(target_family = "unix")]
     fn default_max_socket() -> u64 {
-        rlimit::Resource::NOFILE
-            .get_soft()
-            .unwrap_or(u32::MAX as u64)
-            - 1
-    }
-
-    #[cfg(target_family = "windows")]
-    fn default_max_socket() -> u64 {
-        (rlimit::getmaxstdio() as u64) - 1
-    }
-
-    #[cfg(all(not(target_family = "unix"), not(target_family = "windows")))]
-    fn default_max_socket() -> u64 {
-        (u32::MAX as u64) - 1
+        cfg_select! {
+            target_family = "unix" => {
+                rlimit::Resource::NOFILE
+                    .get_soft()
+                    .unwrap_or(u32::MAX as u64)
+                    - 1
+            }
+            target_family = "windows" => {
+                (rlimit::getmaxstdio() as u64) - 1
+            }
+            _ => {
+                (u32::MAX as u64) - 1
+            }
+        }
     }
 
     /// Method to create manually a target

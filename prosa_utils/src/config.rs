@@ -71,62 +71,66 @@ pub fn os_country() -> Option<String> {
 
 /// Method to try get the hostname from the OS
 pub fn hostname() -> Option<String> {
-    #[cfg(target_family = "unix")]
-    if let Ok(host) = std::env::var("HOSTNAME").map(|h| h.trim().to_string())
-        && !host.is_empty()
-        && !host.contains('\n')
-    {
-        return Some(host);
-    }
+    cfg_select! {
+        target_family = "unix" => {
+            if let Ok(host) = std::env::var("HOSTNAME").map(|h| h.trim().to_string())
+                && !host.is_empty()
+                && !host.contains('\n')
+            {
+                return Some(host);
+            }
 
-    #[cfg(target_family = "unix")]
-    return Command::new("hostname")
-        .arg("-s")
-        .output()
-        .ok()
-        .and_then(|h| {
-            str::from_utf8(h.stdout.trim_ascii())
+            Command::new("hostname")
+                .arg("-s")
+                .output()
                 .ok()
-                .filter(|h| !h.is_empty() && !h.contains('\n'))
-                .map(|h| h.to_string())
-        });
-
-    #[cfg(target_family = "windows")]
-    return Command::new("hostname").output().ok().and_then(|h| {
-        str::from_utf8(h.stdout.trim_ascii())
-            .ok()
-            .filter(|h| !h.is_empty() && !h.contains('\n'))
-            .map(|h| h.to_string())
-    });
-
-    #[cfg(all(not(target_family = "unix"), not(target_family = "windows")))]
-    return None;
+                .and_then(|h| {
+                    str::from_utf8(h.stdout.trim_ascii())
+                        .ok()
+                        .filter(|h| !h.is_empty() && !h.contains('\n'))
+                        .map(|h| h.to_string())
+                })
+        }
+        target_family = "windows" => {
+            Command::new("hostname").output().ok().and_then(|h| {
+                str::from_utf8(h.stdout.trim_ascii())
+                    .ok()
+                    .filter(|h| !h.is_empty() && !h.contains('\n'))
+                    .map(|h| h.to_string())
+            })
+        }
+        _ => None
+    }
 }
 
 /// Method to get a consistant host ID (UUID v1 or UUID v4) useful for `service.instance.id`
 pub fn hostid() -> String {
-    #[cfg(target_os = "linux")]
-    if let Ok(machine_id) = std::fs::read_to_string("/etc/machine-id")
-        && let Ok(machine_uuid) = Uuid::parse_str(machine_id.trim())
-    {
-        return machine_uuid.to_string();
-    }
-
-    #[cfg(target_os = "macos")]
-    if let Ok(output) = Command::new("ioreg")
-        .args(["-rd1", "-c", "IOPlatformExpertDevice"])
-        .output()
-        && output.status.success()
-        && let Ok(output_str) = String::from_utf8(output.stdout)
-    {
-        for line in output_str.lines() {
-            if line.contains("IOPlatformUUID")
-                && let Some(value) = line.split('"').nth(3)
-                && let Ok(machine_uuid) = Uuid::parse_str(value.trim())
+    cfg_select! {
+        target_os = "linux" => {
+            if let Ok(machine_id) = std::fs::read_to_string("/etc/machine-id")
+                && let Ok(machine_uuid) = Uuid::parse_str(machine_id.trim())
             {
                 return machine_uuid.to_string();
             }
         }
+        target_os = "macos" => {
+            if let Ok(output) = Command::new("ioreg")
+                .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+                .output()
+                && output.status.success()
+                && let Ok(output_str) = String::from_utf8(output.stdout)
+            {
+                for line in output_str.lines() {
+                    if line.contains("IOPlatformUUID")
+                        && let Some(value) = line.split('"').nth(3)
+                        && let Ok(machine_uuid) = Uuid::parse_str(value.trim())
+                    {
+                        return machine_uuid.to_string();
+                    }
+                }
+            }
+        }
+        _ => {}
     }
 
     if let Some(hostname) = hostname() {

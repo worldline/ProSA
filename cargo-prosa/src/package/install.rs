@@ -41,21 +41,27 @@ impl InstanceInstall {
         // Get all path for system or home installation
         let (install_bin_dir, install_config_dir, install_service_dir) = if args.get_flag("system")
         {
-            #[cfg(target_os = "linux")]
-            {
-                (
-                    "/usr/local/bin".to_string(),
-                    "/etc/prosa".to_string(),
-                    "/etc/systemd/system".to_string(),
-                )
-            }
-            #[cfg(target_os = "macos")]
-            {
-                (
-                    "/usr/local/bin".to_string(),
-                    "/etc/prosa".to_string(),
-                    "/Library/LaunchDaemons".to_string(),
-                )
+            cfg_select! {
+                target_os = "linux" => {
+                    (
+                        "/usr/local/bin".to_string(),
+                        "/etc/prosa".to_string(),
+                        "/etc/systemd/system".to_string(),
+                    )
+                }
+                target_os = "macos" => {
+                    (
+                        "/usr/local/bin".to_string(),
+                        "/etc/prosa".to_string(),
+                        "/Library/LaunchDaemons".to_string(),
+                    )
+                }
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        "Install is only supported on Linux and macOS",
+                    ));
+                }
             }
         } else {
             let install_dir = env::var("HOME").map_err(|ve| {
@@ -75,21 +81,27 @@ impl InstanceInstall {
                 ));
             }
 
-            #[cfg(target_os = "linux")]
-            {
-                (
-                    format!("{install_dir}/.local/bin"),
-                    format!("{install_dir}/.config/prosa"),
-                    format!("{install_dir}/.config/systemd/user"),
-                )
-            }
-            #[cfg(target_os = "macos")]
-            {
-                (
-                    format!("{install_dir}/.local/bin"),
-                    format!("{install_dir}/.config/prosa"),
-                    format!("{install_dir}/Library/LaunchAgents"),
-                )
+            cfg_select! {
+                target_os = "linux" => {
+                    (
+                        format!("{install_dir}/.local/bin"),
+                        format!("{install_dir}/.config/prosa"),
+                        format!("{install_dir}/.config/systemd/user"),
+                    )
+                }
+                target_os = "macos" => {
+                    (
+                        format!("{install_dir}/.local/bin"),
+                        format!("{install_dir}/.config/prosa"),
+                        format!("{install_dir}/Library/LaunchAgents"),
+                    )
+                }
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        "Install is only supported on Linux and macOS",
+                    ));
+                }
             }
         };
 
