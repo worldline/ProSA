@@ -166,6 +166,9 @@ pub trait TvfFilter {
 ///
 /// [^tvfnote]: **T**ag **V**alue **F**ormat
 pub trait TvfDict<'d> {
+    /// Meta-data associated with an entry
+    type MetaData;
+
     /// Given a numerical tag, return the corresponding text mnemonic
     fn get_mnemo(&self, id: usize) -> Option<&str>;
 
@@ -174,13 +177,98 @@ pub trait TvfDict<'d> {
 
     /// Given a numerical tag, return the corresponding sub dictionary
     #[inline]
-    fn sub_dict(&self, _id: usize) -> Option<&Self> {
+    fn metadata(&'d self, _id: usize) -> Option<&'d Self::MetaData> {
         None
     }
 
     /// Given a text mnemonic, return the corresponding sub dictionary
     #[inline]
-    fn sub_dict_from_mnemo(&'d self, mnemo: &str) -> Option<&'d Self> {
-        self.get_id(mnemo).and_then(|id| self.sub_dict(id))
+    fn metadata_from_mnemo(&'d self, mnemo: &str) -> Option<&'d Self::MetaData> {
+        self.get_id(mnemo).and_then(|id| self.metadata(id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// Bidirectional dictionary
+    #[derive(Debug, Clone)]
+    struct Dict {
+        id_to_mnemo: HashMap<usize, Entry<String>>,
+        mnemo_to_id: HashMap<String, Entry<usize>>,
+    }
+
+    /// An entry in the dictionary
+    #[derive(Debug, Clone)]
+    struct Entry<V> {
+        value: V,
+        sub_dict: Option<Dict>,
+    }
+
+    impl Dict {
+        fn new() -> Self {
+            Self {
+                id_to_mnemo: HashMap::new(),
+                mnemo_to_id: HashMap::new(),
+            }
+        }
+
+        fn add(&mut self, id: usize, mnemo: &str, sub_dict: Option<Dict>) {
+            self.id_to_mnemo.insert(
+                id,
+                Entry {
+                    value: mnemo.to_string(),
+                    sub_dict: sub_dict.clone(),
+                },
+            );
+            self.mnemo_to_id.insert(
+                mnemo.to_string(),
+                Entry {
+                    value: id,
+                    sub_dict,
+                },
+            );
+        }
+    }
+
+    /// Implementation of the trait allowing for tree-like dictionaries
+    impl<'d> TvfDict<'d> for Dict {
+        type MetaData = Self;
+
+        fn get_mnemo(&self, id: usize) -> Option<&str> {
+            self.id_to_mnemo.get(&id).map(|e| e.value.as_str())
+        }
+
+        fn get_id(&self, mnemo: &str) -> Option<usize> {
+            self.mnemo_to_id.get(mnemo).map(|e| e.value)
+        }
+
+        fn metadata(&'d self, id: usize) -> Option<&'d Self::MetaData> {
+            self.id_to_mnemo.get(&id).and_then(|e| e.sub_dict.as_ref())
+        }
+
+        fn metadata_from_mnemo(&'d self, mnemo: &str) -> Option<&'d Self::MetaData> {
+            self.mnemo_to_id
+                .get(mnemo)
+                .and_then(|e| e.sub_dict.as_ref())
+        }
+    }
+
+    #[test]
+    fn test_dict() {
+        let mut dict = Dict::new();
+        dict.add(1, "A", None);
+        dict.add(2, "B", None);
+        dict.add(3, "C", Some(dict.clone()));
+
+        assert_eq!("A", dict.get_mnemo(1).unwrap());
+        assert_eq!(2, dict.get_id("B").unwrap());
+        assert!(dict.metadata(3).is_some());
+
+        let sub = dict.metadata_from_mnemo("C").unwrap();
+        assert_eq!(1, sub.get_id("A").unwrap());
+        assert_eq!("B", sub.get_mnemo(2).unwrap());
     }
 }
