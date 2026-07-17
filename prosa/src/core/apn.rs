@@ -4,10 +4,11 @@
 //! other services, branch on their results, and produce the final response — without writing a
 //! manual state machine over the processor loop.
 //!
-//! An APN is launched with [`RequestMsg::apn`]: it spawns the automaton on a Tokio task, handing it
-//! an [`Apn`] handle plus the request's service name and data. The automaton issues sub-calls with
-//! [`Apn::call`], branches on their results, and returns the final `M`; the APN sends that result back
-//! to the original caller on the request's response queue. The processor loop is **not blocked**.
+//! An APN is launched with [`RequestMsg::apn`](crate::core::msg::RequestMsg::apn): it spawns the
+//! automaton on a Tokio task, handing it an [`Apn`](crate::core::apn::Apn) handle plus the request's
+//! service name and data. The automaton issues sub-calls with [`Apn::call`](crate::core::apn::Apn::call),
+//! branches on their results, and returns the final `M`; the APN sends that result back to the original
+//! caller on the request's response queue. The processor loop is **not blocked**.
 //!
 //! Because the automaton is spawned, it must be `Send + 'static`: it captures owned data and cannot
 //! borrow the processor's state.

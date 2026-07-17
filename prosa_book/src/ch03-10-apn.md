@@ -27,7 +27,7 @@ An APN is launched with [`RequestMsg::apn`](https://docs.rs/prosa/latest/prosa/c
 
 The APN hands the automaton closure the [`Apn`](https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html) handle plus the request's **service name and data** (a `String` and the `M`). There is no automatic first call: the automaton drives every sub-call itself with `apn.call(...)`, branches on the results, and returns the final `M`. That result is **sent back** to the original requestor on the request's response queue — you never call `return_to_sender` yourself. If the automaton needs the request's trace span (to nest its own spans), it's available via [`apn.trace_id()`](https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.trace_id).
 
-Build a [`RequestMsg`](https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html) with its **response queue** set to your processor's own service queue ([`get_service_queue()`](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.get_service_queue)) — that queue is where the APN's final result lands — then call [`apn`](https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn) on it. Since the automaton is spawned, everything it needs must be captured by value:
+You build that [`RequestMsg`](https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html) just as you would to [send a message to a service](./ch03-05-service.md#sending-messages) — with one twist: set its **response queue** to your processor's own service queue ([`get_service_queue()`](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.get_service_queue)), so the APN's final result lands back in your own loop. Then, instead of pushing it onto a service's `proc_queue` yourself, hand it to [`apn`](https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn), which takes ownership of the request from there. Since the automaton is spawned, everything it needs must be captured by value:
 
 ```rust,noplayground
 // `trans` is the request to handle (its response queue points back at this processor).
@@ -45,6 +45,23 @@ trans.apn(
         Ok(resp.take_data().unwrap_or_default())
     },
 );
+```
+
+Just as often you won't build a request at all: you'll run an APN on one you **received**. When your processor [offers a service](./ch03-05-service.md#listening-to-a-service), a [`RequestMsg`](https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html) arrives in the `Request` arm of its loop already carrying the response queue of whoever called you. Hand that request straight to [`apn`](https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn) — no rebuilding, no re-wiring — and the automaton's result flows back to the original caller untouched:
+
+```rust,noplayground
+InternalMsg::Request(request) => {
+    // A request for a service this processor offers just arrived.
+    request.apn(
+        self.service.clone(),
+        self.settings.apn_timeout,
+        move |apn, _service, data| async move {
+            // Drive the sub-calls from the received request's data.
+            let mut resp = apn.call("NEXT", data).await?;
+            Ok(resp.take_data().unwrap_or_default())
+        },
+    );
+}
 ```
 
 The automaton can create any object it needs; just remember it captures owned values (clone what you need out of the processor before launching).
