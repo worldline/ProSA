@@ -11,11 +11,12 @@ pub trait Sender<T> {
     /// Try to send a value, return a Full error if the queue is full
     ///
     /// ```
-    /// use prosa::event::queue::{QueueChecker, QueueError, mpsc::Sender};
+    /// use prosa::event::queue::{IsInteger, QueueChecker, QueueError, mpsc::Sender};
     ///
     /// async fn sender_process<S, T, P>(sender: S)
     /// where
     ///     S: Sender<T> + QueueChecker<P>,
+    ///     P: IsInteger,
     ///     T: std::cmp::PartialEq + std::fmt::Debug + std::default::Default,
     /// {
     ///     if sender.is_full() {

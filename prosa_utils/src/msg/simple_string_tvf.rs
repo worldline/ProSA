@@ -1,16 +1,19 @@
 //! Implementation of a simple String TVF
 
-use crate::msg::{
-    bytes::Bytes,
-    chrono::{NaiveDate, NaiveDateTime},
-    tvf::{Tvf, TvfError},
+use crate::{
+    hash::IntHashMap,
+    msg::{
+        bytes::Bytes,
+        chrono::{NaiveDate, NaiveDateTime},
+        tvf::{Tvf, TvfError},
+    },
 };
-use std::{borrow::Cow, collections::hash_map::HashMap};
+use std::borrow::Cow;
 
 /// Struct that define a simple string TVF
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct SimpleStringTvf {
-    fields: HashMap<usize, String>,
+    fields: IntHashMap<usize, String>,
 }
 
 static SIMPLE_DATE_FMT: &str = "%Y-%m-%d";

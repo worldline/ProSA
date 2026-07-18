@@ -138,6 +138,26 @@ Make sure to also implement:
 - `Clone`: if duplication of buffers is needed
 - `Debug`: To enable easy debugging and inspection
 
+### Use integer hashing for TVF fields
+
+TVF field identifiers are integers. When designing a TVF buffer backed by a hash
+table, use [`IntHashMap`](https://docs.rs/prosa-utils/latest/prosa_utils/hash/type.IntHashMap.html)
+instead of the standard `HashMap`. It uses ProSA's integer hasher and avoids the
+overhead of general-purpose hashing for field lookups.
+
+```rust,noplayground
+use prosa_utils::hash::IntHashMap;
+
+#[derive(Default)]
+struct MyOwnTvf {
+    fields: IntHashMap<usize, String>,
+}
+```
+
+`IntHashMap` supports only integer key types, including `usize`, which matches the
+field identifiers used by the `Tvf` trait. For an integer set, use
+[`IntHashSet`](https://docs.rs/prosa-utils/latest/prosa_utils/hash/type.IntHashSet.html).
+
 ## Declare your custom TVF
 
 When you implement your own TVF, you need to expose it in your Cargo.toml metadata as discussed in the previous chapter.

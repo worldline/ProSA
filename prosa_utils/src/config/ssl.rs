@@ -1,7 +1,7 @@
 //! Definition of SSL configuration
 
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, time::Duration};
+use std::{collections::HashMap, fmt, io, path::Path, time::Duration};
 
 use super::ConfigError;
 
@@ -57,6 +57,30 @@ pub enum Store {
         /// List of string PEMs for certificates
         certs: Vec<String>,
     },
+}
+
+impl TryFrom<&Path> for Store {
+    type Error = io::Error;
+
+    /// Initialize a Store with a certificate path
+    ///
+    /// ```
+    /// use std::path::Path;
+    /// use prosa_utils::config::ssl::Store;
+    ///
+    /// let store = Store::try_from(Path::new("cert.pem")).expect("Path should be valid");
+    /// assert_eq!(store, Store::File{ path: "cert.pem".into() });
+    /// ```
+    fn try_from(path: &Path) -> io::Result<Self> {
+        path.to_str()
+            .map(|s| Store::File {
+                path: s.to_string(),
+            })
+            .ok_or(io::Error::new(
+                io::ErrorKind::InvalidFilename,
+                "Invalid store path",
+            ))
+    }
 }
 
 impl fmt::Display for Store {

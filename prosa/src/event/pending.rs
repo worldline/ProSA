@@ -1,6 +1,9 @@
-use std::{cmp::Ordering, collections::HashMap, marker::PhantomData, ops::Add, time::Duration};
+use std::{cmp::Ordering, marker::PhantomData, ops::Add, time::Duration};
 
-use prosa_utils::msg::tvf::Tvf;
+use prosa_utils::{
+    hash::{BuildIntHasher, IntHashMap},
+    msg::tvf::Tvf,
+};
 use tokio::time::{Instant, Sleep, sleep_until};
 
 use crate::core::msg::Msg;
@@ -256,7 +259,7 @@ where
     T: Msg<M>,
     M: Sized + Clone + Tvf,
 {
-    pending_messages: HashMap<u64, T>,
+    pending_messages: IntHashMap<u64, T>,
     timers: Timers<u64>,
     phantom: PhantomData<M>,
 }
@@ -288,7 +291,10 @@ where
         M: Sized + Clone + Tvf,
     {
         PendingMsgs {
-            pending_messages: HashMap::with_capacity(capacity),
+            pending_messages: IntHashMap::with_capacity_and_hasher(
+                capacity,
+                BuildIntHasher::default(),
+            ),
             timers: Timers::with_capacity(capacity),
             phantom: PhantomData,
         }

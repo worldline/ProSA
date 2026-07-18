@@ -1,5 +1,7 @@
 //! Module for ProSA internal queueing utilitary
 
+pub use crate::hash::IsInteger;
+
 /// Atomic queue implementation
 pub(crate) mod lockfree;
 
@@ -42,7 +44,7 @@ pub enum QueueError<T> {
 ///     }
 /// }
 /// ```
-pub trait QueueChecker<P> {
+pub trait QueueChecker<P: IsInteger> {
     /// Checks if the queue is empty.
     /// Prefer this method over `len() != 0`
     fn is_empty(&self) -> bool;
