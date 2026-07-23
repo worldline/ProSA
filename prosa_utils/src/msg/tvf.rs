@@ -188,6 +188,32 @@ pub trait TvfDict<'d> {
     }
 }
 
+/// Bind a TVF message with a dictionary
+#[derive(Debug)]
+pub struct TvfBind<'t, 'd, T, D>
+where
+    T: Tvf,
+    D: TvfDict<'d>,
+{
+    /// TVF message to qualify
+    pub msg: &'t T,
+
+    /// Dictionary to qualify the message
+    pub dict: &'d D,
+}
+
+impl<'t, 'd, T, D> TvfBind<'t, 'd, T, D>
+where
+    T: Tvf,
+    D: TvfDict<'d>,
+{
+    /// Bind a TVF message with a dictionary
+    #[inline]
+    pub fn new(msg: &'t T, dict: &'d D) -> Self {
+        Self { msg, dict }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
