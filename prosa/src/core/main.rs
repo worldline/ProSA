@@ -20,12 +20,12 @@ use crate::otel::metrics::{Meter, MeterProvider as _};
 use crate::otel::trace::TracerProvider as _;
 use crate::otel::{InstrumentationScope, KeyValue};
 use crate::tracing::{debug, info, warn};
+use prosa_utils::hash::{BuildIntHasher, IntHashMap, IntHashSet};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::{borrow::Cow, collections::HashSet};
-use std::{collections::HashMap, fmt::Debug};
+use std::{borrow::Cow, fmt::Debug};
 use tokio::{signal, sync::mpsc};
 
 /// Trait to define a ProSA main processor that is runnable
@@ -259,13 +259,16 @@ where
     }
 }
 
+type ProcQueueMap<M> = IntHashMap<u32, ProcService<M>>;
+type ProcessorMap<M> = IntHashMap<u32, ProcQueueMap<M>>;
+
 /// Main ProSA task processor
 pub struct MainProc<M>
 where
     M: Sized + Clone + Tvf,
 {
     name: String,
-    processors: HashMap<u32, HashMap<u32, ProcService<M>>>,
+    processors: ProcessorMap<M>,
     services: Arc<ServiceTable<M>>,
     config: Option<Arc<ProsaConfig>>,
     internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
@@ -290,7 +293,7 @@ impl<M> MainProc<M>
 where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
-    async fn remove_proc(&mut self, proc_id: u32) -> Option<HashMap<u32, ProcService<M>>> {
+    async fn remove_proc(&mut self, proc_id: u32) -> Option<ProcQueueMap<M>> {
         if let Some(proc) = self.processors.remove(&proc_id) {
             let mut new_services = (*self.services).clone();
             new_services.remove_proc_services(proc_id);
@@ -433,7 +436,7 @@ where
     fn create<S: Settings>(settings: &S, proc_capacity: Option<usize>) -> (Main<M>, MainProc<M>) {
         fn inner<M>(
             main: Main<M>,
-            processors: HashMap<u32, HashMap<u32, ProcService<M>>>,
+            processors: ProcessorMap<M>,
             internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
         ) -> (Main<M>, MainProc<M>)
         where
@@ -464,9 +467,9 @@ where
         }
         let (internal_tx_queue, internal_rx_queue) = mpsc::channel(2048);
         let processors = if let Some(capacity) = proc_capacity {
-            HashMap::with_capacity(capacity)
+            IntHashMap::with_capacity_and_hasher(capacity, BuildIntHasher::default())
         } else {
-            HashMap::new()
+            IntHashMap::with_hasher(BuildIntHasher::default())
         };
         inner(
             Main::new(internal_tx_queue, settings),
@@ -508,11 +511,11 @@ where
             })
             .build();
 
-        let mut proc_names = HashMap::new();
+        let mut proc_names = IntHashMap::with_hasher(BuildIntHasher::default());
 
         // Monitor processors objects
-        let mut crashed_proc: HashSet<u32> = HashSet::new();
-        let mut restarted_proc = HashMap::new();
+        let mut crashed_proc = IntHashSet::with_hasher(BuildIntHasher::default());
+        let mut restarted_proc = IntHashMap::with_hasher(BuildIntHasher::default());
         let processors_meter = self
             .meter
             .i64_gauge("prosa_processors")
@@ -580,9 +583,9 @@ where
                                 proc_service.insert(queue_id, proc);
                             } else {
                                 proc_names.insert(proc_id, proc.name().to_string());
-                                self.processors.insert(proc_id, HashMap::from([
-                                    (queue_id, proc),
-                                ]));
+                                self.processors.insert(proc_id, [(queue_id, proc)]
+                                .into_iter()
+                                .collect::<IntHashMap<_, _>>());
                             }
 
                             // Ask to the processor to load the service table

@@ -17,3 +17,6 @@ pub mod config;
 
 #[cfg(feature = "queue")]
 pub mod queue;
+
+#[cfg(any(feature = "msg", feature = "queue"))]
+pub mod hash;
