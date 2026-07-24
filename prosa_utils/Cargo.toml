@@ -12,6 +12,7 @@ include.workspace = true
 [features]
 default = ["msg", "config", "config-openssl", "config-observability"]
 msg = []
+dict = ["dep:serde", "bytes/serde", "chrono/serde", "dep:regex"]
 config = ["dep:glob","dep:serde","dep:serde_yaml", "dep:base64", "dep:uuid"]
 config-openssl = ["config", "dep:openssl"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored"]
@@ -66,6 +67,9 @@ hyper = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 hyper-util = { workspace = true, optional = true }
 flate2 = { version = "1", optional = true }
+
+# Dictionary
+regex = { version = "1.13", optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
