@@ -8,17 +8,17 @@ use opentelemetry_sdk::{
     trace::{SdkTracerProvider, Tracer},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, fmt, time::Duration};
 use tracing_subscriber::{filter, prelude::*};
 use tracing_subscriber::{layer::SubscriberExt, util::TryInitError};
 use url::Url;
 
-use crate::config::url_authentication;
+use crate::config::url::{get_safe_url, url_authentication};
 
 use super::tracing::{TelemetryFilter, TelemetryLevel};
 
 /// Configuration struct of an **O**pen **T**e**l**emetry **P**rotocol Exporter
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub(crate) struct OTLPExporterCfg {
     pub(crate) level: Option<TelemetryLevel>,
     endpoint: Url,
@@ -55,7 +55,11 @@ impl OTLPExporterCfg {
     pub(crate) fn get_header(&self) -> HashMap<String, String> {
         let mut headers = HashMap::with_capacity(1);
         if let Some(authorization) = url_authentication(&self.endpoint) {
-            headers.insert("Authorization".to_string(), authorization);
+            // `WithHttpConfig::with_headers` URL-decodes values, so preserve literal `%`.
+            headers.insert(
+                "Authorization".to_string(),
+                authorization.replace('%', "%25"),
+            );
         }
         headers
     }
@@ -85,6 +89,19 @@ impl Default for OTLPExporterCfg {
             endpoint: Url::parse("grpc://localhost:4317").expect("default OTLP address is invalid"),
             timeout_sec: None,
         }
+    }
+}
+
+impl fmt::Debug for OTLPExporterCfg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OTLPExporterCfg")
+            .field("level", &self.level)
+            .field(
+                "endpoint",
+                &get_safe_url(&self.endpoint).without_credentials(),
+            )
+            .field("timeout_sec", &self.timeout_sec)
+            .finish()
     }
 }
 
@@ -681,5 +698,43 @@ impl Default for Observability {
                 }),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn otlp_http_authorization_preserves_literal_percent_triplets() {
+        let config = OTLPExporterCfg {
+            level: None,
+            endpoint: Url::parse("http://:token%2541@localhost:4318")
+                .expect("OTLP endpoint should be valid"),
+            timeout_sec: None,
+        };
+
+        assert_eq!(
+            Some("Bearer token%2541"),
+            config.get_header().get("Authorization").map(String::as_str)
+        );
+    }
+
+    #[test]
+    fn otlp_debug_redacts_url_secrets() {
+        let config = OTLPExporterCfg {
+            level: None,
+            endpoint: Url::parse(
+                "http://user:password@localhost:4318/v1?token=secret#access_token=secret",
+            )
+            .expect("OTLP endpoint should be valid"),
+            timeout_sec: None,
+        };
+
+        let debug = format!("{config:?}");
+        assert!(debug.contains("http://localhost:4318/v1"));
+        assert!(!debug.contains("user"));
+        assert!(!debug.contains("password"));
+        assert!(!debug.contains("secret"));
     }
 }

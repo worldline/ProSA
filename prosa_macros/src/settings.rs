@@ -9,7 +9,7 @@ fn add_default_member<F>(mut item_impl: ItemImpl, func: F) -> syn::parse::Result
 where
     F: Fn(&mut syn::ExprStruct) -> syn::parse::Result<()>,
 {
-    if let (Some((_, trait_path, _)), syn::Type::Path(self_path)) =
+    if let (Some((trait_path, _)), syn::Type::Path(self_path)) =
         (&item_impl.trait_, item_impl.self_ty.as_ref())
     {
         // Only consider Default trait impl

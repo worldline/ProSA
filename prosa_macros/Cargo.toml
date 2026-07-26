@@ -16,7 +16,7 @@ proc-macro = true
 unwrap_used = "deny"
 
 [dependencies]
-syn = { version = "2", features = ["full"] }
+syn = { version = "3", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
 chrono.workspace = true

@@ -139,7 +139,10 @@ pub trait SslConfigContext<C, S> {
     fn init_tls_server_context(&self, host: Option<&str>) -> Result<S, ConfigError>;
 }
 
-/// SSL configuration for socket
+/// SSL configuration for sockets.
+///
+/// Its [`Debug`](fmt::Debug) implementation deliberately omits the private-key or PKCS#12
+/// passphrase.
 ///
 /// Client SSL socket
 /// ```
@@ -147,8 +150,6 @@ pub trait SslConfigContext<C, S> {
 /// use std::pin::Pin;
 /// use tokio::net::TcpStream;
 /// use tokio_openssl::SslStream;
-/// # #[cfg(feature="config-openssl")]
-/// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
 /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 ///
 /// # #[cfg(feature="config-openssl")]
@@ -159,11 +160,10 @@ pub trait SslConfigContext<C, S> {
 ///     if let Ok(mut ssl_context_builder) = client_config.init_tls_client_context() {
 ///         let ssl = ssl_context_builder.build().configure().unwrap().into_ssl("localhost").unwrap();
 ///         let mut stream = SslStream::new(ssl, stream).unwrap();
-///         if let Err(e) = Pin::new(&mut stream).connect().await {
-///             if e.code() != ErrorCode::ZERO_RETURN {
-///                 eprintln!("Can't connect the client: {}", e);
-///             }
-///         }
+///         Pin::new(&mut stream)
+///             .connect()
+///             .await
+///             .map_err(|e| io::Error::other(format!("Can't connect the client: {e}")))?;
 ///
 ///         // SSL stream ...
 ///     }
@@ -179,7 +179,7 @@ pub trait SslConfigContext<C, S> {
 /// use tokio::net::TcpListener;
 /// use tokio_openssl::SslStream;
 /// # #[cfg(feature="config-openssl")]
-/// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
+/// use openssl::ssl::{Ssl, SslVerifyMode};
 /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
 ///
 /// # #[cfg(feature="config-openssl")]
@@ -196,9 +196,8 @@ pub trait SslConfigContext<C, S> {
 ///             let ssl = Ssl::new(&ssl_context.context()).unwrap();
 ///             let mut stream = SslStream::new(ssl, stream).unwrap();
 ///             if let Err(e) = Pin::new(&mut stream).accept().await {
-///                 if e.code() != ErrorCode::ZERO_RETURN {
-///                     eprintln!("Can't accept the client {}: {}", cli_addr, e);
-///                 }
+///                 eprintln!("Can't accept the client {cli_addr}: {e}");
+///                 continue;
 ///             }
 ///
 ///             // SSL stream ...
@@ -208,7 +207,7 @@ pub trait SslConfigContext<C, S> {
 ///     Ok(())
 /// }
 /// ```
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 pub struct SslConfig {
     /// SSL store certificate to verify the remote certificate
     store: Option<Store>,
@@ -319,6 +318,20 @@ impl Default for SslConfig {
             modern_security: Self::default_modern_security(),
             ssl_timeout: Self::default_ssl_timeout(),
         }
+    }
+}
+
+impl fmt::Debug for SslConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SslConfig")
+            .field("store", &self.store)
+            .field("pkcs12", &self.pkcs12)
+            .field("cert", &self.cert)
+            .field("key", &self.key)
+            .field("alpn", &self.alpn)
+            .field("modern_security", &self.modern_security)
+            .field("ssl_timeout", &self.ssl_timeout)
+            .finish()
     }
 }
 
@@ -448,6 +461,10 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
     #[test]
     fn test_tls_server_context() {
         let ssl_config = SslConfig::default();
+        assert_eq!(
+            "SslConfig { store: None, pkcs12: None, cert: None, key: None, alpn: [], modern_security: true, ssl_timeout: 3000 }",
+            format!("{ssl_config:?}")
+        );
         let ssl_acceptor = ssl_config
             .init_tls_server_context(None)
             .expect("The TLS server context should be init")
@@ -456,5 +473,20 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
         // Check for self signed certificate
         assert!(ssl_acceptor.context().private_key().is_some());
         assert!(ssl_acceptor.context().certificate().is_some());
+    }
+
+    #[test]
+    fn ssl_config_debug_redacts_passphrase() {
+        let ssl_config = SslConfig::new_cert_key(
+            "cert.pem".into(),
+            "key.pem".into(),
+            Some("sensitive-passphrase".into()),
+        );
+
+        let debug = format!("{ssl_config:?}");
+        assert!(debug.contains("cert.pem"));
+        assert!(debug.contains("key.pem"));
+        assert!(!debug.contains("sensitive-passphrase"));
+        assert!(!debug.contains("passphrase"));
     }
 }

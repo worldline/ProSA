@@ -33,7 +33,7 @@ inj-1:
 
 To customize what the injector sends and how it processes responses, implement the `InjAdaptor` trait:
 
-```rust,noplayground
+```rust,ignore
 pub trait InjAdaptor<M>
 where
     M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
@@ -61,7 +61,7 @@ where
 
 The built-in `InjDummyAdaptor` creates minimal messages with `"DUMMY"` in field 1. It is useful for quick smoke tests:
 
-```rust,noplayground
+```rust,ignore
 #[derive(Adaptor)]
 pub struct InjDummyAdaptor {}
 
@@ -86,7 +86,7 @@ where
 The injector exposes a histogram metric `prosa_inj_request_duration` (in seconds) with attributes:
 - `proc`: processor name
 - `service`: target service name
-- `err_code`: `"0"` for success, or the service error code
+- `err_code`: numeric `0` for success, or the numeric service error code
 
 ---
 
@@ -116,7 +116,7 @@ stub-1:
 
 To customize how the stub responds, implement the `StubAdaptor` trait:
 
-```rust,noplayground
+```rust,ignore
 pub trait StubAdaptor<M>
 where
     M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
@@ -141,7 +141,7 @@ The return type `MaybeAsync` lets you choose between synchronous and asynchronou
 
 Return a value directly using `.into()`:
 
-```rust,noplayground
+```rust,ignore
 fn process_request(&self, service_name: &str, request: M) -> MaybeAsync<Result<M, ServiceError>> {
     // Echo the request back
     Ok(request).into()
@@ -152,7 +152,7 @@ fn process_request(&self, service_name: &str, request: M) -> MaybeAsync<Result<M
 
 Use the `maybe_async!` macro for async processing:
 
-```rust,noplayground
+```rust,ignore
 fn process_request(&self, service_name: &str, request: M) -> MaybeAsync<Result<M, ServiceError>> {
     let service_name = service_name.to_string();
     maybe_async!(async move {
@@ -169,9 +169,9 @@ fn process_request(&self, service_name: &str, request: M) -> MaybeAsync<Result<M
 
 **StubParotAdaptor** — echoes the request back as-is (synchronous):
 
-```rust,noplayground
+```rust,ignore
 fn process_request(&self, _service_name: &str, request: M) -> MaybeAsync<Result<M, ServiceError>> {
-    Ok(request.clone()).into()
+    Ok(request).into()
 }
 ```
 
@@ -187,7 +187,7 @@ stub_1:
 sleep_ms: 250
 ```
 
-```rust,noplayground
+```rust,ignore
 fn process_request(&self, _service_name: &str, request: M) -> MaybeAsync<Result<M, ServiceError>> {
     let sleep_duration = std::time::Duration::from_millis(
         self.sleep_ms.load(std::sync::atomic::Ordering::Relaxed),

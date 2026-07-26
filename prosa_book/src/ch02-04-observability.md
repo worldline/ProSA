@@ -9,7 +9,7 @@ When you create an adaptor, you may want to generate custom metrics, traces or l
 It is important to understand how to implement these features within ProSA, as ProSA handles much of the integration for you.
 
 For convenience, ProSA re-exports the OpenTelemetry items (`KeyValue`, `metrics`, ...) and the `tracing` macros (`info!`, `debug!`, ...), so for most adaptors you don't need to add any dependency:
-```rust,noplayground
+```rust,ignore
 use prosa::otel::{KeyValue, metrics};
 use prosa::tracing::{debug, error, info, trace, warn};
 ```
@@ -27,7 +27,7 @@ With the meter, you can declare counters, gauges, and more.
 A meter is created from the [main task](https://docs.rs/prosa/latest/prosa/core/main/struct.Main.html#method.meter) or from [processors](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.meter).
 You create your metrics using this meter object.
 
-```rust,noplayground
+```rust,ignore
 fn create_metrics<M>(proc_param: prosa::core::proc::ProcParam<M>)
 where
   M: Sized + Clone + Tvf,
@@ -53,7 +53,7 @@ where
 ```
 
 If you want to create asynchronous metrics with regular updates, for example triggered by messages, you can do:
-```rust,noplayground
+```rust,ignore
 fn create_async_metrics<M>(proc_param: prosa::core::proc::ProcParam<M>) -> tokio::sync::watch::Sender<u64>
 where
   M: Sized + Clone + Tvf,
@@ -99,7 +99,7 @@ Tracing create spans and send them automatically to the configured [tracing endp
 Traces is also deeply integrated into ProSA's internal [messaging](https://docs.rs/prosa/latest/prosa/core/msg/trait.Msg.html).
 ProSA messages (which inplement the `prosa::core::msg::Msg` trait) have an internal span that represents the flow of a message through ProSA services.
 
-```rust,noplayground
+```rust,ignore
 fn process_prosa_msg<M>(msg: prosa::core::msg::Msg<M>)
 where
   M: Sized + Clone + Tvf,
@@ -122,7 +122,7 @@ With traces, standalone logs are often less useful, since events are better atta
 However, if you want to log messages, you can use the [log](https://docs.rs/log/latest/log/) crate.
 Like tracing, logging is provisioned automatically with ProSA.
 
-```rust,noplayground
+```rust,ignore
 log::info!("Generate an info log (will not be attached to a trace)");
 ```
 

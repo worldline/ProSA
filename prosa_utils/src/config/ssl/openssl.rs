@@ -399,7 +399,7 @@ impl SslConfigContext<SslConnectorBuilder, SslAcceptorBuilder> for SslConfig {
     /// use std::pin::Pin;
     /// use tokio::net::TcpStream;
     /// use tokio_openssl::SslStream;
-    /// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
+    /// use openssl::ssl::Ssl;
     /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     ///
     /// async fn client() -> Result<(), io::Error> {
@@ -410,11 +410,10 @@ impl SslConfigContext<SslConnectorBuilder, SslAcceptorBuilder> for SslConfig {
     ///         let ssl_context = ssl_context_builder.build();
     ///         let ssl = Ssl::new(&ssl_context.context()).unwrap();
     ///         let mut stream = SslStream::new(ssl, stream).unwrap();
-    ///         if let Err(e) = Pin::new(&mut stream).connect().await {
-    ///             if e.code() != ErrorCode::ZERO_RETURN {
-    ///                 eprintln!("Can't connect the client: {}", e);
-    ///             }
-    ///         }
+    ///         Pin::new(&mut stream)
+    ///             .connect()
+    ///             .await
+    ///             .map_err(|e| io::Error::other(format!("Can't connect the client: {e}")))?;
     ///
     ///         // SSL stream ...
     ///     }
@@ -435,7 +434,7 @@ impl SslConfigContext<SslConnectorBuilder, SslAcceptorBuilder> for SslConfig {
     /// use std::pin::Pin;
     /// use tokio::net::TcpListener;
     /// use tokio_openssl::SslStream;
-    /// use openssl::ssl::{ErrorCode, Ssl, SslMethod, SslVerifyMode};
+    /// use openssl::ssl::{Ssl, SslVerifyMode};
     /// use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
     ///
     /// async fn server() -> Result<(), io::Error> {
@@ -451,9 +450,8 @@ impl SslConfigContext<SslConnectorBuilder, SslAcceptorBuilder> for SslConfig {
     ///             let ssl = Ssl::new(&ssl_context.context()).unwrap();
     ///             let mut stream = SslStream::new(ssl, stream).unwrap();
     ///             if let Err(e) = Pin::new(&mut stream).accept().await {
-    ///                 if e.code() != ErrorCode::ZERO_RETURN {
-    ///                     eprintln!("Can't accept the client {}: {}", cli_addr, e);
-    ///                 }
+    ///                 eprintln!("Can't accept the client {cli_addr}: {e}");
+    ///                 continue;
     ///             }
     ///
     ///             // SSL stream ...

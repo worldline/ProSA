@@ -9,7 +9,7 @@ You'll specify your processor settings object when you create your processor in 
 
 Use [`ProsaConfig`](https://docs.rs/prosa/latest/prosa/core/settings/struct.ProsaConfig.html) to load a ProSA configuration from a file or a directory:
 
-```rust,noplayground
+```rust,ignore
 use prosa::core::settings::ProsaConfig;
 
 let config = ProsaConfig::from_path("prosa.yml")?;
@@ -38,7 +38,7 @@ proc:
 ```
 
 And declare your settings like this in Rust:
-```rust,noplayground
+```rust,ignore
 use serde::{Deserialize, Serialize};
 
 #[proc_settings]
@@ -52,7 +52,7 @@ pub struct MySettings {
 
 Since the `proc_settings` macro adds fields to your struct, it can be tricky to manually implement a default value.
 Fortunately, the macro also supports a custom `Default` implementation that incorporates all required fields:
-```rust,noplayground
+```rust,ignore
 #[proc_settings]
 impl Default for MySettings {
     fn default() -> Self {
@@ -64,7 +64,7 @@ impl Default for MySettings {
 ```
 
 By implementing `Default` for your settings, you can then create a `new` function that uses default parameters, for example:
-```rust,noplayground
+```rust,ignore
 impl MySettings {
     pub fn new(my_param: String) -> MySettings {
         MySettings {

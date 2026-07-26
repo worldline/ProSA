@@ -152,7 +152,7 @@ impl InjProc {
                     &[
                         KeyValue::new("proc", self.name().to_string()),
                         KeyValue::new("service", msg.get_service().clone()),
-                        KeyValue::new("err_code", "0".to_string()),
+                        KeyValue::new("err_code", 0),
                     ],
                 );
 
@@ -163,7 +163,7 @@ impl InjProc {
                     regulator.notify_receive_transaction(msg.elapsed());
 
                     // Build the next transaction
-                    let _ = next_transaction.get_or_insert(adaptor.build_transaction());
+                    let _ = next_transaction.get_or_insert_with(|| adaptor.build_transaction());
                 }
             }
             InternalMsg::Error(err_msg) => {
@@ -173,7 +173,7 @@ impl InjProc {
                     &[
                         KeyValue::new("proc", self.name().to_string()),
                         KeyValue::new("service", err_msg.get_service().clone()),
-                        KeyValue::new("err_code", err_msg.get_err().get_code().to_string()),
+                        KeyValue::new("err_code", err_msg.get_err().get_code() as i64),
                     ],
                 );
 
@@ -195,7 +195,7 @@ impl InjProc {
                 regulator.notify_receive_transaction(err_msg.elapsed());
 
                 // Build the next transaction
-                let _ = next_transaction.get_or_insert(adaptor.build_transaction());
+                let _ = next_transaction.get_or_insert_with(|| adaptor.build_transaction());
             }
             InternalMsg::Config(config) => {
                 let settings = match config.get_proc::<InjSettings>(self.proc.as_ref()) {

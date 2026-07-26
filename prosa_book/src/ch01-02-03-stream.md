@@ -19,6 +19,13 @@ listener:
 
 > Some server implementations may support the `max_socket` parameter to prevent overload conditions.
 
+When listener settings are logged or formatted, URL credentials are masked and query parameters
+and fragments are omitted. URL paths are preserved, so they should not contain secrets.
+`ListenerSetting::get_safe_url()` returns a borrowed
+[`SafeUrl`](https://docs.rs/prosa/latest/prosa/io/struct.SafeUrl.html), allowing callers to format
+the masked view directly, create an owned URL without credentials with `to_url()`, or create an
+owned URL with masked credentials using `to_mask_url()`.
+
 ## Client
 
 For clients, [`Stream`](https://docs.rs/prosa/latest/prosa/io/stream/enum.Stream.html) typically uses [`TargetSetting`](https://docs.rs/prosa/latest/prosa/io/stream/struct.TargetSetting.html) for configuration.
@@ -35,4 +42,10 @@ stream:
   connect_timeout: 3000
 ```
 
-> The `connect_timeout` setting prevents infinite waits during connection attempts.
+> The `connect_timeout` setting covers address resolution and connection establishment, including
+> proxy and TLS handshakes.
+
+Target and proxy URLs are redacted when settings or connection errors are formatted: credentials
+are masked, while query parameters and fragments are omitted. URL paths are preserved and should
+not contain secrets. `TargetSetting::get_safe_url()` returns the same borrowed `SafeUrl` view, so
+the caller chooses whether to format it or convert it into either form of owned sanitized URL.

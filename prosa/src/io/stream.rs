@@ -21,7 +21,7 @@ use tokio::{
 };
 use url::Url;
 
-use super::{SocketAddr, url_is_ssl};
+use super::{SafeUrl, SocketAddr, get_safe_url, url_is_ssl};
 
 /// ProSA socket object to handle TCP/SSL socket with or without proxy
 #[derive(Debug)]
@@ -167,9 +167,7 @@ impl Stream {
     {
         let ssl = ssl_connector.configure()?.into_ssl(domain)?;
         let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream)?;
-        if let Err(e) = Pin::new(&mut stream).connect().await
-            && e.code() != openssl::ssl::ErrorCode::ZERO_RETURN
-        {
+        if let Err(e) = Pin::new(&mut stream).connect().await {
             return Err(io::Error::new(
                 io::ErrorKind::Interrupted,
                 format!("Can't connect the OpenSSL socket `{e}`"),
@@ -209,15 +207,17 @@ impl Stream {
         url: &Url,
         ssl_context: &openssl::ssl::SslConnector,
     ) -> Result<Stream, io::Error> {
-        let addrs = url.socket_addrs(|| url.port_or_known_default())?;
+        let addrs = super::lookup_url(url).await?;
         Ok(Stream::OpenSsl(
             Self::create_openssl(
                 TcpStream::connect(&*addrs).await?,
                 ssl_context,
-                url.host_str().ok_or(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("Can't retrieve host from url `{url}` for ssl"),
-                ))?,
+                url.host_str().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Can't retrieve host from url `{url}` for ssl"),
+                    )
+                })?,
             )
             .await?,
         ))
@@ -230,7 +230,7 @@ impl Stream {
         port: u16,
         proxy: &Url,
     ) -> Result<TcpStream, io::Error> {
-        let proxy_addrs = proxy.socket_addrs(|| proxy.port_or_known_default())?;
+        let proxy_addrs = super::lookup_url(proxy).await?;
         let mut tcp_stream = TcpStream::connect(&*proxy_addrs).await?;
         if let (username, Some(password)) = (proxy.username(), proxy.password()) {
             if let Err(e) = async_http_proxy::http_connect_tokio_with_basic_auth(
@@ -752,24 +752,18 @@ impl TargetSetting {
         self.ssl.is_some() || url_is_ssl(&self.url)
     }
 
-    /// Getter of the URL with masked inner credential
-    pub fn get_safe_url(&self) -> Url {
-        let mut url = self.url.clone();
-        url.set_query(None);
-        if !url.username().is_empty() {
-            let _ = url.set_username("***");
-        }
-        if url.password().is_some() {
-            let _ = url.set_password(Some("***"));
-        }
-
-        url
+    /// Return a borrowed safe view of the target URL.
+    ///
+    /// Formatting the [`SafeUrl`] masks credentials and omits the query and fragment without
+    /// cloning. Callers can use [`SafeUrl::to_url`] to obtain an owned URL without credentials, or
+    /// [`SafeUrl::to_mask_url`] to obtain one with masked credentials.
+    pub fn get_safe_url(&self) -> SafeUrl<'_> {
+        get_safe_url(&self.url)
     }
 
-    /// Method to get authentication value out of URL username/password
+    /// Build an HTTP authorization value from the target URL credentials.
     ///
-    /// - If user password is provided, it return *Basic* authentication with base64 encoded username:password
-    /// - If only password is provided, it return *Bearer* authentication with the password as token
+    /// Credentials are percent-decoded and validated by [`url_authentication`].
     ///
     /// ```
     /// use url::Url;
@@ -809,7 +803,7 @@ impl TargetSetting {
             .map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::TimedOut,
-                    format!("unix timeout after {e} for {}", self.get_safe_url()),
+                    format!("unix timeout after {e} for {}", self.url.path()),
                 )
             })?;
         }
@@ -850,8 +844,9 @@ impl TargetSetting {
                             io::Error::new(
                                 io::ErrorKind::TimedOut,
                                 format!(
-                                    "openssl with proxy timeout after {e} for {}",
-                                    self.get_safe_url()
+                                    "openssl with proxy timeout after {e} for {} -proxy {}",
+                                    self.get_safe_url(),
+                                    get_safe_url(proxy_url)
                                 ),
                             )
                         })?;
@@ -870,8 +865,9 @@ impl TargetSetting {
                         io::Error::new(
                             io::ErrorKind::TimedOut,
                             format!(
-                                "tcp with proxy timeout after {e} for {}",
-                                self.get_safe_url()
+                                "tcp with proxy timeout after {e} for {} -proxy {}",
+                                self.get_safe_url(),
+                                get_safe_url(proxy_url)
                             ),
                         )
                     })?;
@@ -905,11 +901,10 @@ impl TargetSetting {
             })?;
         }
 
-        let addrs = self.url.socket_addrs(|| self.url.port_or_known_default())?;
-        timeout(
-            Duration::from_millis(self.connect_timeout),
-            Stream::connect_tcp(&*addrs),
-        )
+        timeout(Duration::from_millis(self.connect_timeout), async {
+            let addrs = super::lookup_url(&self.url).await?;
+            Stream::connect_tcp(&*addrs).await
+        })
         .await
         .map_err(|e| {
             io::Error::new(
@@ -935,21 +930,18 @@ impl From<Url> for TargetSetting {
 
 impl fmt::Debug for TargetSetting {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut binding = f.debug_struct("TargetSetting");
-        binding
+        f.debug_struct("TargetSetting")
             .field("url", &self.get_safe_url())
             .field("ssl", &self.ssl)
-            .field("connect_timeout", &self.connect_timeout);
-        if let Some(proxy_url) = &self.proxy {
-            binding.field("proxy", proxy_url);
-        }
-        binding.finish()
+            .field("proxy", &self.proxy.as_ref().map(|p| get_safe_url(p)))
+            .field("connect_timeout", &self.connect_timeout)
+            .finish()
     }
 }
 
 impl fmt::Display for TargetSetting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut url = self.get_safe_url();
+        let mut url = self.get_safe_url().to_mask_url();
         if self.ssl.is_some() {
             let url_scheme = url.scheme();
             if url_scheme.is_empty() {
@@ -965,7 +957,7 @@ impl fmt::Display for TargetSetting {
 
         if f.alternate() {
             if let Some(proxy_url) = &self.proxy {
-                write!(f, "{url} -proxy {proxy_url}")
+                write!(f, "{url} -proxy {}", get_safe_url(proxy_url))
             } else {
                 write!(f, "{url}")
             }
@@ -999,10 +991,27 @@ mod tests {
         );
 
         let target_with_user_password = TargetSetting::new(
-            Url::parse("https://admin:admin@localhost:4443/v1?user=admin&password=admin")
-                .expect("Target url is invalid"),
+            Url::parse(
+                "https://admin:admin@localhost:4443/v1?user=admin&password=admin#access_token=secret",
+            )
+            .expect("Target url is invalid"),
             None,
             None,
+        );
+        assert_eq!(
+            "https://***:***@localhost:4443/v1",
+            target_with_user_password.get_safe_url().to_string()
+        );
+        assert_eq!(
+            "https://localhost:4443/v1",
+            target_with_user_password.get_safe_url().to_url().as_str()
+        );
+        assert_eq!(
+            "https://***:***@localhost:4443/v1",
+            target_with_user_password
+                .get_safe_url()
+                .to_mask_url()
+                .as_str()
         );
         assert_eq!(
             "https://localhost:4443/v1",
@@ -1013,7 +1022,7 @@ mod tests {
             format!("{target_with_user_password:#}")
         );
         assert_eq!(
-            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"***\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\", query: None, fragment: None }, ssl: None, connect_timeout: 5000 }",
+            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"***\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\" }, ssl: None, connect_timeout: 5000 }",
             format!("{target_with_user_password:?}")
         );
 
@@ -1028,7 +1037,7 @@ mod tests {
             format!("{target_with_token:#}")
         );
         assert_eq!(
-            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\", query: None, fragment: None }, ssl: None, connect_timeout: 5000 }",
+            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\" }, ssl: None, connect_timeout: 5000 }",
             format!("{target_with_token:?}")
         );
     }

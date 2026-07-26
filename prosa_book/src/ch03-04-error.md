@@ -7,7 +7,7 @@ And even in such occurrence, it is mandatory to have logs about the root cause o
 If there is one advice that we learn implementing ProSA is to avoid using any method that can result in a panic (such as `.unwrap()`) and prefer handling every error correctly.
 Errors should be forwarded to the caller, transformed into an other error type using the `From` trait or handled properly when encountered.
 
-```rust,noplayground
+```rust,ignore
 use thiserror::Error;
 use prosa::core::service::ServiceError;
 

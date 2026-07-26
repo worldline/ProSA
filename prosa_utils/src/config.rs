@@ -6,9 +6,7 @@
 
 use std::{io, path::PathBuf, process::Command};
 
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use thiserror::Error;
-use url::Url;
 use uuid::Uuid;
 
 // Feature openssl or rusttls,...
@@ -21,6 +19,9 @@ pub mod observability;
 // Feature tracing
 #[cfg(feature = "config-observability")]
 pub mod tracing;
+
+pub mod url;
+pub use url::url_authentication;
 
 /// Error define for configuration object
 #[derive(Debug, Error)]
@@ -144,40 +145,6 @@ pub fn hostid() -> String {
     }
 }
 
-/// Method to get authentication value out of URL username/password
-///
-/// - If user password is provided, it return *Basic* authentication with base64 encoded username:password
-/// - If only password is provided, it return *Bearer* authentication with the password as token
-///
-/// ```
-/// use url::Url;
-/// use prosa_utils::config::url_authentication;
-///
-/// let basic_auth_target = Url::parse("http://user:pass@localhost:8080").unwrap();
-/// assert_eq!(Some(String::from("Basic dXNlcjpwYXNz")), url_authentication(&basic_auth_target));
-///
-/// let bearer_auth_target = Url::parse("http://:token@localhost:8080").unwrap();
-/// assert_eq!(Some(String::from("Bearer token")), url_authentication(&bearer_auth_target));
-/// ```
-pub fn url_authentication(url: &Url) -> Option<String> {
-    if let Some(password) = url.password().map(|p| {
-        p.replace("%24", "$")
-            .replace("%26", "&")
-            .replace("%3D", "=")
-    }) {
-        if url.username().is_empty() {
-            Some(format!("Bearer {password}"))
-        } else {
-            Some(format!(
-                "Basic {}",
-                STANDARD.encode(format!("{}:{}", url.username(), password))
-            ))
-        }
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,35 +169,5 @@ mod tests {
     fn test_hostid() {
         let host_id = hostid();
         assert_eq!(host_id.len(), 36);
-    }
-
-    #[test]
-    fn test_url_authentication_basic() {
-        let basic_auth_target = Url::parse("http://user:pass@localhost:8080")
-            .expect("Basic auth target URL should be valid");
-        assert_eq!(
-            Some(String::from("Basic dXNlcjpwYXNz")),
-            url_authentication(&basic_auth_target)
-        );
-    }
-
-    #[test]
-    fn test_url_safe_authentication_basic() {
-        let basic_auth_target = Url::parse("http://user:$ab&cd=@localhost:8080")
-            .expect("Basic auth target URL should be valid");
-        assert_eq!(
-            Some(String::from("Basic dXNlcjokYWImY2Q9")),
-            url_authentication(&basic_auth_target)
-        );
-    }
-
-    #[test]
-    fn test_url_authentication_bearer() {
-        let bearer_auth_target = Url::parse("http://:token@localhost:8080")
-            .expect("Basic auth target URL should be valid");
-        assert_eq!(
-            Some(String::from("Bearer token")),
-            url_authentication(&bearer_auth_target)
-        );
     }
 }

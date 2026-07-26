@@ -10,7 +10,7 @@ The [Proc module](https://docs.rs/prosa/latest/prosa/core/proc/index.html) conta
 To create a processor, use the [proc macro](https://docs.rs/prosa/latest/prosa/core/proc/attr.proc.html), and implement the [`Proc`](https://docs.rs/prosa/latest/prosa/core/proc/trait.Proc.html) trait.
 
 Given a settings struct named `MyProcSettings` for your processor, your processor struct declaration would look like this:
-```rust,noplayground
+```rust,ignore
 #[proc(settings = MyProcSettings)]
 pub struct MyProc { /* No members here */ }
 ```
@@ -20,7 +20,7 @@ pub struct MyProc { /* No members here */ }
 This is usually not an issue, as you can instantiate and use variables within `internal_run()` (the main loop of the processor).
 
 You can still declare methods on your struct as needed:
-```rust,noplayground
+```rust,ignore
 #[proc]
 impl MyProc
 {
@@ -33,7 +33,7 @@ impl MyProc
 Finally, implement the [`Proc`](https://docs.rs/prosa/latest/prosa/core/proc/trait.Proc.html) trait.
 
 Here's an example skeleton:
-```rust,noplayground
+```rust,ignore
 #[proc]
 impl<A> Proc<A> for MyProc
 where
@@ -83,7 +83,7 @@ Specify in the _where_ clause which traits your adaptor must implement (commonly
 Sometimes, you may want your processor to handle only specific TVF objects, possibly to optimize data handling performance or to provide dedicated logic.
 In these cases, explicitly implement the `Proc` trait for your processor, parameterized by the specific TVF type:
 
-```rust,noplayground
+```rust,ignore
 #[proc]
 impl<A> Proc<A> for MyProc<SimpleStringTvf>
 where
