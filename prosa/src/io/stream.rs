@@ -1022,7 +1022,7 @@ mod tests {
             format!("{target_with_user_password:#}")
         );
         assert_eq!(
-            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"***\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\" }, ssl: None, connect_timeout: 5000 }",
+            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"***\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\" }, ssl: None, proxy: None, connect_timeout: 5000 }",
             format!("{target_with_user_password:?}")
         );
 
@@ -1037,7 +1037,7 @@ mod tests {
             format!("{target_with_token:#}")
         );
         assert_eq!(
-            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\" }, ssl: None, connect_timeout: 5000 }",
+            "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\" }, ssl: None, proxy: None, connect_timeout: 5000 }",
             format!("{target_with_token:?}")
         );
     }
