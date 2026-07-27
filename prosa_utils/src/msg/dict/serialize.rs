@@ -82,9 +82,11 @@ where
                             map.serialize_value(&value)?;
                         }
                     }
-                    TvfType::List => {}
-                    _ => {
+                    TvfType::List => {
                         todo!()
+                    }
+                    _ => {
+                        map.serialize_value(&value)?;
                     }
                 }
             } else if !self.ignore_missing {
