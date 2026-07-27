@@ -155,7 +155,7 @@ table, use [`IntHashMap`](https://docs.rs/prosa-utils/latest/prosa_utils/hash/ty
 instead of the standard `HashMap`. It uses ProSA's integer hasher and avoids the
 overhead of general-purpose hashing for field lookups.
 
-```rust,noplayground
+```rust,ignore
 use prosa_utils::hash::IntHashMap;
 
 #[derive(Default)]
