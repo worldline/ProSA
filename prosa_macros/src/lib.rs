@@ -11,10 +11,10 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
+use syn::{DeriveInput, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
 
 mod adaptor;
-mod derive;
+//mod derive;
 mod io;
 mod proc;
 mod settings;
@@ -128,40 +128,22 @@ pub fn tvf(input: TokenStream) -> TokenStream {
         .into()
 }
 
+/*
 #[proc_macro_derive(ToTvf, attributes(tvf))]
-pub fn derive_serialize(input: TokenStream) -> TokenStream {
-    let ast = parse_macro_input!(input as DeriveInput);
-    let generated = match ast.data {
-        Data::Struct(structure) => {
-            derive::structure::to_token_stream_for_serialize(&ast.ident, &structure, &ast.attrs)
-        }
-        Data::Enum(enumeration) => {
-            derive::enumeration::to_token_stream_for_serialize(&ast.ident, &enumeration, &ast.attrs)
-        }
-        _ => panic!("Only structs and enums are supported"),
-    };
-    match generated {
-        Ok(generated) => derive::module_setup(generated),
-        Err(err) => err.to_compile_error().into(),
+pub fn derive_to_tvf(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match derive::impl_derive_to_tvf(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => syn::Error::from(err).to_compile_error().into(),
     }
 }
 
 #[proc_macro_derive(FromTvf, attributes(tvf))]
-pub fn derive_deserialize(input: TokenStream) -> TokenStream {
-    let ast = parse_macro_input!(input as DeriveInput);
-    let generated = match ast.data {
-        Data::Struct(structure) => {
-            derive::structure::to_token_stream_for_deserialize(&ast.ident, &structure, &ast.attrs)
-        }
-        Data::Enum(enumeration) => derive::enumeration::to_token_stream_for_deserialize(
-            &ast.ident,
-            &enumeration,
-            &ast.attrs,
-        ),
-        _ => panic!("Only structs and enums are supported"),
-    };
-    match generated {
-        Ok(generated) => derive::module_setup(generated),
-        Err(err) => err.to_compile_error().into(),
+pub fn derive_from_tvf(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match derive::impl_derive_from_tvf(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => syn::Error::from(err).to_compile_error().into(),
     }
 }
+*/

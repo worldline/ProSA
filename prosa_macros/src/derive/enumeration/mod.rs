@@ -73,13 +73,13 @@ pub(crate) fn to_token_stream_for_deserialize(
 
     // generate the code to deserialize the fields
     Ok(quote! [
-        impl __tvf::FromTvf for #type_name {
-            fn from_tvf_buffer(enum_buffer: &dyn __tvf::Tvf) ->
+        impl __tvf::FromTvf<__TVF> for #type_name {
+            fn from_tvf(enum_buffer: &__TVF) ->
                 ::core::result::Result<Self, __tvf::TvfError>
             {
                 #(#tag_const_tokens)*
                 let tag = #get_method(enum_buffer, #id_tag)?;
-                let buffer = <__BUFFER as __tvf::Tvf>::
+                let __msg = <__TVF as __tvf::Tvf>::
                     get_buffer(enum_buffer, #id_content)?;
                 Ok(match #match_tag {
                     #(#deserialize_tokens)*

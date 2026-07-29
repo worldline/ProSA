@@ -107,7 +107,7 @@ impl TagType {
             TagType::Unsigned => quote![put_unsigned],
             TagType::String => quote![put_string],
         };
-        quote! [ <__BUFFER as __tvf::Tvf>::#method ]
+        quote! [ <__TVF as __tvf::Tvf>::#method ]
     }
 
     /// Select the appropriate method to get the tag from the buffer
@@ -118,6 +118,6 @@ impl TagType {
             TagType::Unsigned => quote![get_unsigned],
             TagType::String => quote![get_string],
         };
-        quote! [ <__BUFFER as __tvf::Tvf>::#method ]
+        quote! [ <__TVF as __tvf::Tvf>::#method ]
     }
 }
