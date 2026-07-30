@@ -1,9 +1,12 @@
-use crate::derive::attr::{AttrError, AttrField, AttrVariant};
-use syn::{DataEnum, DataStruct, Expr, Fields, Generics, Ident};
+use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrVariant};
+use syn::{Attribute, DataEnum, DataStruct, Expr, Fields, Generics, Ident};
 
 /// Container for an enumeration
 #[derive(Clone)]
 pub(crate) struct TvfEnum<'e> {
+    /// The attributes that have been identified on this enumeration
+    pub attr: AttrEnum,
+
     /// Identifier of the enum type
     pub type_ident: &'e Ident,
 
@@ -15,9 +18,6 @@ pub(crate) struct TvfEnum<'e> {
 
     /// Has default variant
     pub default_variant: Option<TvfVariant<'e>>,
-
-    /// Check if the enum has a `#[repr(u8)]` attribute
-    pub is_repr_u8: bool,
 }
 
 /// Container for a variant of an enumeration
@@ -74,16 +74,18 @@ pub(crate) struct TvfField<'f> {
 
 impl<'f> TvfEnum<'f> {
     /// Analyze the enum
-    pub fn new(
+    pub(crate) fn new(
         type_ident: &'f Ident,
+        attrs: &[Attribute],
         generics: &'f Generics,
         enum_data: &'f DataEnum,
-        is_repr_u8: bool,
     ) -> Result<Self, AttrError> {
         // We will collect metadata about the variants as we iterate over them.
         let var_count = enum_data.variants.len();
         let mut out_vars = Vec::with_capacity(var_count);
         let mut count_def = 0;
+
+        let enum_attr = AttrEnum::identify(attrs)?;
 
         // Look for a default variant if any
         let mut def_var = None;
@@ -106,11 +108,6 @@ impl<'f> TvfEnum<'f> {
                 fields,
             };
 
-            // Verify the variant is valid
-            if !var.check_repr(is_repr_u8) {
-                return Err(AttrError::TooBigVariant);
-            }
-
             // A variant was tagged as default
             if is_def {
                 count_def += 1;
@@ -126,42 +123,21 @@ impl<'f> TvfEnum<'f> {
         } else {
             // Return the ordered list of fields
             Ok(Self {
+                attr: enum_attr,
                 type_ident,
                 generics,
                 variants: out_vars,
                 default_variant: def_var,
-                is_repr_u8,
             })
-        }
-    }
-}
-
-impl<'f> TvfVariant<'f> {
-    /// Return true if the variant value is compatible with the target representation
-    pub fn check_repr(&self, is_repr_u8: bool) -> bool {
-        // Max value for a byte
-        const MAX: usize = u8::MAX as usize;
-
-        // We only need to verify when the target encoding is u8 instead of varint
-        if is_repr_u8 {
-            // Evaluate the numeric type identifying the variant.
-            if let Some(custom_id) = self.attr.custom_id {
-                custom_id <= MAX
-            } else if let Some(_) = self.discriminant {
-                true
-            } else {
-                self.index <= MAX
-            }
-        } else {
-            true
         }
     }
 }
 
 impl<'f> TvfStruct<'f> {
     /// Analyze the struct
-    pub fn new(
+    pub(crate) fn new(
         type_ident: &'f Ident,
+        attrs: &[Attribute],
         generics: &'f Generics,
         struct_data: &'f DataStruct,
     ) -> Result<Self, AttrError> {
@@ -178,7 +154,7 @@ impl<'f> TvfStruct<'f> {
 
 impl<'f> TvfFields<'f> {
     /// Analyze the fields
-    pub fn new(fields: &'f Fields) -> Result<Self, AttrError> {
+    pub(crate) fn new(fields: &'f Fields) -> Result<Self, AttrError> {
         // We will collect metadata about the fields as we iterate over them.
         let mut out_fields = Vec::with_capacity(fields.len());
 

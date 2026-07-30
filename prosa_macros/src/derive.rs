@@ -14,7 +14,7 @@ mod tokens;
 
 use crate::derive::{
     ast::{TvfEnum, TvfStruct},
-    attr::{AttrError, has_repr_u8},
+    attr::AttrError,
 };
 use proc_macro2::TokenStream;
 use syn::{Data, DeriveInput};
@@ -43,15 +43,15 @@ pub(crate) fn impl_derive_to_tvf(input: &DeriveInput) -> Result<TokenStream, Tvf
     match &input.data {
         // Implement for struct
         Data::Struct(data) => {
-            let tokens = TvfStruct::new(&input.ident, &input.generics, data)?.impl_to_tvf();
+            let tokens =
+                TvfStruct::new(&input.ident, &input.attrs, &input.generics, data)?.impl_to_tvf();
             Ok(encapsulate(&tokens))
         }
 
         // Implement for enum without payload
         Data::Enum(data) => {
-            let is_repr_u8 = has_repr_u8(input);
             let tokens =
-                TvfEnum::new(&input.ident, &input.generics, data, is_repr_u8)?.impl_to_tvf();
+                TvfEnum::new(&input.ident, &input.attrs, &input.generics, data)?.impl_to_tvf();
             Ok(encapsulate(&tokens))
         }
         _ => Err(TvfError::Union),
@@ -62,15 +62,15 @@ pub(crate) fn impl_derive_from_tvf(input: &DeriveInput) -> Result<TokenStream, T
     match &input.data {
         // Implement for struct
         Data::Struct(data) => {
-            let tokens = TvfStruct::new(&input.ident, &input.generics, data)?.impl_from_tvf();
+            let tokens =
+                TvfStruct::new(&input.ident, &input.attrs, &input.generics, data)?.impl_from_tvf();
             Ok(encapsulate(&tokens))
         }
 
         // Implement for enum without payload
         Data::Enum(data) => {
-            let is_repr_u8 = has_repr_u8(input);
             let tokens =
-                TvfEnum::new(&input.ident, &input.generics, data, is_repr_u8)?.impl_from_tvf();
+                TvfEnum::new(&input.ident, &input.attrs, &input.generics, data)?.impl_from_tvf();
             Ok(encapsulate(&tokens))
         }
         _ => Err(TvfError::Union),
