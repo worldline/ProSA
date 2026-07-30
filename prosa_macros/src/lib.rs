@@ -14,7 +14,7 @@ use quote::quote;
 use syn::{DeriveInput, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
 
 mod adaptor;
-//mod derive;
+mod derive;
 mod io;
 mod proc;
 mod settings;
