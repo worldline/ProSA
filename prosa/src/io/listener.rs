@@ -16,7 +16,7 @@ pub use prosa_macros::io;
 use tokio::net::{TcpListener, ToSocketAddrs, UnixListener};
 use url::Url;
 
-use super::{SocketAddr, stream::Stream, url_is_ssl};
+use super::{SafeUrl, SocketAddr, get_safe_url, stream::Stream, url_is_ssl};
 
 /// ProSA socket object to handle TCP/SSL server socket
 pub enum StreamListener {
@@ -208,7 +208,6 @@ impl StreamListener {
                                 ),
                             )
                         })?
-                    && e.code() != openssl::ssl::ErrorCode::ZERO_RETURN
                 {
                     return Err(io::Error::other(format!("Can't accept the client: {e}")));
                 }
@@ -280,7 +279,6 @@ impl StreamListener {
                                     ),
                                 )
                             })?
-                        && e.code() != openssl::ssl::ErrorCode::ZERO_RETURN
                     {
                         return Err(io::Error::other(format!("Can't accept the client: {e}")));
                     }
@@ -417,6 +415,15 @@ impl ListenerSetting {
         target
     }
 
+    /// Return a borrowed safe view of the listener URL.
+    ///
+    /// Formatting the [`SafeUrl`] masks credentials and omits the query and fragment without
+    /// cloning. Callers can use [`SafeUrl::to_url`] to obtain an owned URL without credentials, or
+    /// [`SafeUrl::to_mask_url`] to obtain one with masked credentials.
+    pub fn get_safe_url(&self) -> SafeUrl<'_> {
+        get_safe_url(&self.url)
+    }
+
     #[cfg(feature = "openssl")]
     /// Method to init the ssl context out of the ssl target configuration.
     /// Must be call when the configuration is retrieved
@@ -511,7 +518,7 @@ impl From<Url> for ListenerSetting {
 impl fmt::Debug for ListenerSetting {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ListenerSetting")
-            .field("url", &self.url)
+            .field("url", &self.get_safe_url())
             .field("ssl", &self.ssl)
             .field("max_socket", &self.max_socket)
             .finish()
@@ -520,7 +527,7 @@ impl fmt::Debug for ListenerSetting {
 
 impl fmt::Display for ListenerSetting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut url = self.url.clone();
+        let mut url = self.get_safe_url().to_mask_url();
         if self.ssl.is_some() {
             let url_scheme = url.scheme();
             if url_scheme.is_empty() {
@@ -535,5 +542,32 @@ impl fmt::Display for ListenerSetting {
         }
 
         write!(f, "{} -max_socket {}", url, self.max_socket)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn listener_setting_display_redacts_url_secrets() {
+        let mut setting = ListenerSetting::from(
+            Url::parse("tcp://admin:secret@localhost:8080/v1?token=secret#access_token=secret")
+                .expect("Listener URL should be valid"),
+        );
+        setting.max_socket = 42;
+
+        assert_eq!(
+            "tcp://***:***@localhost:8080/v1",
+            setting.get_safe_url().to_string()
+        );
+        assert_eq!(
+            "tcp://localhost:8080/v1",
+            setting.get_safe_url().to_url().as_str()
+        );
+        assert_eq!(
+            "tcp://***:***@localhost:8080/v1 -max_socket 42",
+            setting.to_string()
+        );
     }
 }

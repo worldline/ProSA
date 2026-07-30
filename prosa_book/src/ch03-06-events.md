@@ -14,7 +14,7 @@ There are three important methods you need to use for this object:
 - [`pull_msg()`](https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull) Remove your message when you have received its response and no longer need to check its timeout.
 - [`pull()`](https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull) Async method to retrieve all messages that have expired (timed out).
 
-```rust,noplayground
+```rust,ignore
 # #[proc]
 # struct MyProc {}
 #

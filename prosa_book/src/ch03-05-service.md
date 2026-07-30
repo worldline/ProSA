@@ -11,7 +11,7 @@ After declaration, the main task gains access to a queue for sending service req
 However, by default, your processor doesn't listen to any services.
 To start listening to a specific service, call [`add_service_proc()`](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_service_proc)
 
-```rust,noplayground
+```rust,ignore
 # #[proc]
 # struct MyProc {}
 #
@@ -62,7 +62,7 @@ When designing more complex processors, you may need to handle multiple subtasks
 
 In this case, you can declare multiple listener subtasks, each of which subscribes individually to its relevant service(s).
 
-```rust,noplayground
+```rust,ignore
 # #[proc]
 # struct MyProc {}
 #
@@ -155,7 +155,7 @@ In this case, you can declare multiple listener subtasks, each of which subscrib
 Even if your processor only sends messages, it must be registered to receive responses and errors for your requests using [`add_proc()`](https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_proc).
 After that, you are free to call any services.
 
-```rust,noplayground
+```rust,ignore
 # #[proc]
 # struct MyProc {}
 #
@@ -213,7 +213,7 @@ After that, you are free to call any services.
 If you have multiple subtasks, each must use its own queue to ensure responses are routed to the correct subtask.
 The logic is similar to single senders, but you specify the queue when sending messages.
 
-```rust,noplayground
+```rust,ignore
 # #[proc]
 # struct MyProc {}
 #

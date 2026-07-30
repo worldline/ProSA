@@ -11,7 +11,7 @@ However, we'll describe good practices for adaptor design to help you understand
 A Processor uses an Adaptor to transform messages, so you typically need a single Adaptor instance to perform this role.
 This adaptor instance must be both `Send` and `Sync`.
 
-```rust,noplayground
+```rust,ignore
 pub trait MyTraitAdaptor<M>
 where
     M: 'static
@@ -53,7 +53,7 @@ flowchart LR
 ```
 
 In this architecture, if your adaptor needs to send external requests originating from internal messages, it may look like this:
-```rust,noplayground
+```rust,ignore
 # pub struct ExternalObjectRequest {}
 # pub struct ExternalObjectResponse {}
 #
@@ -77,7 +77,7 @@ where
 ```
 
 Conversely, if your adaptor needs to handle incoming external requests and provide corresponding internal responses, it may take this shape:
-```rust,noplayground
+```rust,ignore
 # pub struct ExternalObjectRequest {}
 # pub struct ExternalObjectResponse {}
 #
@@ -105,7 +105,7 @@ where
 You can leverage Rust traits to enhance the adaptor specification.
 For example, you can use associated `const` values in traits, such as setting a [user agent](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/User-Agent).
 
-```rust,noplayground
+```rust,ignore
 pub trait MyTraitAdaptor
 {
     const USER_AGENT: &str;

@@ -6,10 +6,14 @@ use std::{
     path::Path,
 };
 
-use url::Url;
+use tokio::net::lookup_host;
+use url::{Host, Url};
 
 pub use prosa_macros::io;
-pub use prosa_utils::config::ssl::{SslConfig, SslConfigContext};
+pub use prosa_utils::config::{
+    ssl::{SslConfig, SslConfigContext},
+    url::{SafeUrl, get_safe_url},
+};
 
 pub mod listener;
 pub mod stream;
@@ -49,6 +53,52 @@ pub fn url_is_ssl(url: &Url) -> bool {
         true
     } else {
         matches!(url.scheme(), "ssl" | "tls" | "https" | "wss")
+    }
+}
+
+/// Resolve a URL host asynchronously.
+///
+/// Domain names are resolved through Tokio. Literal IPv4 and IPv6 addresses are returned directly
+/// without a DNS lookup. The explicit URL port is used when present; otherwise the scheme's known
+/// default port is used.
+///
+/// # Errors
+///
+/// Returns an error when the URL has no host, has neither an explicit nor a known default port, or
+/// when domain-name resolution fails.
+///
+/// ```
+/// use prosa::io::lookup_url;
+/// use url::Url;
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let url = Url::parse("http://localhost:8080")?;
+/// let addresses = lookup_url(&url).await?;
+///
+/// assert!(!addresses.is_empty());
+/// assert!(addresses.iter().all(|address| address.port() == 8080));
+/// # Ok(())
+/// # }
+/// ```
+pub async fn lookup_url(url: &Url) -> Result<Vec<std::net::SocketAddr>, std::io::Error> {
+    let host = url.host().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("No host name in the URL ({})", get_safe_url(url)),
+        )
+    })?;
+    let port = url.port_or_known_default().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("No port number in the URL ({})", get_safe_url(url)),
+        )
+    })?;
+
+    match host {
+        Host::Domain(domain) => Ok(lookup_host((domain, port)).await?.collect()),
+        Host::Ipv4(ip) => Ok(vec![(ip, port).into()]),
+        Host::Ipv6(ip) => Ok(vec![(ip, port).into()]),
     }
 }
 

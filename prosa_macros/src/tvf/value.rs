@@ -115,7 +115,7 @@ pub(crate) fn generate_value(
             // check if the identifier is a boolean
             match ident.to_string().as_str() {
                 "true" => Ok((quote![1u8], output_type.unwrap_or(ValueType::Byte))),
-                "false" => Ok((quote![1u8], output_type.unwrap_or(ValueType::Byte))),
+                "false" => Ok((quote![0u8], output_type.unwrap_or(ValueType::Byte))),
                 _ => {
                     if let Some(output_type) = output_type {
                         Ok((quote![#ident], output_type))

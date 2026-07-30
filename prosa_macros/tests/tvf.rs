@@ -23,12 +23,21 @@ mod macro_tests {
                 }
             ],
             6 => "1995-01-10" as Date,
+            7 => false,
+            8 => true,
+            9 => b"string from bytes" as String,
             200 => "2023-06-05 15:02:00.000" as DateTime,
         });
 
-        assert_eq!(5, buffer.len());
+        assert_eq!(8, buffer.len());
         assert_eq!(Ok(2), buffer.get_unsigned(1));
         assert_eq!(Ok(4), buffer.get_signed(3));
+        assert_eq!(Ok(0), buffer.get_byte(7));
+        assert_eq!(Ok(1), buffer.get_byte(8));
+        assert_eq!(
+            Ok("string from bytes"),
+            buffer.get_string(9).map(|s| s.to_string()).as_deref()
+        );
 
         let subbuffer = buffer.get_buffer(5).expect("TVF should have a sub buffer");
         assert_eq!(Ok(1u64), subbuffer.get_unsigned(1));

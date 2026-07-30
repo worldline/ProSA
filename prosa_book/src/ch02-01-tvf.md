@@ -17,7 +17,7 @@ The trait allows you to:
 - ...
 
 Most of the time, when using a component that use TVF, you'll see a generic declaration like:
-```rust,noplayground
+```rust,ignore
 struct StructObject<M>
 where
     M: 'static
@@ -50,7 +50,7 @@ Instead of manually calling `put_*` methods one by one, you can use the `tvf!` p
 
 Create a TVF with key-value pairs using `=>`:
 
-```rust,noplayground
+```rust,ignore
 use prosa_macros::tvf;
 use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
 
@@ -58,12 +58,16 @@ let message = tvf!(SimpleStringTvf {
     1 => "hello",
     2 => 42,
     3 => 3.14,
+    4 => false,
+    5 => true,
 });
 ```
 
-Integer values are inferred as signed (`i64`) by default. Use type suffixes or `as` casts to specify other types:
+Integer values are inferred as signed (`i64`) by default. Boolean values are stored as bytes:
+`false` becomes `0u8` and `true` becomes `1u8`. Use type suffixes or `as` casts to specify other
+types:
 
-```rust,noplayground
+```rust,ignore
 let message = tvf!(SimpleStringTvf {
     1 => 2,              // signed (i64)
     2 => 4usize,         // also signed
@@ -82,15 +86,19 @@ Use `as Type` to explicitly set the field type:
 | `as Signed`   | `i64`           | `-5 as Signed`                          |
 | `as Float`    | `f64`           | `3.14 as Float`                         |
 | `as Byte`     | `u8`            | `22 as Byte`                            |
+| `as String`   | `String`         | `b"UTF-8 bytes" as String`              |
 | `as Bytes`    | `Bytes`         | `0x01020304 as Bytes`                   |
 | `as Date`     | `NaiveDate`     | `"1995-01-10" as Date`                  |
 | `as DateTime` | `NaiveDateTime` | `"2023-06-05 15:02:00.000" as DateTime` |
+
+Converting a byte-string literal with `as String` happens at compile time and fails compilation if
+the bytes are not valid UTF-8.
 
 ### Lists
 
 Use `[ ]` to create sequential fields indexed starting from 1:
 
-```rust,noplayground
+```rust,ignore
 let list = tvf!(SimpleStringTvf [
     "first element",   // index 1
     "second element",  // index 2
@@ -102,7 +110,7 @@ let list = tvf!(SimpleStringTvf [
 
 Nest TVF structures inside other TVF messages:
 
-```rust,noplayground
+```rust,ignore
 let message = tvf!(SimpleStringTvf {
     1 => 2,
     5 => [
@@ -117,6 +125,8 @@ let message = tvf!(SimpleStringTvf {
         }
     ],
     6 => "1995-01-10" as Date,
+    7 => false,
+    8 => b"UTF-8 bytes" as String,
     200 => "2023-06-05 15:02:00.000" as DateTime,
 });
 ```
@@ -126,7 +136,7 @@ Lists can contain nested maps (`{ }`), and maps can contain nested lists (`[ ]`)
 ## Implement your own TVF
 
 If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:
-```rust,noplayground
+```rust,ignore
 impl Tvf for MyOwnTvf {
     // All trait method must be implement here
 }
@@ -145,7 +155,7 @@ table, use [`IntHashMap`](https://docs.rs/prosa-utils/latest/prosa_utils/hash/ty
 instead of the standard `HashMap`. It uses ProSA's integer hasher and avoids the
 overhead of general-purpose hashing for field lookups.
 
-```rust,noplayground
+```rust,ignore
 use prosa_utils::hash::IntHashMap;
 
 #[derive(Default)]

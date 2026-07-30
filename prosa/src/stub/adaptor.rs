@@ -167,7 +167,7 @@ where
         _service_name: &str,
         request: M,
     ) -> MaybeAsync<Result<M, ServiceError>> {
-        Ok(request.clone()).into()
+        Ok(request).into()
     }
 }
 

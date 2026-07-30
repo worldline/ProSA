@@ -134,7 +134,31 @@ pub(crate) fn convert_literal(
             }
         },
         ValueType::Bytes => match output_type {
-            ValueType::String => quote! [ ::std::str::from_utf8( #literal.as_ref() ).unwrap() ],
+            ValueType::String => {
+                let byte_string = match parse_quote! [ #literal ] {
+                    syn::Expr::Lit(literal) => match literal.lit {
+                        Lit::ByteStr(byte_string) => byte_string,
+                        _ => {
+                            return Err(Error::new_spanned(
+                                literal,
+                                "Expected a byte string literal.",
+                            ));
+                        }
+                    },
+                    expression => {
+                        return Err(Error::new_spanned(
+                            expression,
+                            "Expected a byte string literal.",
+                        ));
+                    }
+                };
+                let value = byte_string.value();
+                let string = std::str::from_utf8(&value).map_err(|_| {
+                    Error::new_spanned(literal, "Byte string contains invalid UTF-8.")
+                })?;
+                let string = syn::LitStr::new(string, literal.span());
+                quote! [ #string ]
+            }
             _ => {
                 return Err(Error::new_spanned(
                     literal,
