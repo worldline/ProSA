@@ -15,6 +15,9 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use thiserror::Error;
 
+// re-export extra traits
+pub use crate::msg::traits::*;
+
 /// Error define for TVF object
 /// Use by several method (serialize/unserialize/getter/setter)
 #[derive(Debug, Eq, Error, PartialOrd, PartialEq)]
