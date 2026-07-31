@@ -1,5 +1,5 @@
 use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrVariant};
-use syn::{Attribute, DataEnum, DataStruct, Expr, Fields, Generics, Ident};
+use syn::{Attribute, DataEnum, DataStruct, Expr, Fields, Generics, Ident, parse_quote};
 
 /// Container for an enumeration
 #[derive(Clone)]
@@ -65,7 +65,7 @@ pub(crate) struct TvfField<'f> {
     /// The attributes that have been identified for this field.
     pub attr: AttrField,
 
-    /// The original index of the field before reordering
+    /// The original index of the field
     pub index: usize,
 
     /// The field itself.
@@ -170,4 +170,10 @@ impl<'f> TvfFields<'f> {
         // Return the ordered list of fields
         Ok(Self { fields: out_fields })
     }
+}
+
+/// Add the generic bound `__TVF: __tvf::Tvf` to an impl-block
+pub(crate) fn extend_generics(mut generics: Generics) -> Generics {
+    generics.params.push(parse_quote![ __TVF: __tvf::Tvf ]);
+    generics
 }
