@@ -1,4 +1,6 @@
 use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrVariant};
+use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{Attribute, DataEnum, DataStruct, Expr, Fields, Generics, Ident, parse_quote};
 
 /// Container for an enumeration
@@ -173,7 +175,18 @@ impl<'f> TvfFields<'f> {
 }
 
 /// Add the generic bound `__TVF: __tvf::Tvf` to an impl-block
-pub(crate) fn extend_generics(mut generics: Generics) -> Generics {
+/// Output [ImplGenerics, TypeGenerics, WhereClause]
+pub(crate) fn extend_generics(mut generics: Generics) -> [TokenStream; 3] {
+    // Pick current type's generics and where clause as is
+    let (_, type_g, clause) = generics.split_for_impl();
+    let type_g = quote![ #type_g ];
+    let clause = quote![ #clause ];
+
+    // Add extra `__TVF` generics and force a `Tvf` trait bound
     generics.params.push(parse_quote![ __TVF: __tvf::Tvf ]);
-    generics
+    let (impl_g, _, _) = generics.split_for_impl();
+    let impl_g = quote![ #impl_g ];
+
+    // Output the new three parts generics blocks
+    [impl_g, type_g, clause]
 }

@@ -139,7 +139,7 @@ impl AttrField {
                     .map_err(|_| AttrError::Format)?;
                 for name_value in name_values {
                     let name = name_value.path;
-                    if name.is_ident("to_tvf") {
+                    if name.is_ident("id") {
                         field_id = Some(name_value.value);
                     } else if name.is_ident("to_tvf") {
                         custom_to_tvf = Some(path_from_expr(&name_value.value)?);

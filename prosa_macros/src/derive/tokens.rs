@@ -12,16 +12,13 @@ impl<'f> TvfEnum<'f> {
     pub(crate) fn impl_to_tvf(&self) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
-        let generics = extend_generics(self.generics.clone());
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
 
         // handle all cases of the enumeration
-        let count = self.variants.len();
-        let discri_decls = self.decl_discris(self.attr.tag_type, true);
-        let mut cases = Vec::with_capacity(count);
-
-        let tag_type = self.attr.tag_type;
-        let put_variant = tag_type.put_method();
+        let decl_discris = self.decl_discris(self.attr.tag_type, true);
+        let mut cases = Vec::with_capacity(self.variants.len());
+        let put_variant = self.attr.tag_type.put_method();
+        let tag_id = self.attr.tag_id;
 
         // Process all variants
         for variant in self.variants.iter() {
@@ -33,7 +30,7 @@ impl<'f> TvfEnum<'f> {
 
             cases.push(quote! [
                 Self::#var_ident #fields => {
-                    __msg.#put_variant(#discri);
+                    #put_variant(__msg, #tag_id, #discri);
                     #tokens
                 }
             ]);
@@ -51,7 +48,7 @@ impl<'f> TvfEnum<'f> {
             // Add the variant as a regular entry in the store_on list
             cases.push(quote! [
                 Self::#var_ident #fields => {
-                    __msg.#put_variant(#discri);
+                    #put_variant(__msg, #tag_id, #discri);
                     #tokens
                 }
             ]);
@@ -60,7 +57,7 @@ impl<'f> TvfEnum<'f> {
         quote![
             impl #impl_generics __tvf::ToTvf<__TVF> for #type_name #ty_generics #where_clause {
                 fn to_tvf(&self, __msg: &mut __TVF) {
-                    #discri_decls
+                    #decl_discris
                     match self { #(#cases),* }
                 }
             }
@@ -74,8 +71,7 @@ impl<'f> TvfStruct<'f> {
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
-        let generics = extend_generics(self.generics.clone());
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
 
         // (de)structure the type
         let fields = self.fields.structuring();
@@ -116,7 +112,7 @@ impl<'f> TvfFields<'f> {
         }
 
         // return tokens
-        quote![{ #decls #(#tokens)* }]
+        quote![ #decls #(#tokens)* ]
     }
 }
 
@@ -126,16 +122,13 @@ impl<'f> TvfEnum<'f> {
     pub(crate) fn impl_from_tvf(&self) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
-        let generics = extend_generics(self.generics.clone());
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
 
         // handle all cases of the enumeration
-        let count = self.variants.len();
-        let discri_decls = self.decl_discris(self.attr.tag_type, false);
-        let mut cases = Vec::with_capacity(count);
-
-        let tag_type = self.attr.tag_type;
-        let get_variant = tag_type.get_method();
+        let decl_discris = self.decl_discris(self.attr.tag_type, false);
+        let mut cases = Vec::with_capacity(self.variants.len());
+        let get_variant = self.attr.tag_type.get_method();
+        let tag_id = self.attr.tag_id;
 
         // Process all variants
         for variant in self.variants.iter() {
@@ -143,7 +136,7 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_to_tvf();
+            let tokens = variant.fields.impl_from_tvf();
 
             cases.push(quote! [
                 #discri => {
@@ -160,7 +153,7 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_to_tvf();
+            let tokens = variant.fields.impl_from_tvf();
 
             // Add the variant as a regular entry in the store_on list
             cases.push(quote! [
@@ -176,20 +169,30 @@ impl<'f> TvfEnum<'f> {
             ]
         } else {
             quote![::core::result::Result::Err(
-                __tvf::TvfError::InvalidVariant(__disc as u64)
+                __tvf::TvfError::SerializationError(format!["Unknown tag \"{}\"", __disc])
             )]
         };
 
+        // When reading a string from the TVf message, we need to
+        // cast it to a `&str` to use it in the match statement.
+        let as_str = if self.attr.tag_type == TagType::String {
+            quote![ .as_str() ]
+        } else {
+            TokenStream::new()
+        };
+
         quote![
-            impl #impl_generics __tvf::FromTvf for #type_name #ty_generics #where_clause {
-                fn from_tvf(__msg: &mut __TVF) -> ::std::result::Result<Self, __tvf::TvfError>
+            impl #impl_generics __tvf::FromTvf<__TVF> for #type_name #ty_generics #where_clause {
+                fn from_tvf(__msg: &__TVF) -> ::core::result::Result<Self, __tvf::TvfError>
                 where
                     Self: ::core::marker::Sized,
                 {
-                    #discri_decls
+                    #decl_discris
 
-                    let __disc = __msg.#get_variant().map_err(|_| __tvf::TvfError::InvalidVariant(0u64))?;
-                    match __disc {
+                    let __disc = #get_variant(__msg, #tag_id).map_err(|_| {
+                        __tvf::TvfError::SerializationError("Missing tag field".to_string())
+                    })?;
+                    match __disc #as_str {
                         #(#cases),*
                         _ => { #def_case }
                     }
@@ -205,16 +208,15 @@ impl<'f> TvfStruct<'f> {
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
-        let generics = extend_generics(self.generics.clone());
-        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
 
         // (de)structure the type
         let fields = self.fields.structuring();
-        let tokens = self.fields.impl_to_tvf();
+        let tokens = self.fields.impl_from_tvf();
 
         quote![
-            impl #impl_generics __tvf::ToTvf<__TVF> for #type_name #ty_generics #where_clause {
-                fn from_tvf(__msg: &mut __TVF) -> ::std::result::Result<Self, __tvf::TvfError>
+            impl #impl_generics __tvf::FromTvf<__TVF> for #type_name #ty_generics #where_clause {
+                fn from_tvf(__msg: &__TVF) -> ::core::result::Result<Self, __tvf::TvfError>
                 where
                     Self: ::core::marker::Sized,
                 {
@@ -250,7 +252,7 @@ impl<'f> TvfFields<'f> {
         }
 
         // return tokens
-        quote![{ #decls #(#tokens)* }]
+        quote![ #decls #(#tokens)* ]
     }
 }
 
@@ -381,7 +383,7 @@ impl<'f> TvfField<'f> {
     pub(crate) fn decl_field_id(&self) -> TokenStream {
         let ident = self.ident_field_id();
         let value = if let Some(id) = &self.attr.field_id {
-            quote![ #id ]
+            quote![ (#id) as usize ]
         } else {
             let index = self.index;
             quote![ #index ]
