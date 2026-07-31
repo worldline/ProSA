@@ -1,10 +1,10 @@
 use crate::derive::{
-    ast::{TvfEnum, TvfField, TvfFields, TvfStruct, TvfVariant},
+    ast::{TvfEnum, TvfField, TvfFields, TvfStruct, TvfVariant, extend_generics},
     attr::TagType,
 };
 use proc_macro2::TokenStream;
 use quote::{ToTokens as _, format_ident, quote};
-use syn::{Generics, Ident, Index, parse_quote};
+use syn::{Ident, Index};
 
 // MARK: ToTvf
 
@@ -12,11 +12,12 @@ impl<'f> TvfEnum<'f> {
     pub(crate) fn impl_to_tvf(&self) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
-        let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
+        let generics = extend_generics(self.generics.clone());
+        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         // handle all cases of the enumeration
         let count = self.variants.len();
-        let mut discri_decls = Vec::with_capacity(count);
+        let discri_decls = self.decl_discris(self.attr.tag_type, true);
         let mut cases = Vec::with_capacity(count);
 
         let tag_type = self.attr.tag_type;
@@ -24,13 +25,10 @@ impl<'f> TvfEnum<'f> {
 
         // Process all variants
         for variant in self.variants.iter() {
-            // Declare the constant
-            discri_decls.push(variant.discri_decl(tag_type));
-
             // (de)structure the variant
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
-            let discri = variant.discri_ident();
+            let discri = variant.ident_discri();
             let tokens = variant.fields.impl_to_tvf();
 
             cases.push(quote! [
@@ -44,13 +42,10 @@ impl<'f> TvfEnum<'f> {
         // If one variant is the default one, for any unknown discriminant,
         // we try to construct the selected variant.
         if let Some(variant) = &self.default_variant {
-            // Declare the constant
-            discri_decls.push(variant.discri_decl(self.attr.tag_type));
-
             // (de)structure the variant
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
-            let discri = variant.discri_ident();
+            let discri = variant.ident_discri();
             let tokens = variant.fields.impl_to_tvf();
 
             // Add the variant as a regular entry in the store_on list
@@ -65,7 +60,7 @@ impl<'f> TvfEnum<'f> {
         quote![
             impl #impl_generics __tvf::ToTvf<__TVF> for #type_name #ty_generics #where_clause {
                 fn to_tvf(&self, __msg: &mut __TVF) {
-                    #(#discri_decls)*
+                    #discri_decls
                     match self { #(#cases),* }
                 }
             }
@@ -79,7 +74,7 @@ impl<'f> TvfStruct<'f> {
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
-        let generics = add_tvf_bound(&self.generics, format_ident!("ToTvf"));
+        let generics = extend_generics(self.generics.clone());
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         // (de)structure the type
@@ -102,25 +97,26 @@ impl<'f> TvfFields<'f> {
     pub(crate) fn impl_to_tvf(&self) -> TokenStream {
         // Collect tokens
         let len = self.fields.len();
+        let decls = self.decl_field_ids();
         let mut tokens = Vec::with_capacity(len);
 
         // iterate over each field
         for field in self.fields.iter() {
             let ty = &field.field.ty;
-            let id = field.tmp_ident();
+            let ident = field.tmp_ident();
 
             // Select "to_tvf" function
-            let to = if let Some(to) = &field.attr.custom_to_tvf {
-                quote![ #to(#id, __msg); ]
+            let f = if let Some(func) = &field.attr.custom_to_tvf {
+                quote![ #func(&#ident, __msg); ]
             } else {
-                quote![ <#ty as __tvf::ToTvf>::to_tvf(#id, __msg); ]
+                let id = field.ident_field_id();
+                quote![ <#ty as __tvf::ToField<__TVF>>::to_field(&#ident, #id, __msg); ]
             };
-
-            tokens.push(to);
+            tokens.push(f);
         }
 
         // return tokens
-        quote![ #(#tokens)* ]
+        quote![{ #decls #(#tokens)* }]
     }
 }
 
@@ -130,11 +126,12 @@ impl<'f> TvfEnum<'f> {
     pub(crate) fn impl_from_tvf(&self) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
-        let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
+        let generics = extend_generics(self.generics.clone());
+        let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         // handle all cases of the enumeration
         let count = self.variants.len();
-        let mut discri_decls = Vec::with_capacity(count);
+        let discri_decls = self.decl_discris(self.attr.tag_type, false);
         let mut cases = Vec::with_capacity(count);
 
         let tag_type = self.attr.tag_type;
@@ -142,13 +139,10 @@ impl<'f> TvfEnum<'f> {
 
         // Process all variants
         for variant in self.variants.iter() {
-            // Declare the constant
-            discri_decls.push(variant.discri_decl(tag_type));
-
             // (de)structure the variant
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
-            let discri = variant.discri_ident();
+            let discri = variant.ident_discri();
             let tokens = variant.fields.impl_to_tvf();
 
             cases.push(quote! [
@@ -162,13 +156,10 @@ impl<'f> TvfEnum<'f> {
         // If one variant is the default one, for any unknown discriminant,
         // we try to construct the selected variant.
         let def_case = if let Some(variant) = &self.default_variant {
-            // Declare the constant
-            discri_decls.push(variant.discri_decl(self.attr.tag_type));
-
             // (de)structure the variant
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
-            let discri = variant.discri_ident();
+            let discri = variant.ident_discri();
             let tokens = variant.fields.impl_to_tvf();
 
             // Add the variant as a regular entry in the store_on list
@@ -195,7 +186,7 @@ impl<'f> TvfEnum<'f> {
                 where
                     Self: ::core::marker::Sized,
                 {
-                    #(#discri_decls)*
+                    #discri_decls
 
                     let __disc = __msg.#get_variant().map_err(|_| __tvf::TvfError::InvalidVariant(0u64))?;
                     match __disc {
@@ -214,7 +205,7 @@ impl<'f> TvfStruct<'f> {
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
-        let generics = add_tvf_bound(&self.generics, format_ident!("ToTvf"));
+        let generics = extend_generics(self.generics.clone());
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         // (de)structure the type
@@ -240,39 +231,60 @@ impl<'f> TvfFields<'f> {
     pub(crate) fn impl_from_tvf(&self) -> TokenStream {
         // Collect tokens
         let len = self.fields.len();
+        let decls = self.decl_field_ids();
         let mut tokens = Vec::with_capacity(len);
 
         // iterate over each field
         for field in self.fields.iter() {
             let ty = &field.field.ty;
-            let id = field.tmp_ident();
+            let ident = field.tmp_ident();
 
             // Select "tvf_from" function
-            let from = if let Some(from) = &field.attr.custom_from_tvf {
-                quote![ let #id = #from(__msg)?; ]
+            let f = if let Some(func) = &field.attr.custom_from_tvf {
+                quote![ let #ident = #func(__msg)?; ]
             } else {
-                quote![ let #id = <#ty as __tvf::FromTvf>::tvf_from(__msg)?; ]
+                let id = field.ident_field_id();
+                quote![ let #ident = <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id)?; ]
             };
-
-            tokens.push(from);
+            tokens.push(f);
         }
 
         // return tokens
-        quote![ #(#tokens)* ]
+        quote![{ #decls #(#tokens)* }]
     }
 }
 
 // MARK: Common
 
+impl<'f> TvfEnum<'f> {
+    /// Declare the variant discriminants
+    pub(crate) fn decl_discris(&self, tag_type: TagType, include_default: bool) -> TokenStream {
+        // Decalre constants for each variant
+        let mut decls = self
+            .variants
+            .iter()
+            .map(|v| v.decl_discri(tag_type))
+            .collect::<Vec<_>>();
+
+        // If a default variant was defined, include it too
+        if include_default && let Some(default) = &self.default_variant {
+            decls.push(default.decl_discri(tag_type));
+        }
+
+        // Output the tokens
+        decls.into_iter().collect()
+    }
+}
+
 impl<'f> TvfVariant<'f> {
     /// Generate an identifier for the discriminant constant
-    pub(crate) fn discri_ident(&self) -> Ident {
+    pub(crate) fn ident_discri(&self) -> Ident {
         format_ident!("__{}", self.variant_ident.to_string().to_uppercase())
     }
 
     /// Declare a discriminant constant
-    pub(crate) fn discri_decl(&self, tag_type: TagType) -> TokenStream {
-        let ident = self.discri_ident();
+    pub(crate) fn decl_discri(&self, tag_type: TagType) -> TokenStream {
+        let ident = self.ident_discri();
 
         // we have either a text label as a tag or numeric values
         if tag_type == TagType::String {
@@ -335,6 +347,11 @@ impl<'f> TvfFields<'f> {
 
         quote![ { #(#entries),* } ]
     }
+
+    /// Declare constants for the field numeric identifiers
+    pub(crate) fn decl_field_ids(&self) -> TokenStream {
+        self.fields.iter().map(|f| f.decl_field_id()).collect()
+    }
 }
 
 impl<'f> TvfField<'f> {
@@ -353,20 +370,22 @@ impl<'f> TvfField<'f> {
     pub(crate) fn tmp_ident(&self) -> Ident {
         format_ident!("__field_{}", self.index)
     }
-}
 
-/// Iterate over each generic of the type and append the necessary tvf trait bound
-pub(crate) fn add_tvf_bound(generics: &Generics, tvf_trait: Ident) -> Generics {
-    let mut new_gen = generics.clone();
-
-    // Create a where clause and add tvf trait bounds
-    let where_clause = new_gen.make_where_clause();
-    for param in generics.type_params() {
-        let param_name = &param.ident;
-        where_clause
-            .predicates
-            .push(parse_quote!(#param_name : __tvf::#tvf_trait));
+    /// Create a identifier for the field ID
+    #[inline]
+    pub(crate) fn ident_field_id(&self) -> Ident {
+        format_ident!("__ID_{}", self.index)
     }
 
-    new_gen
+    /// Declare the field ID
+    pub(crate) fn decl_field_id(&self) -> TokenStream {
+        let ident = self.ident_field_id();
+        let value = if let Some(id) = &self.attr.field_id {
+            quote![ #id ]
+        } else {
+            let index = self.index;
+            quote![ #index ]
+        };
+        quote![ const #ident: usize = #value; ]
+    }
 }
