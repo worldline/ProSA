@@ -1,8 +1,3 @@
-pub(crate) mod attribute;
-pub(crate) mod enumeration;
-pub(crate) mod field;
-pub(crate) mod structure;
-
 /// Abstract Syntatic Tree components
 mod ast;
 
