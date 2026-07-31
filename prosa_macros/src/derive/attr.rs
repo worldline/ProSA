@@ -110,15 +110,20 @@ impl AttrVariant {
 /// Attributes defined on a field
 #[derive(Default, Clone)]
 pub(crate) struct AttrField {
-    /// Override default to_tvf implementation
+    /// Field index where to store and read the value
+    /// We store it as an expression to allow using predefined constants
+    pub field_id: Option<Expr>,
+
+    /// Override default `to_tvf` implementation
     pub custom_to_tvf: Option<Path>,
 
-    /// Override default from_tvf implementation
+    /// Override default `from_tvf` implementation
     pub custom_from_tvf: Option<Path>,
 }
 
 impl AttrField {
     pub(crate) fn identify(attrs: &[Attribute]) -> Result<Self, AttrError> {
+        let mut field_id = None;
         let mut custom_to_tvf = None;
         let mut custom_from_tvf = None;
 
@@ -135,17 +140,20 @@ impl AttrField {
                 for name_value in name_values {
                     let name = name_value.path;
                     if name.is_ident("to_tvf") {
-                        custom_to_tvf = Some(path_from_expr(&name_value.value)?)
+                        field_id = Some(name_value.value);
+                    } else if name.is_ident("to_tvf") {
+                        custom_to_tvf = Some(path_from_expr(&name_value.value)?);
                     } else if name.is_ident("from_tvf") {
-                        custom_from_tvf = Some(path_from_expr(&name_value.value)?)
+                        custom_from_tvf = Some(path_from_expr(&name_value.value)?);
                     }
                 }
             }
         }
 
         Ok(Self {
-            custom_to_tvf: custom_to_tvf,
-            custom_from_tvf: custom_from_tvf,
+            field_id,
+            custom_to_tvf,
+            custom_from_tvf,
         })
     }
 }
