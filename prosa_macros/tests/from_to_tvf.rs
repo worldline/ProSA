@@ -15,7 +15,7 @@ struct A {
 }
 
 #[derive(Debug, FromTvf, ToTvf)]
-#[tvf(tag_id = 100, tag_type = "string")]
+#[tvf(tag_id = MY_FIELD)]
 enum B {
     C,
     D { a: u32, b: f32 },

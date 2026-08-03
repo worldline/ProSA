@@ -18,7 +18,7 @@ impl<'f> TvfEnum<'f> {
         let decl_discris = self.decl_discris(self.attr.tag_type, true);
         let mut cases = Vec::with_capacity(self.variants.len());
         let put_variant = self.attr.tag_type.put_method();
-        let tag_id = self.attr.tag_id;
+        let tag_id = &self.attr.tag_id;
 
         // Process all variants
         for variant in self.variants.iter() {
@@ -128,7 +128,7 @@ impl<'f> TvfEnum<'f> {
         let decl_discris = self.decl_discris(self.attr.tag_type, false);
         let mut cases = Vec::with_capacity(self.variants.len());
         let get_variant = self.attr.tag_type.get_method();
-        let tag_id = self.attr.tag_id;
+        let tag_id = &self.attr.tag_id;
 
         // Process all variants
         for variant in self.variants.iter() {
