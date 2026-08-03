@@ -24,6 +24,8 @@
 
 /// Adaptor module to adapt processor object and internal messages
 pub mod adaptor;
+/// APN (Application Programming Node) module to run inline service-call automatons from a processor
+pub mod apn;
 /// Define error types for adaptor and processor
 pub mod error;
 /// The module define ProSA main processing to bring asynchronous handler for all processors
