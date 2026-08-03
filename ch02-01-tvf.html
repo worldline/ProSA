@@ -15,8 +15,8 @@
         <link rel="icon" href="favicon-de23e50b.svg">
         <link rel="shortcut icon" href="favicon-8114d1fc.png">
         <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
         <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
+            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-3494636a.js"></script>
+        <script src="toc-fd5e9555.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -193,7 +193,7 @@ The trait allows you to:</p>
 <li>…</li>
 </ul>
 <p>Most of the time, when using a component that use TVF, you’ll see a generic declaration like:</p>
-<pre><code class="language-rust noplayground">struct StructObject&lt;M&gt;
+<pre><code class="language-rust ignore">struct StructObject&lt;M&gt;
 where
     M: 'static
         + std::marker::Send
@@ -221,16 +221,20 @@ where
 <p>Instead of manually calling <code>put_*</code> methods one by one, you can use the <code>tvf!</code> procedural macro to construct TVF messages with a concise syntax.</p>
 <h3 id="basic-usage-map"><a class="header" href="#basic-usage-map">Basic usage (map)</a></h3>
 <p>Create a TVF with key-value pairs using <code>=&gt;</code>:</p>
-<pre><code class="language-rust noplayground">use prosa_macros::tvf;
+<pre><code class="language-rust ignore">use prosa_macros::tvf;
 use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
 
 let message = tvf!(SimpleStringTvf {
     1 =&gt; "hello",
     2 =&gt; 42,
     3 =&gt; 3.14,
+    4 =&gt; false,
+    5 =&gt; true,
 });</code></pre>
-<p>Integer values are inferred as signed (<code>i64</code>) by default. Use type suffixes or <code>as</code> casts to specify other types:</p>
-<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+<p>Integer values are inferred as signed (<code>i64</code>) by default. Boolean values are stored as bytes:
+<code>false</code> becomes <code>0u8</code> and <code>true</code> becomes <code>1u8</code>. Use type suffixes or <code>as</code> casts to specify other
+types:</p>
+<pre><code class="language-rust ignore">let message = tvf!(SimpleStringTvf {
     1 =&gt; 2,              // signed (i64)
     2 =&gt; 4usize,         // also signed
     3 =&gt; 1 as Unsigned,  // unsigned (u64)
@@ -248,22 +252,25 @@ let message = tvf!(SimpleStringTvf {
 <tr><td><code>as Signed</code></td><td><code>i64</code></td><td><code>-5 as Signed</code></td></tr>
 <tr><td><code>as Float</code></td><td><code>f64</code></td><td><code>3.14 as Float</code></td></tr>
 <tr><td><code>as Byte</code></td><td><code>u8</code></td><td><code>22 as Byte</code></td></tr>
+<tr><td><code>as String</code></td><td><code>String</code></td><td><code>b"UTF-8 bytes" as String</code></td></tr>
 <tr><td><code>as Bytes</code></td><td><code>Bytes</code></td><td><code>0x01020304 as Bytes</code></td></tr>
 <tr><td><code>as Date</code></td><td><code>NaiveDate</code></td><td><code>"1995-01-10" as Date</code></td></tr>
 <tr><td><code>as DateTime</code></td><td><code>NaiveDateTime</code></td><td><code>"2023-06-05 15:02:00.000" as DateTime</code></td></tr>
 </tbody>
 </table>
 </div>
+<p>Converting a byte-string literal with <code>as String</code> happens at compile time and fails compilation if
+the bytes are not valid UTF-8.</p>
 <h3 id="lists"><a class="header" href="#lists">Lists</a></h3>
 <p>Use <code>[ ]</code> to create sequential fields indexed starting from 1:</p>
-<pre><code class="language-rust noplayground">let list = tvf!(SimpleStringTvf [
+<pre><code class="language-rust ignore">let list = tvf!(SimpleStringTvf [
     "first element",   // index 1
     "second element",  // index 2
     42,                // index 3
 ]);</code></pre>
 <h3 id="nested-buffers"><a class="header" href="#nested-buffers">Nested buffers</a></h3>
 <p>Nest TVF structures inside other TVF messages:</p>
-<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+<pre><code class="language-rust ignore">let message = tvf!(SimpleStringTvf {
     1 =&gt; 2,
     5 =&gt; [
         1 as Unsigned,
@@ -277,12 +284,14 @@ let message = tvf!(SimpleStringTvf {
         }
     ],
     6 =&gt; "1995-01-10" as Date,
+    7 =&gt; false,
+    8 =&gt; b"UTF-8 bytes" as String,
     200 =&gt; "2023-06-05 15:02:00.000" as DateTime,
 });</code></pre>
 <p>Lists can contain nested maps (<code>{ }</code>), and maps can contain nested lists (<code>[ ]</code>), allowing arbitrary depth.</p>
 <h2 id="implement-your-own-tvf"><a class="header" href="#implement-your-own-tvf">Implement your own TVF</a></h2>
 <p>If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:</p>
-<pre><code class="language-rust noplayground">impl Tvf for MyOwnTvf {
+<pre><code class="language-rust ignore">impl Tvf for MyOwnTvf {
     // All trait method must be implement here
 }</code></pre>
 <p>Make sure to also implement:</p>
@@ -292,6 +301,20 @@ let message = tvf!(SimpleStringTvf {
 <li><code>Clone</code>: if duplication of buffers is needed</li>
 <li><code>Debug</code>: To enable easy debugging and inspection</li>
 </ul>
+<h3 id="use-integer-hashing-for-tvf-fields"><a class="header" href="#use-integer-hashing-for-tvf-fields">Use integer hashing for TVF fields</a></h3>
+<p>TVF field identifiers are integers. When designing a TVF buffer backed by a hash
+table, use <a href="https://docs.rs/prosa-utils/latest/prosa_utils/hash/type.IntHashMap.html"><code>IntHashMap</code></a>
+instead of the standard <code>HashMap</code>. It uses ProSA’s integer hasher and avoids the
+overhead of general-purpose hashing for field lookups.</p>
+<pre><code class="language-rust ignore">use prosa_utils::hash::IntHashMap;
+
+#[derive(Default)]
+struct MyOwnTvf {
+    fields: IntHashMap&lt;usize, String&gt;,
+}</code></pre>
+<p><code>IntHashMap</code> supports only integer key types, including <code>usize</code>, which matches the
+field identifiers used by the <code>Tvf</code> trait. For an integer set, use
+<a href="https://docs.rs/prosa-utils/latest/prosa_utils/hash/type.IntHashSet.html"><code>IntHashSet</code></a>.</p>
 <h2 id="declare-your-custom-tvf"><a class="header" href="#declare-your-custom-tvf">Declare your custom TVF</a></h2>
 <p>When you implement your own TVF, you need to expose it in your Cargo.toml metadata as discussed in the previous chapter.</p>
 <p>To do this, add the following to your <em>Cargo.toml</em> file:</p>
@@ -350,11 +373,11 @@ Since <code>TvfFilter</code> is a trait, you can implement your own filter tailo
 
         <script src="elasticlunr-ef4e11c1.min.js"></script>
         <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="searcher-09f2665d.js"></script>
 
         <script src="clipboard-1626706a.min.js"></script>
         <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="book-609e4cb8.js"></script>
 
         <!-- Custom JS scripts -->
         <script src="mermaid-3a6b472a.min.js"></script>

@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Introduction - ProSA - Protocol Service Adaptor</title>
+        <title>APN - ProSA - Protocol Service Adaptor</title>
 
 
         <!-- Custom HTML head -->
@@ -178,51 +178,119 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p>Welcome to the ProSA ecosystem.
-This book will help you run and build a ProSA.</p>
-<h2 id="who-prosa-is-for"><a class="header" href="#who-prosa-is-for">Who ProSA is for</a></h2>
-<p>ProSA is ideal for people who want to run and build transactional systems.</p>
-<h2 id="how-to-use-this-book"><a class="header" href="#how-to-use-this-book">How to use this book</a></h2>
-<p>This book is organised in three main topics:</p>
+                        <h1 id="apn"><a class="header" href="#apn">APN</a></h1>
+<p>An <strong>APN</strong> (Application Programming Node) lets a processor react to a service request by running a small <em>automaton</em> that can call other services, branch on their results, and produce the final response — without hand-writing a state machine over the processor loop.</p>
+<p>An APN associates a service request with an automaton that handles it. Your code implements the automaton, while the framework takes care of running it and returning the response. ProSA exposes this as a lightweight primitive rather than a dedicated processor: you launch an APN directly on a request from within any processor.</p>
+<h2 id="when-to-use-an-apn"><a class="header" href="#when-to-use-an-apn">When to use an APN</a></h2>
+<p>Use an APN when handling a request means <em>making one or more sub-calls and deciding what to do next based on their responses</em>. For example: call an authorization service, and depending on its return code, call either a payment service or a rejection service, then return the outcome to the original caller.</p>
+<p>Without an APN you would have to store the in-flight request in a <a href="./ch03-06-events.html"><code>PendingMsgs</code></a> map, send the sub-call yourself, match the response on a later loop iteration, correlate it back, and repeat for every step. An APN collapses all of that into a single linear (or branching) block of <code>async</code> code.</p>
+<h2 id="limitations"><a class="header" href="#limitations">Limitations</a></h2>
+<p>An APN has a few limitations by design:</p>
 <ul>
-<li>
-<p>OPS: To give you all the assets you need to run your ProSA</p>
-</li>
-<li>
-<p>Adaptor: A section for application developers who want to use the existing ProSA ecosystem and build their applications around it</p>
-</li>
-<li>
-<p>Processor: For more advanced developers who want to add new processors in ProSA.</p>
-</li>
+<li><strong>It only processes service requests.</strong> It cannot drive a timer, open a socket, or manage any external resource.</li>
+<li><strong>The automaton runs under a timeout budget.</strong> An APN must never block for long; keep the budget short.</li>
 </ul>
-<p>These topics assume that you’re reading them in sequence from OPS through Adaptor to Processor. Later chapters build on concepts from earlier chapters.
-It’s important that you understand concepts from previous chapters if you want to dive into a specific topic.</p>
+<p>The automaton runs on its own spawned task, so it does <strong>not</strong> block the processor loop — but because it is spawned it must be <code>Send + 'static</code>: it captures owned data only and cannot borrow the processor’s state.</p>
+<p>If your need matches any of these limitations, write a full ProSA <a href="./ch03-00-proc.html">processor</a> instead.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<p>An APN is launched with <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn"><code>RequestMsg::apn</code></a>, called directly on the request you want to handle. It takes a service table snapshot and a timeout that is the <strong>overall budget for the whole automaton</strong>, spawns a Tokio task for the automaton, and returns straight away — it is a plain (non-<code>async</code>) call.</p>
+<p>The APN hands the automaton closure the <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html"><code>Apn</code></a> handle plus the request’s <strong>service name and data</strong> (a <code>String</code> and the <code>M</code>). There is no automatic first call: the automaton drives every sub-call itself with <code>apn.call(...)</code>, branches on the results, and returns the final <code>M</code>. That result is <strong>sent back</strong> to the original requestor on the request’s response queue — you never call <code>return_to_sender</code> yourself. If the automaton needs the request’s trace span (to nest its own spans), it’s available via <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.trace_id"><code>apn.trace_id()</code></a>.</p>
+<p>You build that <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html"><code>RequestMsg</code></a> just as you would to <a href="./ch03-05-service.html#sending-messages">send a message to a service</a> — with one twist: set its <strong>response queue</strong> to your processor’s own service queue (<a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.get_service_queue"><code>get_service_queue()</code></a>), so the APN’s final result lands back in your own loop. Then, instead of pushing it onto a service’s <code>proc_queue</code> yourself, hand it to <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn"><code>apn</code></a>, which takes ownership of the request from there. Since the automaton is spawned, everything it needs must be captured by value:</p>
+<pre><code class="language-rust noplayground">// `trans` is the request to handle (its response queue points back at this processor).
+trans.apn(
+    self.service.clone(),
+    self.settings.apn_timeout,
+    move |apn, _service, data| async move {
+        // `data` is the request payload; drive the sub-calls from it.
+        let mut auth = apn.call("AUTH", data).await?;
+        let auth_data = auth.take_data().unwrap_or_default();
+        let mut resp = match auth_data.get_unsigned(1).unwrap_or(0) {
+            0 =&gt; apn.call("PAY", auth_data).await?,      // final response, auto-sent
+            _ =&gt; apn.call("REJECT", auth_data).await?,
+        };
+        Ok(resp.take_data().unwrap_or_default())
+    },
+);</code></pre>
+<p>Just as often you won’t build a request at all: you’ll run an APN on one you <strong>received</strong>. When your processor <a href="./ch03-05-service.html#listening-to-a-service">offers a service</a>, a <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html"><code>RequestMsg</code></a> arrives in the <code>Request</code> arm of its loop already carrying the response queue of whoever called you. Hand that request straight to <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn"><code>apn</code></a> — no rebuilding, no re-wiring — and the automaton’s result flows back to the original caller untouched:</p>
+<pre><code class="language-rust noplayground">InternalMsg::Request(request) =&gt; {
+    // A request for a service this processor offers just arrived.
+    request.apn(
+        self.service.clone(),
+        self.settings.apn_timeout,
+        move |apn, _service, data| async move {
+            // Drive the sub-calls from the received request's data.
+            let mut resp = apn.call("NEXT", data).await?;
+            Ok(resp.take_data().unwrap_or_default())
+        },
+    );
+}</code></pre>
+<p>The automaton can create any object it needs; just remember it captures owned values (clone what you need out of the processor before launching).</p>
+<h3 id="sub-calls"><a class="header" href="#sub-calls">Sub-calls</a></h3>
+<p>The <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html"><code>Apn</code></a> handle exposes two methods:</p>
 <ul>
-<li>
-<p>OPS people only need to understand the OPS chapter</p>
-</li>
-<li>
-<p>Applicative developers need to read OPS and Adaptor chapters</p>
-</li>
-<li>
-<p>More advanced developers need to read this book in its entirety</p>
-</li>
+<li><a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.call"><code>call()</code></a> — sub-call a service; not individually timed out, it is bounded only by the APN’s overall timeout budget.</li>
+<li><a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.call_with_timeout"><code>call_with_timeout()</code></a> — sub-call with an explicit timeout for that one call.</li>
 </ul>
-<h2 id="source-code"><a class="header" href="#source-code">Source code</a></h2>
-<p>The source files from which this book is generated can be found on <a href="https://github.com/worldline/ProSA/tree/main/prosa_book">GitHub</a>.</p>
+<p>Both return <code>Result&lt;ResponseMsg&lt;M&gt;, ServiceError&gt;</code> — take the data out of the response to use it — so failures are handled with ordinary <code>?</code> / <code>match</code>:</p>
+<ul>
+<li><code>ServiceError::UnableToReachService</code> — the service isn’t in the table, or the send failed.</li>
+<li><code>ServiceError::Timeout</code> — the service didn’t respond within the timeout.</li>
+<li>Any error returned by the sub-called service is forwarded as-is.</li>
+</ul>
+<p>Each sub-call gets its own dedicated response channel, so a reply can never be mistaken for another call’s. Sub-call traces are nested under the original request’s span, so a full APN flow shows up as a single trace tree.</p>
+<p>If a sub-call fails (unreachable or timeout), propagate it with <code>?</code> and the error is returned straight to the original caller.</p>
+<h3 id="parallel-sub-calls"><a class="header" href="#parallel-sub-calls">Parallel sub-calls</a></h3>
+<p>Because <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.call"><code>call()</code></a> borrows <code>&amp;self</code>, an automaton can fan out to several distinct services at once and await them together with <a href="https://docs.rs/tokio/latest/tokio/macro.join.html"><code>tokio::join!</code></a> — each sub-call has its own response channel, so their replies never interfere:</p>
+<pre><code class="language-rust noplayground">move |apn, _service, data| async move {
+    // Fire both sub-calls, then await both.
+    let (pay, fraud) = tokio::join!(
+        apn.call("PAY", data.clone()),
+        apn.call("FRAUD", data),
+    );
+    let mut pay = pay?;
+    let _fraud = fraud?;
+    Ok(pay.take_data().unwrap_or_default())
+}</code></pre>
+<h2 id="states"><a class="header" href="#states">States</a></h2>
+<p>The “each state is a separate implementation” model maps naturally onto plain control flow: the automaton <em>is</em> the closure, and it holds its own state. A multi-state machine is just a loop over an enum, where each arm may issue a sub-call and transition to the next state. The request data seeds the initial state:</p>
+<pre><code class="language-rust noplayground">enum State {
+    Start(M),
+    Authorized(M),
+    Paid(M),
+}
+
+trans.apn(self.service.clone(), timeout, move |apn, _service, data| async move {
+    let mut state = State::Start(data);
+    loop {
+        state = match state {
+            State::Start(s) =&gt; {
+                State::Authorized(apn.call("AUTH", s).await?.take_data().unwrap_or_default())
+            }
+            State::Authorized(a) if a.get_unsigned(1).unwrap_or(0) == 0 =&gt; {
+                State::Paid(apn.call("PAY", a).await?.take_data().unwrap_or_default())
+            }
+            State::Authorized(a) =&gt; {
+                return Ok(apn.call("REJECT", a).await?.take_data().unwrap_or_default());
+            }
+            State::Paid(p) =&gt; return Ok(p),
+        };
+    }
+});</code></pre>
+<h2 id="relation-to-pendingmsgs"><a class="header" href="#relation-to-pendingmsgs">Relation to <code>PendingMsgs</code></a></h2>
+<p>An APN and <a href="./ch03-06-events.html"><code>PendingMsgs</code></a> solve related problems from opposite ends:</p>
+<ul>
+<li>Use an <strong>APN</strong> when the follow-up logic is a self-contained linear or branching flow that can run on its own task from captured data.</li>
+<li>Use <strong><code>PendingMsgs</code></strong> when you need the processor loop itself to keep driving each response and timeout across loop iterations — for instance to share and mutate processor state per response.</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="ch00-01-foreword.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="ch03-09-builtin.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="ch00-03-architecture.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -230,13 +298,10 @@ It’s important that you understand concepts from previous chapters if you want
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="ch00-01-foreword.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="ch03-09-builtin.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="ch00-03-architecture.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
-                    </a>
             </nav>
 
         </div>

@@ -15,8 +15,8 @@
         <link rel="icon" href="favicon-de23e50b.svg">
         <link rel="shortcut icon" href="favicon-8114d1fc.png">
         <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
         <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
+            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-3494636a.js"></script>
+        <script src="toc-fd5e9555.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -187,11 +187,11 @@ You can configure your observability outputs to be redirected to stdout or an Op
 You can also configure your processor to act as a server that exposes those metrics itself.</p>
 <p>Of course all configurations can be mixed. You can send your logs to an OpenTelemetry collector and to stdout simultaneously.</p>
 <h3 id="attributes"><a class="header" href="#attributes">Attributes</a></h3>
-<p>For each of your observability data, you can configure attribute that will add labels on your data.</p>
-<p>These attribute should follow the <a href="https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md">OpenTelemetry resource conventions</a>.</p>
-<p>Some of these attributtes are automaticcaly field from ProSA depending of your environment:</p>
+<p>For each observability signal, you can configure attributes that add labels to the exported data.</p>
+<p>These attributes should follow the <a href="https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md">OpenTelemetry resource conventions</a>.</p>
+<p>Some attributes are populated automatically by ProSA depending on the environment:</p>
 <ul>
-<li><code>service.name</code> took from <em>prosa name</em></li>
+<li><code>service.name</code> from the <em>ProSA name</em></li>
 <li><code>host.arch</code> if detected from the compilation</li>
 <li><code>os.type</code> if the OS was detected</li>
 <li><code>service.version</code> the package version</li>
@@ -206,9 +206,9 @@ You can also configure your processor to act as a server that exposes those metr
   attributes:
     # Override the service.name from ProSA
     service.name: "my_service"
-    # Overried the version
+    # Override the version
     service.version: "1.0.0"
-  metric: # metrics params
+  metrics: # metrics params
   traces: # traces params
   logs:   # logs params
 </code></pre>
@@ -278,6 +278,18 @@ To send <em>logs</em> separately, use the <strong>logs</strong>:</p>
     otlp:
       endpoint: "http://localhost:4318/v1/logs"
 </code></pre>
+<p>HTTP OTLP endpoints can carry authorization credentials in their URL:</p>
+<ul>
+<li><code>http://user:password@collector/...</code> produces a Basic authorization header.</li>
+<li><code>http://:token@collector/...</code> produces a Bearer authorization header.</li>
+</ul>
+<p>Username, password, and token values are percent-decoded before the header is built. Percent-encode
+characters that have a special meaning in URL user information, such as <code>%</code>, <code>:</code>, <code>@</code>, <code>/</code>, <code>?</code>,
+and <code>#</code>. Credentials, query parameters, and fragments are redacted from debug output.</p>
+<blockquote>
+<p>URL credentials are currently applied only to HTTP OTLP exporters. A <code>grpc://</code> endpoint does not
+convert URL credentials into gRPC metadata.</p>
+</blockquote>
 <h4 id="grafana-cloud"><a class="header" href="#grafana-cloud">Grafana Cloud</a></h4>
 <p>You can connect ProSA directly to Grafana Cloud to send metrics, logs, and traces.
 To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource.</p>
@@ -289,13 +301,14 @@ To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource
 <li>Decode the base64-encoded basic authorization token from the <code>Create an Instrumentation Instance</code>. You’ll get an <code>id:password</code> to set OTLP credentials with.</li>
 </ul>
 <blockquote>
-<p>If your token contains a trailing <code>=</code>, you need to replace it with <code>%3D</code> to ensure a correct URL format.</p>
+<p>Percent-encode reserved characters in the password. For example, encode a trailing <code>=</code> as <code>%3D</code>
+and a literal <code>%</code> as <code>%25</code>.</p>
 </blockquote>
 <p>With this information, set up your observability stack (look before if you want to set up traces):</p>
 <pre><code class="language-yaml">observability:
   # For the datasource setup
   attributes:
-    - service.name: my-app
+    service.name: my-app
   level: debug
   metrics:
     otlp:
@@ -372,11 +385,11 @@ It’s the role of Prometheus to gather metrics from your application.</p>
 
         <script src="elasticlunr-ef4e11c1.min.js"></script>
         <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="searcher-09f2665d.js"></script>
 
         <script src="clipboard-1626706a.min.js"></script>
         <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="book-609e4cb8.js"></script>
 
         <!-- Custom JS scripts -->
         <script src="mermaid-3a6b472a.min.js"></script>

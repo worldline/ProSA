@@ -16,8 +16,8 @@
         <link rel="icon" href="favicon-de23e50b.svg">
         <link rel="shortcut icon" href="favicon-8114d1fc.png">
         <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
         <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
+            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-3494636a.js"></script>
+        <script src="toc-fd5e9555.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -192,7 +192,7 @@ the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">LGPLv3</a>.</p>
 <p>This license has been chosen to keep the framework and some modules open source, while allowing for other modules to be proprietary.
 In fact, ProSA contains no direct references to Worldline’s private properties.</p>
 <h2 id="version"><a class="header" href="#version">Version</a></h2>
-<p>This book is intended for version 0.4.3 of ProSA.</p>
+<p>This book is intended for version 0.5.0 of ProSA.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="foreword"><a class="header" href="#foreword">Foreword</a></h1>
 <p>While programming languages continue to change and evolve, the foundational architectural concepts in software development remain steadfast.</p>
@@ -528,7 +528,7 @@ Config file : $HOME/.config/prosa/dummy/prosa.toml
 Service file: $HOME/Library/LaunchAgents/com.prosa.dummy.plist
 </code></pre>
 <p>And once cargo-prosa installed the service, MacOS should notify you to indicate the new created service:</p>
-<p><img src="/assets/macos_prosa_background.png" alt="MacOS service creation notification"></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="/assets/macos_prosa_background.png" alt="MacOS service creation notification"><span class="img-wrapper"><img src="/assets/macos_prosa_background.png" alt="MacOS service creation notification"></span></label></p>
 <p>You can now load it and run it with:</p>
 <pre><code class="language-bash">launchctl load $HOME/Library/LaunchAgents/com.prosa.dummy.plist
 </code></pre>
@@ -631,11 +631,11 @@ You can configure your observability outputs to be redirected to stdout or an Op
 You can also configure your processor to act as a server that exposes those metrics itself.</p>
 <p>Of course all configurations can be mixed. You can send your logs to an OpenTelemetry collector and to stdout simultaneously.</p>
 <h3 id="attributes"><a class="header" href="#attributes">Attributes</a></h3>
-<p>For each of your observability data, you can configure attribute that will add labels on your data.</p>
-<p>These attribute should follow the <a href="https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md">OpenTelemetry resource conventions</a>.</p>
-<p>Some of these attributtes are automaticcaly field from ProSA depending of your environment:</p>
+<p>For each observability signal, you can configure attributes that add labels to the exported data.</p>
+<p>These attributes should follow the <a href="https://github.com/open-telemetry/semantic-conventions/blob/main/docs/resource/README.md">OpenTelemetry resource conventions</a>.</p>
+<p>Some attributes are populated automatically by ProSA depending on the environment:</p>
 <ul>
-<li><code>service.name</code> took from <em>prosa name</em></li>
+<li><code>service.name</code> from the <em>ProSA name</em></li>
 <li><code>host.arch</code> if detected from the compilation</li>
 <li><code>os.type</code> if the OS was detected</li>
 <li><code>service.version</code> the package version</li>
@@ -650,9 +650,9 @@ You can also configure your processor to act as a server that exposes those metr
   attributes:
     # Override the service.name from ProSA
     service.name: "my_service"
-    # Overried the version
+    # Override the version
     service.version: "1.0.0"
-  metric: # metrics params
+  metrics: # metrics params
   traces: # traces params
   logs:   # logs params
 </code></pre>
@@ -722,6 +722,18 @@ To send <em>logs</em> separately, use the <strong>logs</strong>:</p>
     otlp:
       endpoint: "http://localhost:4318/v1/logs"
 </code></pre>
+<p>HTTP OTLP endpoints can carry authorization credentials in their URL:</p>
+<ul>
+<li><code>http://user:password@collector/...</code> produces a Basic authorization header.</li>
+<li><code>http://:token@collector/...</code> produces a Bearer authorization header.</li>
+</ul>
+<p>Username, password, and token values are percent-decoded before the header is built. Percent-encode
+characters that have a special meaning in URL user information, such as <code>%</code>, <code>:</code>, <code>@</code>, <code>/</code>, <code>?</code>,
+and <code>#</code>. Credentials, query parameters, and fragments are redacted from debug output.</p>
+<blockquote>
+<p>URL credentials are currently applied only to HTTP OTLP exporters. A <code>grpc://</code> endpoint does not
+convert URL credentials into gRPC metadata.</p>
+</blockquote>
 <h4 id="grafana-cloud"><a class="header" href="#grafana-cloud">Grafana Cloud</a></h4>
 <p>You can connect ProSA directly to Grafana Cloud to send metrics, logs, and traces.
 To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource.</p>
@@ -733,13 +745,14 @@ To do so, you need to create an OpenTelemetry Collector Grafana Cloud datasource
 <li>Decode the base64-encoded basic authorization token from the <code>Create an Instrumentation Instance</code>. You’ll get an <code>id:password</code> to set OTLP credentials with.</li>
 </ul>
 <blockquote>
-<p>If your token contains a trailing <code>=</code>, you need to replace it with <code>%3D</code> to ensure a correct URL format.</p>
+<p>Percent-encode reserved characters in the password. For example, encode a trailing <code>=</code> as <code>%3D</code>
+and a literal <code>%</code> as <code>%25</code>.</p>
 </blockquote>
 <p>With this information, set up your observability stack (look before if you want to set up traces):</p>
 <pre><code class="language-yaml">observability:
   # For the datasource setup
   attributes:
-    - service.name: my-app
+    service.name: my-app
   level: debug
   metrics:
     otlp:
@@ -887,6 +900,12 @@ It’s the role of Prometheus to gather metrics from your application.</p>
 <blockquote>
 <p>Some server implementations may support the <code>max_socket</code> parameter to prevent overload conditions.</p>
 </blockquote>
+<p>When listener settings are logged or formatted, URL credentials are masked and query parameters
+and fragments are omitted. URL paths are preserved, so they should not contain secrets.
+<code>ListenerSetting::get_safe_url()</code> returns a borrowed
+<a href="https://docs.rs/prosa/latest/prosa/io/struct.SafeUrl.html"><code>SafeUrl</code></a>, allowing callers to format
+the masked view directly, create an owned URL without credentials with <code>to_url()</code>, or create an
+owned URL with masked credentials using <code>to_mask_url()</code>.</p>
 <h2 id="client"><a class="header" href="#client">Client</a></h2>
 <p>For clients, <a href="https://docs.rs/prosa/latest/prosa/io/stream/enum.Stream.html"><code>Stream</code></a> typically uses <a href="https://docs.rs/prosa/latest/prosa/io/stream/struct.TargetSetting.html"><code>TargetSetting</code></a> for configuration.</p>
 <p>You need to specify the URL and optionally <a href="#ssl">SSL</a>.
@@ -900,8 +919,13 @@ Additionally, you can specify a proxy if needed:</p>
   connect_timeout: 3000
 </code></pre>
 <blockquote>
-<p>The <code>connect_timeout</code> setting prevents infinite waits during connection attempts.</p>
+<p>The <code>connect_timeout</code> setting covers address resolution and connection establishment, including
+proxy and TLS handshakes.</p>
 </blockquote>
+<p>Target and proxy URLs are redacted when settings or connection errors are formatted: credentials
+are masked, while query parameters and fragments are omitted. URL paths are preserved and should
+not contain secrets. <code>TargetSetting::get_safe_url()</code> returns the same borrowed <code>SafeUrl</code> view, so
+the caller chooses whether to format it or convert it into either form of owned sanitized URL.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="run-prosa"><a class="header" href="#run-prosa">Run ProSA</a></h1>
 <p>Once you have created a binary using <code>cargo-prosa</code>, the next step is to run this binary.</p>
@@ -909,7 +933,7 @@ Additionally, you can specify a proxy if needed:</p>
 However, if you want to execute the binary manually, this section explains the available parameters.</p>
 <h2 id="command-line-options"><a class="header" href="#command-line-options">Command-Line Options</a></h2>
 <p>When you run <code>prosa_binary -h</code>, you’ll see output like the following:</p>
-<pre><code>Usage: prosa_binary [OPTIONS]
+<pre><code class="language-text">Usage: prosa_binary [OPTIONS]
 
 Options:
       --dry_run                   Show how the ProSA will run but doesn't start it. Write the config file if it doesn't exist
@@ -995,7 +1019,7 @@ This generic dashboard will be available soon from Grafana if you want to import
 <h3 id="graphical-representation"><a class="header" href="#graphical-representation">Graphical representation</a></h3>
 <p>Having a view of every processor and service is important to know if your processors are healthy and if your services are up and running.
 There is a node graph to view the entire state of ProSA:</p>
-<p><img src="ch01-03-monitoring-grafana_graph.png" alt="Grafana Graph"></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="ch01-03-monitoring-grafana_graph.png" alt="Grafana Graph"><span class="img-wrapper"><img src="ch01-03-monitoring-grafana_graph.png" alt="Grafana Graph"></span></label></p>
 <p>From this graph, you’ll see:</p>
 <ul>
 <li>Processors 🔄
@@ -1028,7 +1052,7 @@ This could be useful to know if on a VM ProSA is using the RAM, or it’s anothe
 </blockquote>
 <h2 id="traces"><a class="header" href="#traces">Traces</a></h2>
 <p>Since ProSA is a transactional framework, traces are a must-have to view transaction-relative information.</p>
-<p><img src="ch01-03-monitoring-grafana_trace.png" alt="Grafana Trace"></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="ch01-03-monitoring-grafana_trace.png" alt="Grafana Trace"><span class="img-wrapper"><img src="ch01-03-monitoring-grafana_trace.png" alt="Grafana Trace"></span></label></p>
 <p>From this global trace, you can have <a href="#traces-1">processor spans</a> attached to it.</p>
 <h2 id="logs"><a class="header" href="#logs">Logs</a></h2>
 <p>All logs generated by ProSA are available.
@@ -1083,6 +1107,9 @@ For more details on configuration, please refer to the <a href="https://worldlin
 <pre><code class="language-puppet">class { 'prosa':
   bin_repo        =&gt; 'https://user:password@binary.repo.com/repository/prosa-1.0.0.bin',
   telemetry_level =&gt; 'info',
+  telemetry_attributes =&gt; {
+    'service.name' =&gt; "prosa-servicename",
+  },
   observability   =&gt; {
     'metrics' =&gt; {
       'otlp' =&gt; {
@@ -1284,7 +1311,7 @@ The trait allows you to:</p>
 <li>…</li>
 </ul>
 <p>Most of the time, when using a component that use TVF, you’ll see a generic declaration like:</p>
-<pre><code class="language-rust noplayground">struct StructObject&lt;M&gt;
+<pre><code class="language-rust ignore">struct StructObject&lt;M&gt;
 where
     M: 'static
         + std::marker::Send
@@ -1312,16 +1339,20 @@ where
 <p>Instead of manually calling <code>put_*</code> methods one by one, you can use the <code>tvf!</code> procedural macro to construct TVF messages with a concise syntax.</p>
 <h3 id="basic-usage-map"><a class="header" href="#basic-usage-map">Basic usage (map)</a></h3>
 <p>Create a TVF with key-value pairs using <code>=&gt;</code>:</p>
-<pre><code class="language-rust noplayground">use prosa_macros::tvf;
+<pre><code class="language-rust ignore">use prosa_macros::tvf;
 use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
 
 let message = tvf!(SimpleStringTvf {
     1 =&gt; "hello",
     2 =&gt; 42,
     3 =&gt; 3.14,
+    4 =&gt; false,
+    5 =&gt; true,
 });</code></pre>
-<p>Integer values are inferred as signed (<code>i64</code>) by default. Use type suffixes or <code>as</code> casts to specify other types:</p>
-<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+<p>Integer values are inferred as signed (<code>i64</code>) by default. Boolean values are stored as bytes:
+<code>false</code> becomes <code>0u8</code> and <code>true</code> becomes <code>1u8</code>. Use type suffixes or <code>as</code> casts to specify other
+types:</p>
+<pre><code class="language-rust ignore">let message = tvf!(SimpleStringTvf {
     1 =&gt; 2,              // signed (i64)
     2 =&gt; 4usize,         // also signed
     3 =&gt; 1 as Unsigned,  // unsigned (u64)
@@ -1339,22 +1370,25 @@ let message = tvf!(SimpleStringTvf {
 <tr><td><code>as Signed</code></td><td><code>i64</code></td><td><code>-5 as Signed</code></td></tr>
 <tr><td><code>as Float</code></td><td><code>f64</code></td><td><code>3.14 as Float</code></td></tr>
 <tr><td><code>as Byte</code></td><td><code>u8</code></td><td><code>22 as Byte</code></td></tr>
+<tr><td><code>as String</code></td><td><code>String</code></td><td><code>b"UTF-8 bytes" as String</code></td></tr>
 <tr><td><code>as Bytes</code></td><td><code>Bytes</code></td><td><code>0x01020304 as Bytes</code></td></tr>
 <tr><td><code>as Date</code></td><td><code>NaiveDate</code></td><td><code>"1995-01-10" as Date</code></td></tr>
 <tr><td><code>as DateTime</code></td><td><code>NaiveDateTime</code></td><td><code>"2023-06-05 15:02:00.000" as DateTime</code></td></tr>
 </tbody>
 </table>
 </div>
+<p>Converting a byte-string literal with <code>as String</code> happens at compile time and fails compilation if
+the bytes are not valid UTF-8.</p>
 <h3 id="lists"><a class="header" href="#lists">Lists</a></h3>
 <p>Use <code>[ ]</code> to create sequential fields indexed starting from 1:</p>
-<pre><code class="language-rust noplayground">let list = tvf!(SimpleStringTvf [
+<pre><code class="language-rust ignore">let list = tvf!(SimpleStringTvf [
     "first element",   // index 1
     "second element",  // index 2
     42,                // index 3
 ]);</code></pre>
 <h3 id="nested-buffers"><a class="header" href="#nested-buffers">Nested buffers</a></h3>
 <p>Nest TVF structures inside other TVF messages:</p>
-<pre><code class="language-rust noplayground">let message = tvf!(SimpleStringTvf {
+<pre><code class="language-rust ignore">let message = tvf!(SimpleStringTvf {
     1 =&gt; 2,
     5 =&gt; [
         1 as Unsigned,
@@ -1368,12 +1402,14 @@ let message = tvf!(SimpleStringTvf {
         }
     ],
     6 =&gt; "1995-01-10" as Date,
+    7 =&gt; false,
+    8 =&gt; b"UTF-8 bytes" as String,
     200 =&gt; "2023-06-05 15:02:00.000" as DateTime,
 });</code></pre>
 <p>Lists can contain nested maps (<code>{ }</code>), and maps can contain nested lists (<code>[ ]</code>), allowing arbitrary depth.</p>
 <h2 id="implement-your-own-tvf"><a class="header" href="#implement-your-own-tvf">Implement your own TVF</a></h2>
 <p>If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:</p>
-<pre><code class="language-rust noplayground">impl Tvf for MyOwnTvf {
+<pre><code class="language-rust ignore">impl Tvf for MyOwnTvf {
     // All trait method must be implement here
 }</code></pre>
 <p>Make sure to also implement:</p>
@@ -1383,6 +1419,20 @@ let message = tvf!(SimpleStringTvf {
 <li><code>Clone</code>: if duplication of buffers is needed</li>
 <li><code>Debug</code>: To enable easy debugging and inspection</li>
 </ul>
+<h3 id="use-integer-hashing-for-tvf-fields"><a class="header" href="#use-integer-hashing-for-tvf-fields">Use integer hashing for TVF fields</a></h3>
+<p>TVF field identifiers are integers. When designing a TVF buffer backed by a hash
+table, use <a href="https://docs.rs/prosa-utils/latest/prosa_utils/hash/type.IntHashMap.html"><code>IntHashMap</code></a>
+instead of the standard <code>HashMap</code>. It uses ProSA’s integer hasher and avoids the
+overhead of general-purpose hashing for field lookups.</p>
+<pre><code class="language-rust ignore">use prosa_utils::hash::IntHashMap;
+
+#[derive(Default)]
+struct MyOwnTvf {
+    fields: IntHashMap&lt;usize, String&gt;,
+}</code></pre>
+<p><code>IntHashMap</code> supports only integer key types, including <code>usize</code>, which matches the
+field identifiers used by the <code>Tvf</code> trait. For an integer set, use
+<a href="https://docs.rs/prosa-utils/latest/prosa_utils/hash/type.IntHashSet.html"><code>IntHashSet</code></a>.</p>
 <h2 id="declare-your-custom-tvf"><a class="header" href="#declare-your-custom-tvf">Declare your custom TVF</a></h2>
 <p>When you implement your own TVF, you need to expose it in your Cargo.toml metadata as discussed in the previous chapter.</p>
 <p>To do this, add the following to your <em>Cargo.toml</em> file:</p>
@@ -1405,7 +1455,7 @@ Sometimes you will have a wide latitude for customization, while other times the
 <h2 id="instantiation"><a class="header" href="#instantiation">Instantiation</a></h2>
 <p>A Processor uses an Adaptor to transform messages, so you typically need a single Adaptor instance to perform this role.
 This adaptor instance must be both <code>Send</code> and <code>Sync</code>.</p>
-<pre><code class="language-rust noplayground">pub trait MyTraitAdaptor&lt;M&gt;
+<pre><code class="language-rust ignore">pub trait MyTraitAdaptor&lt;M&gt;
 where
     M: 'static
         + std::marker::Send
@@ -1439,7 +1489,7 @@ Additionally, <code>new()</code> can fail with a <code>ProcError</code> or a ded
 </pre>
 
 <p>In this architecture, if your adaptor needs to send external requests originating from internal messages, it may look like this:</p>
-<pre><code class="language-rust noplayground"><span class="boring">pub struct ExternalObjectRequest {}
+<pre><code class="language-rust ignore"><span class="boring">pub struct ExternalObjectRequest {}
 </span><span class="boring">pub struct ExternalObjectResponse {}
 </span><span class="boring">
 </span>pub trait MyTraitAdaptor&lt;M&gt;
@@ -1460,7 +1510,7 @@ where
     fn process_external_response(&amp;mut self, response: &amp;ExternalObjectResponse) -&gt; M;
 }</code></pre>
 <p>Conversely, if your adaptor needs to handle incoming external requests and provide corresponding internal responses, it may take this shape:</p>
-<pre><code class="language-rust noplayground"><span class="boring">pub struct ExternalObjectRequest {}
+<pre><code class="language-rust ignore"><span class="boring">pub struct ExternalObjectRequest {}
 </span><span class="boring">pub struct ExternalObjectResponse {}
 </span><span class="boring">
 </span>pub trait MyTraitAdaptor&lt;M&gt;
@@ -1483,7 +1533,7 @@ where
 <h2 id="additional-features"><a class="header" href="#additional-features">Additional features</a></h2>
 <p>You can leverage Rust traits to enhance the adaptor specification.
 For example, you can use associated <code>const</code> values in traits, such as setting a <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/User-Agent">user agent</a>.</p>
-<pre><code class="language-rust noplayground">pub trait MyTraitAdaptor
+<pre><code class="language-rust ignore">pub trait MyTraitAdaptor
 {
     const USER_AGENT: &amp;str;
 }
@@ -1523,15 +1573,18 @@ All required settings are described in this chapter.</p>
 <p>This section explains how you can use observability features for your own purposes.
 When you create an adaptor, you may want to generate custom metrics, traces or logs from relevant data you are processing.</p>
 <p>It is important to understand how to implement these features within ProSA, as ProSA handles much of the integration for you.</p>
-<p>Each time you’ll need to include opentelemetry dependency to your project:</p>
-<pre><code class="language-toml">opentelemetry = { version = "0.29", features = ["metrics", "trace", "logs"] }
+<p>For convenience, ProSA re-exports the OpenTelemetry items (<code>KeyValue</code>, <code>metrics</code>, …) and the <code>tracing</code> macros (<code>info!</code>, <code>debug!</code>, …), so for most adaptors you don’t need to add any dependency:</p>
+<pre><code class="language-rust ignore">use prosa::otel::{KeyValue, metrics};
+use prosa::tracing::{debug, error, info, trace, warn};</code></pre>
+<p>If you need types that aren’t re-exported, add the OpenTelemetry dependency to your project (keep the version aligned with ProSA):</p>
+<pre><code class="language-toml">opentelemetry = { version = "0.32", features = ["metrics", "trace", "logs"] }
 </code></pre>
 <h2 id="metrics-1"><a class="header" href="#metrics-1">Metrics</a></h2>
 <p>Metrics in ProSA are managed using the <a href="https://docs.rs/opentelemetry/latest/opentelemetry/metrics/struct.Meter.html">OpenTelemetry Meter</a>.
 With the meter, you can declare counters, gauges, and more.</p>
 <p>A meter is created from the <a href="https://docs.rs/prosa/latest/prosa/core/main/struct.Main.html#method.meter">main task</a> or from <a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.meter">processors</a>.
 You create your metrics using this meter object.</p>
-<pre><code class="language-rust noplayground">fn create_metrics&lt;M&gt;(proc_param: prosa::core::proc::ProcParam&lt;M&gt;)
+<pre><code class="language-rust ignore">fn create_metrics&lt;M&gt;(proc_param: prosa::core::proc::ProcParam&lt;M&gt;)
 where
   M: Sized + Clone + Tvf,
 {
@@ -1554,7 +1607,7 @@ where
   );
 }</code></pre>
 <p>If you want to create asynchronous metrics with regular updates, for example triggered by messages, you can do:</p>
-<pre><code class="language-rust noplayground">fn create_async_metrics&lt;M&gt;(proc_param: prosa::core::proc::ProcParam&lt;M&gt;) -&gt; tokio::sync::watch::Sender&lt;u64&gt;
+<pre><code class="language-rust ignore">fn create_async_metrics&lt;M&gt;(proc_param: prosa::core::proc::ProcParam&lt;M&gt;) -&gt; tokio::sync::watch::Sender&lt;u64&gt;
 where
   M: Sized + Clone + Tvf,
 {
@@ -1593,7 +1646,7 @@ If you want to set it up manually in your Observability setting, use the <a href
 Tracing create spans and send them automatically to the configured <a href="#opentelemetry">tracing endpoint</a> or to <a href="#stdout">stdout</a>.</p>
 <p>Traces is also deeply integrated into ProSA’s internal <a href="https://docs.rs/prosa/latest/prosa/core/msg/trait.Msg.html">messaging</a>.
 ProSA messages (which inplement the <code>prosa::core::msg::Msg</code> trait) have an internal span that represents the flow of a message through ProSA services.</p>
-<pre><code class="language-rust noplayground">fn process_prosa_msg&lt;M&gt;(msg: prosa::core::msg::Msg&lt;M&gt;)
+<pre><code class="language-rust ignore">fn process_prosa_msg&lt;M&gt;(msg: prosa::core::msg::Msg&lt;M&gt;)
 where
   M: Sized + Clone + Tvf,
 {
@@ -1610,7 +1663,7 @@ where
 <p>With traces, standalone logs are often less useful, since events are better attached to spans, making it easier to know which transaction produced a given log message.</p>
 <p>However, if you want to log messages, you can use the <a href="https://docs.rs/log/latest/log/">log</a> crate.
 Like tracing, logging is provisioned automatically with ProSA.</p>
-<pre><code class="language-rust noplayground">log::info!("Generate an info log (will not be attached to a trace)");</code></pre>
+<pre><code class="language-rust ignore">log::info!("Generate an info log (will not be attached to a trace)");</code></pre>
 <p>If you configure traces, your logs will automatically be included as part of the traces.
 This behavior is inherent to how OpenTelemetry tracing works.</p>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -1644,6 +1697,15 @@ You’ll specify your processor settings object when you create your processor i
 <blockquote>
 <p><code>Settings</code> is the top-level configuration object, while <code>ProcSettings</code> is specific to processors.</p>
 </blockquote>
+<h2 id="loading"><a class="header" href="#loading">Loading</a></h2>
+<p>Use <a href="https://docs.rs/prosa/latest/prosa/core/settings/struct.ProsaConfig.html"><code>ProsaConfig</code></a> to load a ProSA configuration from a file or a directory:</p>
+<pre><code class="language-rust ignore">use prosa::core::settings::ProsaConfig;
+
+let config = ProsaConfig::from_path("prosa.yml")?;
+let settings = config.try_deserialize::&lt;MyRunSettings&gt;()?;</code></pre>
+<p><code>ProsaConfig::from_path()</code> uses the same configuration loading rules as ProSA itself: the path can be a single configuration file or a directory recursively containing <code>yml</code>, <code>yaml</code>, or <code>toml</code> files, and <code>PROSA_*</code> environment variables are applied on top of the file sources.</p>
+<p>When the main task notifies a processor about a configuration change, the message contains the same <code>ProsaConfig</code> wrapper. Processors should reload their own section with <code>config.get_proc(self.proc.as_ref())?</code>.
+If the processor section has <code>adaptor_config_path</code>, <code>ProsaConfig</code> also loads that adaptor configuration and watches it as part of the global configuration reload flow.</p>
 <h2 id="creation"><a class="header" href="#creation">Creation</a></h2>
 <p>To create a processor settings, declare a <code>struct</code> and use the <a href="https://docs.rs/prosa/latest/prosa/core/proc/attr.proc_settings.html"><code>proc_settings</code></a> macro.
 This macro adds necessary members to your struct and implements the <a href="https://docs.rs/prosa/latest/prosa/core/proc/trait.ProcSettings.html"><code>ProcSettings</code></a> trait for you.</p>
@@ -1658,7 +1720,7 @@ This macro adds necessary members to your struct and implements the <a href="htt
     my_param: "test"
 </code></pre>
 <p>And declare your settings like this in Rust:</p>
-<pre><code class="language-rust noplayground">use serde::{Deserialize, Serialize};
+<pre><code class="language-rust ignore">use serde::{Deserialize, Serialize};
 
 #[proc_settings]
 #[derive(Debug, Deserialize, Serialize)]
@@ -1668,7 +1730,7 @@ pub struct MySettings {
 <h2 id="implementing-default"><a class="header" href="#implementing-default">Implementing Default</a></h2>
 <p>Since the <code>proc_settings</code> macro adds fields to your struct, it can be tricky to manually implement a default value.
 Fortunately, the macro also supports a custom <code>Default</code> implementation that incorporates all required fields:</p>
-<pre><code class="language-rust noplayground">#[proc_settings]
+<pre><code class="language-rust ignore">#[proc_settings]
 impl Default for MySettings {
     fn default() -&gt; Self {
         MySettings {
@@ -1677,7 +1739,7 @@ impl Default for MySettings {
     }
 }</code></pre>
 <p>By implementing <code>Default</code> for your settings, you can then create a <code>new</code> function that uses default parameters, for example:</p>
-<pre><code class="language-rust noplayground">impl MySettings {
+<pre><code class="language-rust ignore">impl MySettings {
     pub fn new(my_param: String) -&gt; MySettings {
         MySettings {
             my_param,
@@ -1693,14 +1755,14 @@ Processor interact with each other through internal TVF messages.</p>
 <p>The <a href="https://docs.rs/prosa/latest/prosa/core/proc/index.html">Proc module</a> contains everything you need to create a processor, along with an example processor and configuration.</p>
 <p>To create a processor, use the <a href="https://docs.rs/prosa/latest/prosa/core/proc/attr.proc.html">proc macro</a>, and implement the <a href="https://docs.rs/prosa/latest/prosa/core/proc/trait.Proc.html"><code>Proc</code></a> trait.</p>
 <p>Given a settings struct named <code>MyProcSettings</code> for your processor, your processor struct declaration would look like this:</p>
-<pre><code class="language-rust noplayground">#[proc(settings = MyProcSettings)]
+<pre><code class="language-rust ignore">#[proc(settings = MyProcSettings)]
 pub struct MyProc { /* No members here */ }</code></pre>
 <blockquote>
 <p>The macro currently does not allow you to add members directly to your struct.</p>
 </blockquote>
 <p>This is usually not an issue, as you can instantiate and use variables within <code>internal_run()</code> (the main loop of the processor).</p>
 <p>You can still declare methods on your struct as needed:</p>
-<pre><code class="language-rust noplayground">#[proc]
+<pre><code class="language-rust ignore">#[proc]
 impl MyProc
 {
     fn internal_func() {
@@ -1709,7 +1771,7 @@ impl MyProc
 }</code></pre>
 <p>Finally, implement the <a href="https://docs.rs/prosa/latest/prosa/core/proc/trait.Proc.html"><code>Proc</code></a> trait.</p>
 <p>Here’s an example skeleton:</p>
-<pre><code class="language-rust noplayground">#[proc]
+<pre><code class="language-rust ignore">#[proc]
 impl&lt;A&gt; Proc&lt;A&gt; for MyProc
 where
     A: Adaptor + std::marker::Send + std::marker::Sync,
@@ -1732,8 +1794,9 @@ where
                     InternalMsg::Error(err) =&gt; {
                         // TODO: process the error
                     }
-                    InternalMsg::Command(_) =&gt; todo!(),
-                    InternalMsg::Config =&gt; todo!(),
+                    InternalMsg::Config(config) =&gt; {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
                         adaptor.terminate();
@@ -1745,12 +1808,13 @@ where
         }
     }
 }</code></pre>
+<p>When receiving <code>InternalMsg::Config(config)</code>, call <code>config.get_proc(self.proc.as_ref())?</code> to deserialize the section matching the processor configuration key (the processor name with <code>-</code> replaced by <code>_</code>) into the processor settings type. The main task only sends this message to processors whose own configuration section changed.</p>
 <p>The generic parameter <code>A</code> represents the adaptor type your processor uses.
 Specify in the <em>where</em> clause which traits your adaptor must implement (commonly, <a href="https://docs.rs/prosa/latest/prosa/core/adaptor/trait.Adaptor.html"><code>Adaptor</code></a> plus <code>Send</code> and <code>Sync</code>)</p>
 <h3 id="specific-tvf"><a class="header" href="#specific-tvf">Specific TVF</a></h3>
 <p>Sometimes, you may want your processor to handle only specific TVF objects, possibly to optimize data handling performance or to provide dedicated logic.
 In these cases, explicitly implement the <code>Proc</code> trait for your processor, parameterized by the specific TVF type:</p>
-<pre><code class="language-rust noplayground">#[proc]
+<pre><code class="language-rust ignore">#[proc]
 impl&lt;A&gt; Proc&lt;A&gt; for MyProc&lt;SimpleStringTvf&gt;
 where
     A: Adaptor + std::marker::Send + std::marker::Sync,
@@ -1780,7 +1844,7 @@ It is out of the question for the application to crash on an unhandled error.
 And even in such occurrence, it is mandatory to have logs about the root cause of such crash.</p>
 <p>If there is one advice that we learn implementing ProSA is to avoid using any method that can result in a panic (such as <code>.unwrap()</code>) and prefer handling every error correctly.
 Errors should be forwarded to the caller, transformed into an other error type using the <code>From</code> trait or handled properly when encountered.</p>
-<pre><code class="language-rust noplayground">use thiserror::Error;
+<pre><code class="language-rust ignore">use thiserror::Error;
 use prosa::core::service::ServiceError;
 
 #[derive(Debug, Error)]
@@ -1848,7 +1912,7 @@ It means that the error is transient and the processor can be restarted.</p>
 After declaration, the main task gains access to a queue for sending service requests to your processor.
 However, by default, your processor doesn’t listen to any services.
 To start listening to a specific service, call <a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_service_proc"><code>add_service_proc()</code></a></p>
-<pre><code class="language-rust noplayground"><span class="boring">#[proc]
+<pre><code class="language-rust ignore"><span class="boring">#[proc]
 </span><span class="boring">struct MyProc {}
 </span><span class="boring">
 </span><span class="boring">#[proc]
@@ -1877,8 +1941,9 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Command(_) =&gt; todo!(),
-                    InternalMsg::Config =&gt; todo!(),
+                    InternalMsg::Config(config) =&gt; {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
                         self.proc.remove_proc(None).await?;
@@ -1892,7 +1957,7 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
 <h3 id="multiple"><a class="header" href="#multiple">Multiple</a></h3>
 <p>When designing more complex processors, you may need to handle multiple subtasks, each requiring interactions with ProSA services.</p>
 <p>In this case, you can declare multiple listener subtasks, each of which subscribes individually to its relevant service(s).</p>
-<pre><code class="language-rust noplayground"><span class="boring">#[proc]
+<pre><code class="language-rust ignore"><span class="boring">#[proc]
 </span><span class="boring">struct MyProc {}
 </span><span class="boring">
 </span><span class="boring">#[proc]
@@ -1937,8 +2002,9 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                         InternalMsg::Error(err) =&gt; {
                             // Handle errors as if they were responses
                         },
-                        InternalMsg::Command(_) =&gt; todo!(),
-                        InternalMsg::Config =&gt; todo!(),
+                        InternalMsg::Config(config) =&gt; {
+                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        },
                         InternalMsg::Service(table) =&gt; service = table,
                         InternalMsg::Shutdown =&gt; {
                             self.proc.remove_proc(None).await?;
@@ -1961,8 +2027,9 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Command(_) =&gt; todo!(),
-                    InternalMsg::Config =&gt; todo!(),
+                    InternalMsg::Config(config) =&gt; {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
                         self.proc.remove_proc(None).await?;
@@ -1977,7 +2044,7 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
 <h3 id="single-1"><a class="header" href="#single-1">Single</a></h3>
 <p>Even if your processor only sends messages, it must be registered to receive responses and errors for your requests using <a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.add_proc"><code>add_proc()</code></a>.
 After that, you are free to call any services.</p>
-<pre><code class="language-rust noplayground"><span class="boring">#[proc]
+<pre><code class="language-rust ignore"><span class="boring">#[proc]
 </span><span class="boring">struct MyProc {}
 </span><span class="boring">
 </span><span class="boring">#[proc]
@@ -2002,8 +2069,9 @@ After that, you are free to call any services.</p>
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors
                     },
-                    InternalMsg::Command(_) =&gt; todo!(),
-                    InternalMsg::Config =&gt; todo!(),
+                    InternalMsg::Config(config) =&gt; {
+                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
                         self.proc.remove_proc(None).await?;
@@ -2029,7 +2097,7 @@ After that, you are free to call any services.</p>
 <h3 id="multiple-1"><a class="header" href="#multiple-1">Multiple</a></h3>
 <p>If you have multiple subtasks, each must use its own queue to ensure responses are routed to the correct subtask.
 The logic is similar to single senders, but you specify the queue when sending messages.</p>
-<pre><code class="language-rust noplayground"><span class="boring">#[proc]
+<pre><code class="language-rust ignore"><span class="boring">#[proc]
 </span><span class="boring">struct MyProc {}
 </span><span class="boring">
 </span><span class="boring">#[proc]
@@ -2063,8 +2131,9 @@ The logic is similar to single senders, but you specify the queue when sending m
                         InternalMsg::Error(err) =&gt; {
                             // Handle errors for this subtask
                         },
-                        InternalMsg::Command(_) =&gt; todo!(),
-                        InternalMsg::Config =&gt; todo!(),
+                        InternalMsg::Config(config) =&gt; {
+                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        },
                         InternalMsg::Service(table) =&gt; self.service = table,
                         InternalMsg::Shutdown =&gt; {
                             self.proc.remove_proc(None).await?;
@@ -2101,7 +2170,7 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
 <li><a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull"><code>pull_msg()</code></a> Remove your message when you have received its response and no longer need to check its timeout.</li>
 <li><a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull"><code>pull()</code></a> Async method to retrieve all messages that have expired (timed out).</li>
 </ul>
-<pre><code class="language-rust noplayground"><span class="boring">#[proc]
+<pre><code class="language-rust ignore"><span class="boring">#[proc]
 </span><span class="boring">struct MyProc {}
 </span><span class="boring">
 </span><span class="boring">#[proc]
@@ -2140,8 +2209,9 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
                             let _enter = err.enter_span();
                             info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
                         },
-                        InternalMsg::Command(_) =&gt; todo!(),
-                        InternalMsg::Config =&gt; todo!(),
+                        InternalMsg::Config(config) =&gt; {
+                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        },
                         InternalMsg::Service(table) =&gt; {
                             debug!("New service table received:\n{}\n", table);
                             self.service = table;
@@ -2297,7 +2367,7 @@ Of course, if you implement it, you can get the number of threads from your proc
 </code></pre>
 <h3 id="injadaptor-trait"><a class="header" href="#injadaptor-trait">InjAdaptor Trait</a></h3>
 <p>To customize what the injector sends and how it processes responses, implement the <code>InjAdaptor</code> trait:</p>
-<pre><code class="language-rust noplayground">pub trait InjAdaptor&lt;M&gt;
+<pre><code class="language-rust ignore">pub trait InjAdaptor&lt;M&gt;
 where
     M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
 {
@@ -2320,7 +2390,7 @@ where
 }</code></pre>
 <h3 id="injdummyadaptor"><a class="header" href="#injdummyadaptor">InjDummyAdaptor</a></h3>
 <p>The built-in <code>InjDummyAdaptor</code> creates minimal messages with <code>"DUMMY"</code> in field 1. It is useful for quick smoke tests:</p>
-<pre><code class="language-rust noplayground">#[derive(Adaptor)]
+<pre><code class="language-rust ignore">#[derive(Adaptor)]
 pub struct InjDummyAdaptor {}
 
 impl&lt;M&gt; InjAdaptor&lt;M&gt; for InjDummyAdaptor
@@ -2342,7 +2412,7 @@ where
 <ul>
 <li><code>proc</code>: processor name</li>
 <li><code>service</code>: target service name</li>
-<li><code>err_code</code>: <code>"0"</code> for success, or the service error code</li>
+<li><code>err_code</code>: numeric <code>0</code> for success, or the numeric service error code</li>
 </ul>
 <hr>
 <h2 id="stubproc--stub"><a class="header" href="#stubproc--stub">StubProc — Stub</a></h2>
@@ -2363,7 +2433,7 @@ where
 </code></pre>
 <h3 id="stubadaptor-trait"><a class="header" href="#stubadaptor-trait">StubAdaptor Trait</a></h3>
 <p>To customize how the stub responds, implement the <code>StubAdaptor</code> trait:</p>
-<pre><code class="language-rust noplayground">pub trait StubAdaptor&lt;M&gt;
+<pre><code class="language-rust ignore">pub trait StubAdaptor&lt;M&gt;
 where
     M: Tvf + Clone + Debug + Default + Send + Sync + 'static,
 {
@@ -2382,13 +2452,13 @@ where
 <p>The return type <code>MaybeAsync</code> lets you choose between synchronous and asynchronous processing.</p>
 <h3 id="synchronous-response"><a class="header" href="#synchronous-response">Synchronous response</a></h3>
 <p>Return a value directly using <code>.into()</code>:</p>
-<pre><code class="language-rust noplayground">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+<pre><code class="language-rust ignore">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
     // Echo the request back
     Ok(request).into()
 }</code></pre>
 <h3 id="asynchronous-response"><a class="header" href="#asynchronous-response">Asynchronous response</a></h3>
 <p>Use the <code>maybe_async!</code> macro for async processing:</p>
-<pre><code class="language-rust noplayground">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+<pre><code class="language-rust ignore">fn process_request(&amp;self, service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
     let service_name = service_name.to_string();
     maybe_async!(async move {
         // Simulate async work (e.g., call an external API)
@@ -2400,13 +2470,24 @@ where
 }</code></pre>
 <h3 id="built-in-adaptors"><a class="header" href="#built-in-adaptors">Built-in Adaptors</a></h3>
 <p><strong>StubParotAdaptor</strong> — echoes the request back as-is (synchronous):</p>
-<pre><code class="language-rust noplayground">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
-    Ok(request.clone()).into()
+<pre><code class="language-rust ignore">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    Ok(request).into()
 }</code></pre>
-<p><strong>StubAsyncParotAdaptor</strong> — echoes the request back after a 100ms delay (asynchronous):</p>
-<pre><code class="language-rust noplayground">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+<p><strong>StubAsyncParotAdaptor</strong> — echoes the request back after a configurable delay (100ms by default, using <code>sleep_ms</code> in the adaptor config):</p>
+<pre><code class="language-yaml">stub_1:
+  service_names:
+    - "TEST_SERVICE"
+  adaptor_config_path: /etc/prosa/stub-1-adaptor.yml
+
+# /etc/prosa/stub-1-adaptor.yml
+sleep_ms: 250
+</code></pre>
+<pre><code class="language-rust ignore">fn process_request(&amp;self, _service_name: &amp;str, request: M) -&gt; MaybeAsync&lt;Result&lt;M, ServiceError&gt;&gt; {
+    let sleep_duration = std::time::Duration::from_millis(
+        self.sleep_ms.load(std::sync::atomic::Ordering::Relaxed),
+    );
     maybe_async!(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(sleep_duration).await;
         Ok(request)
     })
 }</code></pre>
@@ -2424,6 +2505,111 @@ inj-1:
   max_speed: 10.0
 </code></pre>
 <p>When you run ProSA with this configuration, the injector will continuously send messages to the stub, which echoes them back. You can observe the transaction flow through metrics and traces.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="apn"><a class="header" href="#apn">APN</a></h1>
+<p>An <strong>APN</strong> (Application Programming Node) lets a processor react to a service request by running a small <em>automaton</em> that can call other services, branch on their results, and produce the final response — without hand-writing a state machine over the processor loop.</p>
+<p>An APN associates a service request with an automaton that handles it. Your code implements the automaton, while the framework takes care of running it and returning the response. ProSA exposes this as a lightweight primitive rather than a dedicated processor: you launch an APN directly on a request from within any processor.</p>
+<h2 id="when-to-use-an-apn"><a class="header" href="#when-to-use-an-apn">When to use an APN</a></h2>
+<p>Use an APN when handling a request means <em>making one or more sub-calls and deciding what to do next based on their responses</em>. For example: call an authorization service, and depending on its return code, call either a payment service or a rejection service, then return the outcome to the original caller.</p>
+<p>Without an APN you would have to store the in-flight request in a <a href="#events"><code>PendingMsgs</code></a> map, send the sub-call yourself, match the response on a later loop iteration, correlate it back, and repeat for every step. An APN collapses all of that into a single linear (or branching) block of <code>async</code> code.</p>
+<h2 id="limitations-1"><a class="header" href="#limitations-1">Limitations</a></h2>
+<p>An APN has a few limitations by design:</p>
+<ul>
+<li><strong>It only processes service requests.</strong> It cannot drive a timer, open a socket, or manage any external resource.</li>
+<li><strong>The automaton runs under a timeout budget.</strong> An APN must never block for long; keep the budget short.</li>
+</ul>
+<p>The automaton runs on its own spawned task, so it does <strong>not</strong> block the processor loop — but because it is spawned it must be <code>Send + 'static</code>: it captures owned data only and cannot borrow the processor’s state.</p>
+<p>If your need matches any of these limitations, write a full ProSA <a href="#processor">processor</a> instead.</p>
+<h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
+<p>An APN is launched with <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn"><code>RequestMsg::apn</code></a>, called directly on the request you want to handle. It takes a service table snapshot and a timeout that is the <strong>overall budget for the whole automaton</strong>, spawns a Tokio task for the automaton, and returns straight away — it is a plain (non-<code>async</code>) call.</p>
+<p>The APN hands the automaton closure the <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html"><code>Apn</code></a> handle plus the request’s <strong>service name and data</strong> (a <code>String</code> and the <code>M</code>). There is no automatic first call: the automaton drives every sub-call itself with <code>apn.call(...)</code>, branches on the results, and returns the final <code>M</code>. That result is <strong>sent back</strong> to the original requestor on the request’s response queue — you never call <code>return_to_sender</code> yourself. If the automaton needs the request’s trace span (to nest its own spans), it’s available via <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.trace_id"><code>apn.trace_id()</code></a>.</p>
+<p>You build that <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html"><code>RequestMsg</code></a> just as you would to <a href="#sending-messages">send a message to a service</a> — with one twist: set its <strong>response queue</strong> to your processor’s own service queue (<a href="https://docs.rs/prosa/latest/prosa/core/proc/struct.ProcParam.html#method.get_service_queue"><code>get_service_queue()</code></a>), so the APN’s final result lands back in your own loop. Then, instead of pushing it onto a service’s <code>proc_queue</code> yourself, hand it to <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn"><code>apn</code></a>, which takes ownership of the request from there. Since the automaton is spawned, everything it needs must be captured by value:</p>
+<pre><code class="language-rust noplayground">// `trans` is the request to handle (its response queue points back at this processor).
+trans.apn(
+    self.service.clone(),
+    self.settings.apn_timeout,
+    move |apn, _service, data| async move {
+        // `data` is the request payload; drive the sub-calls from it.
+        let mut auth = apn.call("AUTH", data).await?;
+        let auth_data = auth.take_data().unwrap_or_default();
+        let mut resp = match auth_data.get_unsigned(1).unwrap_or(0) {
+            0 =&gt; apn.call("PAY", auth_data).await?,      // final response, auto-sent
+            _ =&gt; apn.call("REJECT", auth_data).await?,
+        };
+        Ok(resp.take_data().unwrap_or_default())
+    },
+);</code></pre>
+<p>Just as often you won’t build a request at all: you’ll run an APN on one you <strong>received</strong>. When your processor <a href="#listening-to-a-service">offers a service</a>, a <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html"><code>RequestMsg</code></a> arrives in the <code>Request</code> arm of its loop already carrying the response queue of whoever called you. Hand that request straight to <a href="https://docs.rs/prosa/latest/prosa/core/msg/struct.RequestMsg.html#method.apn"><code>apn</code></a> — no rebuilding, no re-wiring — and the automaton’s result flows back to the original caller untouched:</p>
+<pre><code class="language-rust noplayground">InternalMsg::Request(request) =&gt; {
+    // A request for a service this processor offers just arrived.
+    request.apn(
+        self.service.clone(),
+        self.settings.apn_timeout,
+        move |apn, _service, data| async move {
+            // Drive the sub-calls from the received request's data.
+            let mut resp = apn.call("NEXT", data).await?;
+            Ok(resp.take_data().unwrap_or_default())
+        },
+    );
+}</code></pre>
+<p>The automaton can create any object it needs; just remember it captures owned values (clone what you need out of the processor before launching).</p>
+<h3 id="sub-calls"><a class="header" href="#sub-calls">Sub-calls</a></h3>
+<p>The <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html"><code>Apn</code></a> handle exposes two methods:</p>
+<ul>
+<li><a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.call"><code>call()</code></a> — sub-call a service; not individually timed out, it is bounded only by the APN’s overall timeout budget.</li>
+<li><a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.call_with_timeout"><code>call_with_timeout()</code></a> — sub-call with an explicit timeout for that one call.</li>
+</ul>
+<p>Both return <code>Result&lt;ResponseMsg&lt;M&gt;, ServiceError&gt;</code> — take the data out of the response to use it — so failures are handled with ordinary <code>?</code> / <code>match</code>:</p>
+<ul>
+<li><code>ServiceError::UnableToReachService</code> — the service isn’t in the table, or the send failed.</li>
+<li><code>ServiceError::Timeout</code> — the service didn’t respond within the timeout.</li>
+<li>Any error returned by the sub-called service is forwarded as-is.</li>
+</ul>
+<p>Each sub-call gets its own dedicated response channel, so a reply can never be mistaken for another call’s. Sub-call traces are nested under the original request’s span, so a full APN flow shows up as a single trace tree.</p>
+<p>If a sub-call fails (unreachable or timeout), propagate it with <code>?</code> and the error is returned straight to the original caller.</p>
+<h3 id="parallel-sub-calls"><a class="header" href="#parallel-sub-calls">Parallel sub-calls</a></h3>
+<p>Because <a href="https://docs.rs/prosa/latest/prosa/core/apn/struct.Apn.html#method.call"><code>call()</code></a> borrows <code>&amp;self</code>, an automaton can fan out to several distinct services at once and await them together with <a href="https://docs.rs/tokio/latest/tokio/macro.join.html"><code>tokio::join!</code></a> — each sub-call has its own response channel, so their replies never interfere:</p>
+<pre><code class="language-rust noplayground">move |apn, _service, data| async move {
+    // Fire both sub-calls, then await both.
+    let (pay, fraud) = tokio::join!(
+        apn.call("PAY", data.clone()),
+        apn.call("FRAUD", data),
+    );
+    let mut pay = pay?;
+    let _fraud = fraud?;
+    Ok(pay.take_data().unwrap_or_default())
+}</code></pre>
+<h2 id="states"><a class="header" href="#states">States</a></h2>
+<p>The “each state is a separate implementation” model maps naturally onto plain control flow: the automaton <em>is</em> the closure, and it holds its own state. A multi-state machine is just a loop over an enum, where each arm may issue a sub-call and transition to the next state. The request data seeds the initial state:</p>
+<pre><code class="language-rust noplayground">enum State {
+    Start(M),
+    Authorized(M),
+    Paid(M),
+}
+
+trans.apn(self.service.clone(), timeout, move |apn, _service, data| async move {
+    let mut state = State::Start(data);
+    loop {
+        state = match state {
+            State::Start(s) =&gt; {
+                State::Authorized(apn.call("AUTH", s).await?.take_data().unwrap_or_default())
+            }
+            State::Authorized(a) if a.get_unsigned(1).unwrap_or(0) == 0 =&gt; {
+                State::Paid(apn.call("PAY", a).await?.take_data().unwrap_or_default())
+            }
+            State::Authorized(a) =&gt; {
+                return Ok(apn.call("REJECT", a).await?.take_data().unwrap_or_default());
+            }
+            State::Paid(p) =&gt; return Ok(p),
+        };
+    }
+});</code></pre>
+<h2 id="relation-to-pendingmsgs"><a class="header" href="#relation-to-pendingmsgs">Relation to <code>PendingMsgs</code></a></h2>
+<p>An APN and <a href="#events"><code>PendingMsgs</code></a> solve related problems from opposite ends:</p>
+<ul>
+<li>Use an <strong>APN</strong> when the follow-up logic is a self-contained linear or branching flow that can run on its own task from captured data.</li>
+<li>Use <strong><code>PendingMsgs</code></strong> when you need the processor loop itself to keep driving each response and timeout across loop iterations — for instance to share and mutate processor state per response.</li>
+</ul>
 
                     </main>
 
@@ -2457,11 +2643,11 @@ inj-1:
 
         <script src="elasticlunr-ef4e11c1.min.js"></script>
         <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="searcher-09f2665d.js"></script>
 
         <script src="clipboard-1626706a.min.js"></script>
         <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="book-609e4cb8.js"></script>
 
         <!-- Custom JS scripts -->
         <script src="mermaid-3a6b472a.min.js"></script>

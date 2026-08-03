@@ -15,8 +15,8 @@
         <link rel="icon" href="favicon-de23e50b.svg">
         <link rel="shortcut icon" href="favicon-8114d1fc.png">
         <link rel="stylesheet" href="css/variables-8adf115d.css">
-        <link rel="stylesheet" href="css/general-2459343d.css">
-        <link rel="stylesheet" href="css/chrome-ae938929.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
         <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3beb88ba.js";
+            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-3494636a.js"></script>
+        <script src="toc-fd5e9555.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -184,6 +184,15 @@ You’ll specify your processor settings object when you create your processor i
 <blockquote>
 <p><code>Settings</code> is the top-level configuration object, while <code>ProcSettings</code> is specific to processors.</p>
 </blockquote>
+<h2 id="loading"><a class="header" href="#loading">Loading</a></h2>
+<p>Use <a href="https://docs.rs/prosa/latest/prosa/core/settings/struct.ProsaConfig.html"><code>ProsaConfig</code></a> to load a ProSA configuration from a file or a directory:</p>
+<pre><code class="language-rust ignore">use prosa::core::settings::ProsaConfig;
+
+let config = ProsaConfig::from_path("prosa.yml")?;
+let settings = config.try_deserialize::&lt;MyRunSettings&gt;()?;</code></pre>
+<p><code>ProsaConfig::from_path()</code> uses the same configuration loading rules as ProSA itself: the path can be a single configuration file or a directory recursively containing <code>yml</code>, <code>yaml</code>, or <code>toml</code> files, and <code>PROSA_*</code> environment variables are applied on top of the file sources.</p>
+<p>When the main task notifies a processor about a configuration change, the message contains the same <code>ProsaConfig</code> wrapper. Processors should reload their own section with <code>config.get_proc(self.proc.as_ref())?</code>.
+If the processor section has <code>adaptor_config_path</code>, <code>ProsaConfig</code> also loads that adaptor configuration and watches it as part of the global configuration reload flow.</p>
 <h2 id="creation"><a class="header" href="#creation">Creation</a></h2>
 <p>To create a processor settings, declare a <code>struct</code> and use the <a href="https://docs.rs/prosa/latest/prosa/core/proc/attr.proc_settings.html"><code>proc_settings</code></a> macro.
 This macro adds necessary members to your struct and implements the <a href="https://docs.rs/prosa/latest/prosa/core/proc/trait.ProcSettings.html"><code>ProcSettings</code></a> trait for you.</p>
@@ -198,7 +207,7 @@ This macro adds necessary members to your struct and implements the <a href="htt
     my_param: "test"
 </code></pre>
 <p>And declare your settings like this in Rust:</p>
-<pre><code class="language-rust noplayground">use serde::{Deserialize, Serialize};
+<pre><code class="language-rust ignore">use serde::{Deserialize, Serialize};
 
 #[proc_settings]
 #[derive(Debug, Deserialize, Serialize)]
@@ -208,7 +217,7 @@ pub struct MySettings {
 <h2 id="implementing-default"><a class="header" href="#implementing-default">Implementing Default</a></h2>
 <p>Since the <code>proc_settings</code> macro adds fields to your struct, it can be tricky to manually implement a default value.
 Fortunately, the macro also supports a custom <code>Default</code> implementation that incorporates all required fields:</p>
-<pre><code class="language-rust noplayground">#[proc_settings]
+<pre><code class="language-rust ignore">#[proc_settings]
 impl Default for MySettings {
     fn default() -&gt; Self {
         MySettings {
@@ -217,7 +226,7 @@ impl Default for MySettings {
     }
 }</code></pre>
 <p>By implementing <code>Default</code> for your settings, you can then create a <code>new</code> function that uses default parameters, for example:</p>
-<pre><code class="language-rust noplayground">impl MySettings {
+<pre><code class="language-rust ignore">impl MySettings {
     pub fn new(my_param: String) -&gt; MySettings {
         MySettings {
             my_param,
@@ -270,11 +279,11 @@ impl Default for MySettings {
 
         <script src="elasticlunr-ef4e11c1.min.js"></script>
         <script src="mark-09e88c2c.min.js"></script>
-        <script src="searcher-c2a407aa.js"></script>
+        <script src="searcher-09f2665d.js"></script>
 
         <script src="clipboard-1626706a.min.js"></script>
         <script src="highlight-abc7f01d.js"></script>
-        <script src="book-a0b12cfe.js"></script>
+        <script src="book-609e4cb8.js"></script>
 
         <!-- Custom JS scripts -->
         <script src="mermaid-3a6b472a.min.js"></script>
