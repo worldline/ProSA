@@ -2,19 +2,26 @@ use crate::derive::ATTRIBUTE;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    Attribute, DeriveInput, Expr, Lit, LitInt, LitStr, Meta, MetaNameValue, Path, Token, parse_str,
+    Attribute, DeriveInput, Expr, Lit, LitStr, Meta, MetaNameValue, Path, Token, parse_str,
     punctuated::Punctuated, spanned::Spanned,
 };
 
 /// Error encountered when parsing attributes
 #[derive(thiserror::Error, Debug, Clone, Copy)]
 pub enum AttrError {
+    /// TVF message is missing a field for storing the variant tag
+    #[error("Missing tag field to identify enum variant")]
+    MissingTag,
+
+    /// Format error in the `tvf` attribute
     #[error("Wrong format, expect a list of tags separated by commas")]
     Format,
 
+    /// Invalid path to a function
     #[error("Failed to parse a path")]
     Path,
 
+    /// An enum type cannot have multiple default variants
     #[error("Multiple default variants")]
     MultiDefault,
 }
@@ -23,7 +30,7 @@ pub enum AttrError {
 #[derive(Clone)]
 pub(crate) struct AttrEnum {
     /// Field identifier to identify the variant
-    pub tag_id: usize,
+    pub tag_id: Expr,
 
     /// Type of value used to discriminate the variants
     pub tag_type: TagType,
@@ -48,8 +55,8 @@ impl AttrEnum {
                         Ok(())
                     } else if meta.path.is_ident("tag_id") {
                         meta.input.parse::<Token![=]>()?;
-                        let val: LitInt = meta.input.parse()?;
-                        tag_id = Some(val.base10_parse()?);
+                        let val: Expr = meta.input.parse()?;
+                        tag_id = Some(val);
                         Ok(())
                     } else {
                         Err(syn::Error::new(attr.span(), "Unsupported attribute value"))
@@ -58,10 +65,15 @@ impl AttrEnum {
             }
         }
 
-        Ok(Self {
-            tag_id: tag_id.expect("Tag field identifier is not set"),
-            tag_type: tag_type.expect("Tag value type is not set"),
-        })
+        // While the tag type will default to `String`, we must explicitely define a `tag_id`
+        if let Some(tag_id) = tag_id {
+            Ok(Self {
+                tag_id,
+                tag_type: tag_type.unwrap_or_default(),
+            })
+        } else {
+            Err(AttrError::MissingTag)
+        }
     }
 }
 
