@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::otel::{KeyValue, metrics::Histogram};
-use crate::tracing::{debug, warn};
+use crate::tracing::debug;
 use prosa_macros::{proc, proc_settings};
 use serde::{Deserialize, Serialize};
 
@@ -198,26 +198,12 @@ impl InjProc {
                 let _ = next_transaction.get_or_insert_with(|| adaptor.build_transaction());
             }
             InternalMsg::Config(config) => {
-                let settings = match config.get_proc::<InjSettings>(self.proc.as_ref()) {
-                    Ok(settings) => settings,
-                    Err(err) => {
-                        warn!("Can't reload settings for processor {}: {err}", self.name());
-                        return Ok(());
-                    }
-                };
-
-                if let Err(err) =
-                    adaptor.reload_config(config.get_adaptor_config(self.proc.as_ref()))
+                if let Some(settings) =
+                    config.reload_proc::<InjSettings>(self.proc.as_ref(), adaptor)
                 {
-                    warn!(
-                        "Can't reload adaptor configuration for processor {}: {err}",
-                        self.name()
-                    );
-                    return Ok(());
+                    *regulator = settings.get_regulator();
+                    self.settings = settings;
                 }
-
-                *regulator = settings.get_regulator();
-                self.settings = settings;
             }
             InternalMsg::Service(table) => self.service = table,
             InternalMsg::Shutdown => {

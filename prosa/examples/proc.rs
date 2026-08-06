@@ -79,23 +79,25 @@ where
                             info!("Proc {} received an error: {:?}", self.get_proc_id(), err);
                         },
                         InternalMsg::Config(config) => {
-                            let settings = config.get_proc::<MyProcSettings>(self.proc.as_ref())?;
+                            if let Some(settings) = config
+                                .reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)
+                            {
+                                if self.settings.service_name != settings.service_name {
+                                    self.proc
+                                        .remove_service_proc(vec![self.settings.service_name.clone()])
+                                        .await?;
+                                    self.proc
+                                        .add_service_proc(vec![settings.service_name.clone()])
+                                        .await?;
+                                }
 
-                            if self.settings.service_name != settings.service_name {
-                                self.proc
-                                    .remove_service_proc(vec![self.settings.service_name.clone()])
-                                    .await?;
-                                self.proc
-                                    .add_service_proc(vec![settings.service_name.clone()])
-                                    .await?;
+                                if self.settings.tick_secs != settings.tick_secs {
+                                    interval = settings.interval();
+                                }
+
+                                info!("Proc {} reloaded settings: {:?}", self.get_proc_id(), settings);
+                                self.settings = settings;
                             }
-
-                            if self.settings.tick_secs != settings.tick_secs {
-                                interval = settings.interval();
-                            }
-
-                            info!("Proc {} reloaded settings: {:?}", self.get_proc_id(), settings);
-                            self.settings = settings;
                         },
                         InternalMsg::Service(table) => {
                             debug!("New service table received:\n{}\n", table);

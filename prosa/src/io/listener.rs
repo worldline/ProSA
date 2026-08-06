@@ -364,16 +364,12 @@ impl From<TcpListener> for StreamListener {
 ///     Ok(())
 /// }
 /// ```
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct ListenerSetting {
     /// Url of the listening
     pub url: Url,
-    /// SSL configuration for target destination
-    pub ssl: Option<SslConfig>,
-    #[cfg(feature = "openssl")]
-    #[serde(skip)]
-    /// OpenSSL configuration for target destination
-    openssl_context: Option<::openssl::ssl::SslAcceptor>,
+    /// SSL configuration of the listener
+    ssl: Option<SslConfig>,
     #[serde(skip_serializing)]
     #[serde(default = "ListenerSetting::default_max_socket")]
     /// Maximum number of socket
@@ -400,19 +396,57 @@ impl ListenerSetting {
 
     /// Method to create manually a target
     pub fn new(url: Url, ssl: Option<SslConfig>) -> ListenerSetting {
-        #[allow(unused_mut)]
-        let mut target = ListenerSetting {
-            url: url.clone(),
+        ListenerSetting {
+            url,
             ssl,
-            #[cfg(feature = "openssl")]
-            openssl_context: None,
             max_socket: Self::default_max_socket(),
-        };
+        }
+    }
 
-        #[cfg(feature = "openssl")]
-        target.init_ssl_context(url.host_str());
+    /// Method to know if the listener will accept SSL connections
+    ///
+    /// ```
+    /// use url::Url;
+    /// use prosa::io::listener::ListenerSetting;
+    ///
+    /// assert!(ListenerSetting::from(Url::parse("https://[::]:4443").unwrap()).is_ssl());
+    /// assert!(!ListenerSetting::from(Url::parse("tcp://[::]:8080").unwrap()).is_ssl());
+    /// ```
+    pub fn is_ssl(&self) -> bool {
+        self.ssl.is_some() || url_is_ssl(&self.url)
+    }
 
-        target
+    /// Getter of the SSL configuration of the listener
+    pub fn ssl(&self) -> Option<&SslConfig> {
+        self.ssl.as_ref()
+    }
+
+    /// Setter of the SSL configuration of the listener
+    pub fn set_ssl(&mut self, ssl: Option<SslConfig>) {
+        self.ssl = ssl;
+    }
+
+    /// Method to set the ALPN protocols to negotiate.
+    /// A default SSL configuration is created if the listener accepts SSL connections but none was configured.
+    ///
+    /// Nothing is done for a plain listener. Idempotent, so it can be called on every configuration reload.
+    ///
+    /// ```
+    /// use url::Url;
+    /// use prosa::io::listener::ListenerSetting;
+    ///
+    /// let mut ssl_listener = ListenerSetting::from(Url::parse("https://[::]:4443").unwrap());
+    /// ssl_listener.set_alpn(vec!["h2".into()]);
+    /// assert!(ssl_listener.ssl().is_some());
+    ///
+    /// let mut plain_listener = ListenerSetting::from(Url::parse("tcp://[::]:8080").unwrap());
+    /// plain_listener.set_alpn(vec!["h2".into()]);
+    /// assert!(plain_listener.ssl().is_none());
+    /// ```
+    pub fn set_alpn(&mut self, alpn: Vec<String>) {
+        if self.is_ssl() {
+            self.ssl.get_or_insert_default().set_alpn(alpn);
+        }
     }
 
     /// Return a borrowed safe view of the listener URL.
@@ -422,17 +456,6 @@ impl ListenerSetting {
     /// [`SafeUrl::to_mask_url`] to obtain one with masked credentials.
     pub fn get_safe_url(&self) -> SafeUrl<'_> {
         get_safe_url(&self.url)
-    }
-
-    #[cfg(feature = "openssl")]
-    /// Method to init the ssl context out of the ssl target configuration.
-    /// Must be call when the configuration is retrieved
-    pub fn init_ssl_context(&mut self, domain: Option<&str>) {
-        if let Some(ssl_config) = self.ssl.as_ref() {
-            let ssl_acceptor_builder: Option<::openssl::ssl::SslAcceptorBuilder> =
-                ssl_config.init_tls_server_context(domain).ok();
-            self.openssl_context = ssl_acceptor_builder.map(|a| a.build());
-        }
     }
 
     /// Method to connect a ProSA stream to the remote target using the configuration
@@ -447,59 +470,34 @@ impl ListenerSetting {
         #[allow(unused_mut)]
         let mut stream_listener = StreamListener::bind(&*addrs).await?;
 
-        #[cfg(feature = "openssl")]
-        if let Some(ssl_acceptor) = &self.openssl_context {
-            stream_listener = stream_listener.ssl_acceptor(
-                ssl_acceptor.clone(),
-                self.ssl.as_ref().map(|c| c.get_ssl_timeout()),
-            );
-            return Ok(stream_listener);
-        }
-
-        if let Some(_ssl_config) = self.ssl.as_ref() {
+        if self.is_ssl() {
             #[cfg(feature = "openssl")]
             {
-                let ssl_acceptor_builder_result: Result<
-                    ::openssl::ssl::SslAcceptorBuilder,
-                    prosa_utils::config::ConfigError,
-                > = _ssl_config.init_tls_server_context(self.url.host_str());
-                if let Ok(ssl_acceptor_builder) = ssl_acceptor_builder_result {
-                    stream_listener = stream_listener.ssl_acceptor(
-                        ssl_acceptor_builder.build(),
-                        Some(_ssl_config.get_ssl_timeout()),
-                    );
-                    return Ok(stream_listener);
-                }
+                let ssl_config = self.ssl.clone().unwrap_or_default();
+                let ssl_timeout = ssl_config.get_ssl_timeout();
+                let host = self.url.host_str().map(String::from);
+
+                // Reading the certificates blocks, so it's done on the blocking pool
+                let ssl_acceptor = tokio::task::spawn_blocking(move || {
+                    ssl_config
+                        .init_tls_server_context(host.as_deref())
+                        .map(|ssl_context_builder| ssl_context_builder.build())
+                })
+                .await
+                .map_err(io::Error::other)?
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                stream_listener = stream_listener.ssl_acceptor(ssl_acceptor, Some(ssl_timeout));
+                return Ok(stream_listener);
             }
 
-            Err(io::Error::new(
+            #[cfg(not(feature = "openssl"))]
+            return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "No SSL engine available",
-            ))
-        } else if url_is_ssl(&self.url) {
-            #[cfg(feature = "openssl")]
-            {
-                let ssl_config = SslConfig::default();
-                let ssl_acceptor_builder_result: Result<
-                    ::openssl::ssl::SslAcceptorBuilder,
-                    prosa_utils::config::ConfigError,
-                > = ssl_config.init_tls_server_context(self.url.host_str());
-                if let Ok(ssl_acceptor_builder) = ssl_acceptor_builder_result {
-                    stream_listener = stream_listener.ssl_acceptor(
-                        ssl_acceptor_builder.build(),
-                        Some(ssl_config.get_ssl_timeout()),
-                    );
-                    return Ok(stream_listener);
-                }
-            }
-
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "No SSL engine available",
-            ))
-        } else {
-            Ok(stream_listener)
+            ));
         }
+
+        Ok(stream_listener)
     }
 }
 
@@ -508,8 +506,6 @@ impl From<Url> for ListenerSetting {
         ListenerSetting {
             url,
             ssl: None,
-            #[cfg(feature = "openssl")]
-            openssl_context: None,
             max_socket: Self::default_max_socket(),
         }
     }
@@ -569,5 +565,75 @@ mod tests {
             "tcp://***:***@localhost:8080/v1 -max_socket 42",
             setting.to_string()
         );
+    }
+
+    #[test]
+    fn listener_setting_partial_eq() {
+        let config = "url = \"https://localhost:4443\"\nssl = { alpn = [\"h2\"] }\n";
+        let setting: ListenerSetting =
+            toml::from_str(config).expect("Listener settings should deserialize");
+
+        assert_eq!(
+            setting,
+            toml::from_str::<ListenerSetting>(config)
+                .expect("Listener settings should deserialize")
+        );
+        assert_ne!(
+            setting,
+            toml::from_str::<ListenerSetting>(
+                "url = \"https://localhost:4444\"\nssl = { alpn = [\"h2\"] }\n"
+            )
+            .expect("Listener settings should deserialize")
+        );
+        assert_ne!(
+            setting,
+            toml::from_str::<ListenerSetting>(
+                "url = \"https://localhost:4443\"\nssl = { alpn = [\"http/1.1\"] }\n"
+            )
+            .expect("Listener settings should deserialize")
+        );
+
+        // A programmatically built listener matches its configured counterpart
+        let mut built = ListenerSetting::new(
+            Url::parse("https://localhost:4443").expect("Listener url is invalid"),
+            None,
+        );
+        built.set_alpn(vec!["h2".into()]);
+        assert_eq!(setting, built);
+    }
+
+    #[test]
+    fn listener_setting_set_alpn() {
+        let mut expected_ssl = SslConfig::default();
+        expected_ssl.set_alpn(vec!["h2".into()]);
+
+        // An SSL url without SSL configuration gets a default one
+        let mut ssl_url = ListenerSetting::from(
+            Url::parse("https://[::]:4443").expect("Listener url is invalid"),
+        );
+        ssl_url.set_alpn(vec!["h2".into()]);
+        assert_eq!(Some(&expected_ssl), ssl_url.ssl());
+
+        // Idempotent, so a configuration reload doesn't rebind
+        let reloaded = {
+            let mut reloaded = ssl_url.clone();
+            reloaded.set_alpn(vec!["h2".into()]);
+            reloaded
+        };
+        assert_eq!(ssl_url, reloaded);
+
+        // A plain listener has nothing to negotiate
+        let mut plain_url =
+            ListenerSetting::from(Url::parse("tcp://[::]:8080").expect("Listener url is invalid"));
+        plain_url.set_alpn(vec!["h2".into()]);
+        assert_eq!(None, plain_url.ssl());
+
+        // But a plain url with an explicit SSL configuration does use SSL
+        let mut plain_url_with_ssl = ListenerSetting::new(
+            Url::parse("tcp://[::]:8080").expect("Listener url is invalid"),
+            Some(SslConfig::default()),
+        );
+        plain_url_with_ssl.set_alpn(vec!["h2".into()]);
+        assert_eq!(Some(&expected_ssl), plain_url_with_ssl.ssl());
     }
 }

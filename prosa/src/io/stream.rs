@@ -704,18 +704,14 @@ impl From<tokio_openssl::SslStream<TcpStream>> for Stream {
 ///     Ok(())
 /// }
 /// ```
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub struct TargetSetting {
     /// Url of the target destination
     pub url: Url,
     /// SSL configuration for target destination
-    pub ssl: Option<SslConfig>,
+    ssl: Option<SslConfig>,
     /// Optional proxy use to reach the target
     pub proxy: Option<Url>,
-    #[cfg(feature = "openssl")]
-    #[serde(skip)]
-    /// OpenSSL configuration for target destination
-    openssl_context: Option<::openssl::ssl::SslConnector>,
     #[serde(skip_serializing)]
     #[serde(default = "TargetSetting::get_default_connect_timeout")]
     /// Timeout for socket connection in milliseconds
@@ -729,27 +725,50 @@ impl TargetSetting {
 
     /// Method to create manually a target
     pub fn new(url: Url, ssl: Option<SslConfig>, proxy: Option<Url>) -> TargetSetting {
-        let mut target = TargetSetting {
+        TargetSetting {
             url,
             ssl,
             proxy,
-            #[cfg(feature = "openssl")]
-            openssl_context: None,
             connect_timeout: Self::get_default_connect_timeout(),
-        };
-
-        target.init_ssl_context();
-        target
+        }
     }
 
     /// Method to know if the target will be connected with SSL
     pub fn is_ssl(&self) -> bool {
-        #[cfg(feature = "openssl")]
-        if self.openssl_context.is_some() {
-            return true;
-        }
-
         self.ssl.is_some() || url_is_ssl(&self.url)
+    }
+
+    /// Getter of the SSL configuration of the target
+    pub fn ssl(&self) -> Option<&SslConfig> {
+        self.ssl.as_ref()
+    }
+
+    /// Setter of the SSL configuration of the target
+    pub fn set_ssl(&mut self, ssl: Option<SslConfig>) {
+        self.ssl = ssl;
+    }
+
+    /// Method to set the ALPN protocols to negotiate.
+    /// A default SSL configuration is created if the target is reached over SSL but none was configured.
+    ///
+    /// Nothing is done for a plain target. Idempotent, so it can be called on every configuration reload.
+    ///
+    /// ```
+    /// use url::Url;
+    /// use prosa::io::stream::TargetSetting;
+    ///
+    /// let mut ssl_target = TargetSetting::from(Url::parse("https://worldline.com").unwrap());
+    /// ssl_target.set_alpn(vec!["h2".into()]);
+    /// assert!(ssl_target.ssl().is_some());
+    ///
+    /// let mut plain_target = TargetSetting::from(Url::parse("tcp://worldline.com:80").unwrap());
+    /// plain_target.set_alpn(vec!["h2".into()]);
+    /// assert!(plain_target.ssl().is_none());
+    /// ```
+    pub fn set_alpn(&mut self, alpn: Vec<String>) {
+        if self.is_ssl() {
+            self.ssl.get_or_insert_default().set_alpn(alpn);
+        }
     }
 
     /// Return a borrowed safe view of the target URL.
@@ -779,18 +798,6 @@ impl TargetSetting {
         url_authentication(&self.url)
     }
 
-    /// Method to init the ssl context out of the ssl target configuration.
-    /// Must be call when the configuration is retrieved
-    pub fn init_ssl_context(&mut self) {
-        #[cfg(feature = "openssl")]
-        if let Some(ssl_config) = self.ssl.as_ref() {
-            // Init OpenSSL context by default
-            let ssl_context_builder: Option<openssl::ssl::SslConnectorBuilder> =
-                SslConfigContext::init_tls_client_context(ssl_config).ok();
-            self.openssl_context = ssl_context_builder.map(|c| c.build());
-        }
-    }
-
     /// Method to connect a ProSA stream to the remote target using the configuration
     pub async fn connect(&self) -> Result<Stream, io::Error> {
         #[cfg(target_family = "unix")]
@@ -808,21 +815,31 @@ impl TargetSetting {
             })?;
         }
 
+        // Built for every connection so a certificate rotated on disk applies to the next one.
+        // Reading the certificates blocks, so it's done on the blocking pool.
         #[cfg(feature = "openssl")]
-        let openssl_context = if self.openssl_context.is_some() {
-            self.openssl_context.clone()
-        } else if let Some(ssl_config) = &self.ssl {
-            let ssl_context_builder: openssl::ssl::SslConnectorBuilder =
-                SslConfigContext::init_tls_client_context(ssl_config)?;
-            Some(ssl_context_builder.build())
-        } else if url_is_ssl(&self.url) {
-            let ssl_config = SslConfig::default();
-            let ssl_context_builder: openssl::ssl::SslConnectorBuilder =
-                SslConfigContext::init_tls_client_context(&ssl_config)?;
-            Some(ssl_context_builder.build())
+        let openssl_context = if self.is_ssl() {
+            let ssl_config = self.ssl.clone().unwrap_or_default();
+            Some(
+                tokio::task::spawn_blocking(move || {
+                    let ssl_context_builder: openssl::ssl::SslConnectorBuilder =
+                        SslConfigContext::init_tls_client_context(&ssl_config)?;
+                    Ok::<_, io::Error>(ssl_context_builder.build())
+                })
+                .await
+                .map_err(io::Error::other)??,
+            )
         } else {
             None
         };
+
+        #[cfg(not(feature = "openssl"))]
+        if self.is_ssl() {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "No SSL engine available",
+            ));
+        }
 
         if let Some(proxy_url) = &self.proxy {
             if proxy_url.scheme() == "http" {
@@ -921,8 +938,6 @@ impl From<Url> for TargetSetting {
             url,
             ssl: None,
             proxy: None,
-            #[cfg(feature = "openssl")]
-            openssl_context: None,
             connect_timeout: Self::get_default_connect_timeout(),
         }
     }
@@ -1040,5 +1055,77 @@ mod tests {
             "TargetSetting { url: Url { scheme: \"https\", cannot_be_a_base: false, username: \"\", password: Some(\"***\"), host: Some(Domain(\"localhost\")), port: Some(4443), path: \"/v1\" }, ssl: None, proxy: None, connect_timeout: 5000 }",
             format!("{target_with_token:?}")
         );
+    }
+
+    #[test]
+    fn target_setting_partial_eq() {
+        let config = "url = \"https://localhost:4443/v1\"\nssl = { alpn = [\"h2\"] }\n";
+        let setting: TargetSetting =
+            toml::from_str(config).expect("Target settings should deserialize");
+
+        assert_eq!(
+            setting,
+            toml::from_str::<TargetSetting>(config).expect("Target settings should deserialize")
+        );
+        assert_ne!(
+            setting,
+            toml::from_str::<TargetSetting>(
+                "url = \"https://localhost:4444/v1\"\nssl = { alpn = [\"h2\"] }\n"
+            )
+            .expect("Target settings should deserialize")
+        );
+        assert_ne!(
+            setting,
+            toml::from_str::<TargetSetting>(
+                "url = \"https://localhost:4443/v1\"\nssl = { alpn = [\"http/1.1\"] }\n"
+            )
+            .expect("Target settings should deserialize")
+        );
+
+        // A programmatically built target matches its configured counterpart
+        let mut built = TargetSetting::new(
+            Url::parse("https://localhost:4443/v1").expect("Target url is invalid"),
+            None,
+            None,
+        );
+        built.set_alpn(vec!["h2".into()]);
+        assert_eq!(setting, built);
+    }
+
+    #[test]
+    fn target_setting_set_alpn() {
+        let mut expected_ssl = SslConfig::default();
+        expected_ssl.set_alpn(vec!["h2".into()]);
+
+        // An SSL url without SSL configuration gets a default one
+        let mut ssl_url = TargetSetting::from(
+            Url::parse("https://worldline.com").expect("Target url is invalid"),
+        );
+        ssl_url.set_alpn(vec!["h2".into()]);
+        assert_eq!(Some(&expected_ssl), ssl_url.ssl());
+
+        // Idempotent, so a configuration reload doesn't reconnect
+        let reloaded = {
+            let mut reloaded = ssl_url.clone();
+            reloaded.set_alpn(vec!["h2".into()]);
+            reloaded
+        };
+        assert_eq!(ssl_url, reloaded);
+
+        // A plain target has nothing to negotiate
+        let mut plain_url = TargetSetting::from(
+            Url::parse("tcp://worldline.com:80").expect("Target url is invalid"),
+        );
+        plain_url.set_alpn(vec!["h2".into()]);
+        assert_eq!(None, plain_url.ssl());
+
+        // But a plain url with an explicit SSL configuration does use SSL
+        let mut plain_url_with_ssl = TargetSetting::new(
+            Url::parse("tcp://worldline.com:80").expect("Target url is invalid"),
+            Some(SslConfig::default()),
+            None,
+        );
+        plain_url_with_ssl.set_alpn(vec!["h2".into()]);
+        assert_eq!(Some(&expected_ssl), plain_url_with_ssl.ssl());
     }
 }

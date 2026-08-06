@@ -20,6 +20,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::mpsc;
 
+use super::adaptor::Adaptor;
 use super::proc::ProcBusParam;
 
 /// Re-export of prosa_utils for observability config
@@ -312,7 +313,7 @@ impl ProsaConfig {
     }
 
     /// Deserialize a processor configuration from its processor name.
-    pub fn get_proc<C>(&self, proc: &impl ProcBusParam) -> Result<C, config::ConfigError>
+    pub fn get_proc<C>(&self, proc: &(impl ProcBusParam + ?Sized)) -> Result<C, config::ConfigError>
     where
         C: DeserializeOwned,
     {
@@ -320,8 +321,51 @@ impl ProsaConfig {
     }
 
     /// Access a processor adaptor configuration from its processor name.
-    pub fn get_adaptor_config(&self, proc: &impl ProcBusParam) -> Option<&Config> {
+    pub fn get_adaptor_config(&self, proc: &(impl ProcBusParam + ?Sized)) -> Option<&Config> {
         self.adaptor_configs.get(&proc.get_proc_config_key())
+    }
+
+    /// Reload a processor settings and its adaptor configuration in one step.
+    ///
+    /// Return `None` if either of them can't be reloaded, so the processor can keep running on its
+    /// current configuration. A processor that has no configuration section keeps the settings it
+    /// was created with, which is reported at debug level. Anything else is logged as a warning:
+    ///
+    /// ```rust,ignore
+    /// InternalMsg::Config(config) => {
+    ///     if let Some(settings) =
+    ///         config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)
+    ///     {
+    ///         // ... apply the difference between `settings` and `self.settings`
+    ///         self.settings = settings;
+    ///     }
+    /// }
+    /// ```
+    pub fn reload_proc<S>(&self, proc: &dyn ProcBusParam, adaptor: &dyn Adaptor) -> Option<S>
+    where
+        S: DeserializeOwned,
+    {
+        let settings = match self.get_proc::<S>(proc) {
+            Ok(settings) => settings,
+            Err(config::ConfigError::NotFound(_)) => {
+                log::debug!("No configuration section for processor {}", proc.name());
+                return None;
+            }
+            Err(err) => {
+                log::warn!("Can't reload settings for processor {}: {err}", proc.name());
+                return None;
+            }
+        };
+
+        if let Err(err) = adaptor.reload_config(self.get_adaptor_config(proc)) {
+            log::warn!(
+                "Can't reload adaptor configuration for processor {}: {err}",
+                proc.name()
+            );
+            return None;
+        }
+
+        Some(settings)
     }
 
     /// Return every configuration path watched to maintain this configuration.
@@ -658,6 +702,107 @@ mod tests {
         assert!(current.has_proc_changed(&new, "proc_1"));
 
         fs::remove_dir_all(config_path)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reload_proc() -> Result<(), config::ConfigError> {
+        struct TestProc(&'static str);
+        impl ProcBusParam for TestProc {
+            fn get_proc_id(&self) -> u32 {
+                1
+            }
+
+            fn name(&self) -> &str {
+                self.0
+            }
+        }
+
+        struct TestAdaptor {
+            fail: bool,
+        }
+        impl Adaptor for TestAdaptor {
+            fn reload_config(&self, _config: Option<&Config>) -> Result<(), config::ConfigError> {
+                if self.fail {
+                    Err(config::ConfigError::Message("adaptor failure".into()))
+                } else {
+                    Ok(())
+                }
+            }
+
+            fn terminate(&self) {}
+        }
+
+        #[derive(serde::Deserialize)]
+        struct TestProcSettings {
+            service_name: String,
+        }
+
+        let config = ProsaConfig::from_config(
+            Config::builder()
+                .set_override("proc_1.service_name", "PROC_TEST")?
+                .build()?,
+        )?;
+
+        let settings = config
+            .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: false })
+            .expect("Processor settings should be reloaded");
+        assert_eq!("PROC_TEST", settings.service_name);
+
+        // The adaptor keeps the processor on its current configuration
+        assert!(
+            config
+                .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: true })
+                .is_none()
+        );
+
+        // A processor without a configuration section keeps its settings without warning
+        assert!(matches!(
+            config.get_proc::<TestProcSettings>(&TestProc("proc-unknown")),
+            Err(config::ConfigError::NotFound(_))
+        ));
+        assert!(
+            config
+                .reload_proc::<TestProcSettings>(
+                    &TestProc("proc-unknown"),
+                    &TestAdaptor { fail: false }
+                )
+                .is_none()
+        );
+
+        // But an invalid section is a reload failure
+        let invalid_config = ProsaConfig::from_config(
+            Config::builder()
+                .set_override("proc_1.service_name", vec!["not", "a", "string"])?
+                .build()?,
+        )?;
+        assert!(matches!(
+            invalid_config.get_proc::<TestProcSettings>(&TestProc("proc-1")),
+            Err(config::ConfigError::Type { .. })
+        ));
+        assert!(
+            invalid_config
+                .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: false })
+                .is_none()
+        );
+
+        // So is a section that exists but misses a mandatory setting, which `config` reports as
+        // `At` rather than the `NotFound` of an absent section
+        let incomplete_config = ProsaConfig::from_config(
+            Config::builder()
+                .set_override("proc_1.unrelated", "value")?
+                .build()?,
+        )?;
+        assert!(matches!(
+            incomplete_config.get_proc::<TestProcSettings>(&TestProc("proc-1")),
+            Err(config::ConfigError::At { .. })
+        ));
+        assert!(
+            incomplete_config
+                .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: false })
+                .is_none()
+        );
 
         Ok(())
     }

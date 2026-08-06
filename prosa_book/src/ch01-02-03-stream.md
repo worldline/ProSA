@@ -49,3 +49,27 @@ Target and proxy URLs are redacted when settings or connection errors are format
 are masked, while query parameters and fragments are omitted. URL paths are preserved and should
 not contain secrets. `TargetSetting::get_safe_url()` returns the same borrowed `SafeUrl` view, so
 the caller chooses whether to format it or convert it into either form of owned sanitized URL.
+
+## SSL configuration of a listener or a target
+
+Read the SSL configuration with `ssl()`, and change it with `set_ssl()` or `set_alpn()`.
+
+`set_alpn()` creates a default SSL configuration when the listener or the target uses SSL but has
+none, and does nothing on a plain one. `is_ssl()` tells whether SSL applies: an SSL configuration
+**or** an SSL URL scheme is enough, so a plain `tcp://` URL with an explicit `ssl` block does
+negotiate ALPN.
+
+The OpenSSL context is built from that configuration every time a listener binds or a target
+connects, so a certificate or a CA rotated on disk applies to the next bind or connection without
+needing a configuration change.
+
+Both settings implement `PartialEq`. On a configuration reload, compare the new settings with the
+current ones and rebind or reconnect only when they differ. `set_alpn()` is idempotent, so
+normalise before comparing:
+
+```rust,ignore
+listener_setting.set_alpn(vec!["h2".into()]);
+if listener_setting != self.settings.listener {
+    // ... rebind
+}
+```

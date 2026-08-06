@@ -116,8 +116,12 @@
 //!                        // TODO process the error
 //!                     },
 //!                     InternalMsg::Config(config) => {
-//!                         self.settings = config.get_proc(self.proc.as_ref())?;
-//!                         adaptor.reload_config(config.get_adaptor_config(self.proc.as_ref()))?;
+//!                         if let Some(settings) =
+//!                             config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)
+//!                         {
+//!                             // TODO apply the difference between `settings` and `self.settings`
+//!                             self.settings = settings;
+//!                         }
 //!                     },
 //!                     InternalMsg::Service(table) => self.service = table,
 //!                     InternalMsg::Shutdown => {

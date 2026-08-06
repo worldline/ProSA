@@ -15,7 +15,7 @@ There are three important methods you need to use for this object:
 - [`pull()`](https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull) Async method to retrieve all messages that have expired (timed out).
 
 ```rust,ignore
-# #[proc]
+# #[proc(settings = MyProcSettings)]
 # struct MyProc {}
 #
 # #[proc]
@@ -23,10 +23,7 @@ There are three important methods you need to use for this object:
 # where
 #     A: Default + Adaptor + std::marker::Send + std::marker::Sync,
 # {
-    async fn internal_run(
-        &mut self,
-        _name: String,
-    ) -> Result<(), Box<dyn ProcError + Send + Sync>> {
+    async fn internal_run(&mut self) -> Result<(), Box<dyn ProcError + Send + Sync>> {
         let mut adaptor = A::default();
         self.proc.add_proc().await?;
         self.proc
@@ -55,7 +52,11 @@ There are three important methods you need to use for this object:
                             info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
                         },
                         InternalMsg::Config(config) => {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                            if let Some(settings) = config
+                                .reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)
+                            {
+                                self.settings = settings;
+                            }
                         },
                         InternalMsg::Service(table) => {
                             debug!("New service table received:\n{}\n", table);
@@ -77,7 +78,7 @@ There are three important methods you need to use for this object:
             }
         }
     }
-}
+# }
 ```
 
 ## Regulator - `Regulator`
