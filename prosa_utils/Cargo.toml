@@ -1,6 +1,6 @@
 [package]
 name = "prosa-utils"
-version = "0.5.0"
+version = "0.5.1"
 authors.workspace = true
 description = "ProSA utils"
 homepage.workspace = true
@@ -12,6 +12,7 @@ include.workspace = true
 [features]
 default = ["msg", "config", "config-openssl", "config-observability"]
 msg = []
+msg-serde = ["msg", "dep:serde", "chrono/serde", "bytes/serde"]
 config = ["dep:glob","dep:serde","dep:serde_yaml", "dep:base64", "dep:percent-encoding", "dep:uuid"]
 config-openssl = ["config", "dep:openssl"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored"]

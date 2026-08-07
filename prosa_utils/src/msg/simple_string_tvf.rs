@@ -12,6 +12,7 @@ use std::borrow::Cow;
 
 /// Struct that define a simple string TVF
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "msg-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SimpleStringTvf {
     fields: IntHashMap<usize, String>,
 }
