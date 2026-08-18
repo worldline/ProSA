@@ -63,13 +63,40 @@ The OpenSSL context is built from that configuration every time a listener binds
 connects, so a certificate or a CA rotated on disk applies to the next bind or connection without
 needing a configuration change.
 
-Both settings implement `PartialEq`. On a configuration reload, compare the new settings with the
-current ones and rebind or reconnect only when they differ. `set_alpn()` is idempotent, so
-normalise before comparing:
+Both settings implement `PartialEq`, and `set_alpn()` is idempotent, so normalise before comparing.
+
+A target reconnects, so on a configuration reload compare the new settings with the current ones
+and reconnect only when they differ.
+
+A listener owns a bound socket, and rebinding it releases the port: another process can take it,
+and every client is refused until the new socket is bound. So only change the socket when the
+listener has to listen somewhere else, which is what `needs_rebind()` answers by comparing the host
+and the port. Everything else is served on the socket that is already bound: build the new SSL
+parameters with `build_handshaker()`, then hand them to `set_handshaker()`, which moves the socket
+into the returned listener. That covers rotating a certificate, turning SSL on and turning SSL off,
+whether SSL is declared by the `ssl` block or by the URL scheme.
 
 ```rust,ignore
 listener_setting.set_alpn(vec!["h2".into()]);
-if listener_setting != self.settings.listener {
-    // ... rebind
+if self.settings.listener.needs_rebind(&listener_setting) {
+    listener = listener_setting.bind().await?;
+} else {
+    // Built before the listener is touched, so a broken certificate leaves it serving the one it
+    // already has
+    let handshaker = listener_setting.build_handshaker().await?;
+    listener = listener.set_handshaker(handshaker);
 }
 ```
+
+Call it on every configuration reload of a listener, not only when the settings differ: `SslConfig`
+holds the *paths* of the certificates, so a rotation that rewrites a file in place leaves the
+configuration equal to what it was and there is nothing to compare. `build_handshaker()` reads them
+again on every call, on the blocking pool.
+
+A listener that is SSL through its URL scheme alone is served a default SSL configuration, which
+signs a certificate of its own rather than reading one. That certificate is signed again on every
+call, so such a listener serves a new identity on every configuration reload and a client that pins
+it stops trusting it. Configure a certificate to serve a stable one.
+
+The clients that are already connected, and the ones in the middle of their handshake, keep the
+parameters they started with; only the clients accepted afterwards are served the new ones.
