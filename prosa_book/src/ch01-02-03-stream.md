@@ -60,8 +60,10 @@ none, and does nothing on a plain one. `is_ssl()` tells whether SSL applies: an 
 negotiate ALPN.
 
 The OpenSSL context is built from that configuration every time a listener binds or a target
-connects, so a certificate or a CA rotated on disk applies to the next bind or connection without
-needing a configuration change.
+connects. This makes the convenience API pick up certificate changes, but parsing certificates for
+every target connection has a cost. Performance-sensitive clients can build an `SslConnector`
+snapshot with `SslConfigContext`, use the lower-level `Stream::connect_openssl` API, and replace the
+snapshot only when their certificate source reports a change.
 
 Both settings implement `PartialEq`, and `set_alpn()` is idempotent, so normalise before comparing.
 
@@ -71,10 +73,11 @@ and reconnect only when they differ.
 A listener owns a bound socket, and rebinding it releases the port: another process can take it,
 and every client is refused until the new socket is bound. So only change the socket when the
 listener has to listen somewhere else, which is what `needs_rebind()` answers by comparing the host
-and the port. Everything else is served on the socket that is already bound: build the new SSL
-parameters with `build_handshaker()`, then hand them to `set_handshaker()`, which moves the socket
-into the returned listener. That covers rotating a certificate, turning SSL on and turning SSL off,
-whether SSL is declared by the `ssl` block or by the URL scheme.
+and port of TCP listeners or the path of Unix listeners. Everything else is served on the socket
+that is already bound: build the new SSL parameters with `build_handshaker()`, then hand them to
+`set_handshaker()`, which moves the socket into the returned listener. That covers rotating a
+certificate, turning SSL on and turning SSL off, whether SSL is declared by the `ssl` block or by
+the URL scheme.
 
 ```rust,ignore
 listener_setting.set_alpn(vec!["h2".into()]);
@@ -88,15 +91,20 @@ if self.settings.listener.needs_rebind(&listener_setting) {
 }
 ```
 
-Call it on every configuration reload of a listener, not only when the settings differ: `SslConfig`
-holds the *paths* of the certificates, so a rotation that rewrites a file in place leaves the
-configuration equal to what it was and there is nothing to compare. `build_handshaker()` reads them
-again on every call, on the blocking pool.
+`build_handshaker()` reads certificate paths again on every call, on the blocking pool, but deciding
+when to call it belongs to the certificate source. A processor can react to a configuration change,
+a filesystem watcher can react to a replaced certificate, and a remote secret provider can react to
+a new version or lease. ProSA's configuration watcher does not watch certificate files and does not
+notify processors when only a file referenced by an unchanged configuration is replaced.
+
+The handshaker is the common runtime snapshot for those sources. File-backed configurations can use
+`build_handshaker()`; another provider can build an OpenSSL `SslAcceptor`, wrap it with
+`SslHandshaker::new`, and install it through the same `set_handshaker()` operation.
 
 A listener that is SSL through its URL scheme alone is served a default SSL configuration, which
 signs a certificate of its own rather than reading one. That certificate is signed again on every
-call, so such a listener serves a new identity on every configuration reload and a client that pins
-it stops trusting it. Configure a certificate to serve a stable one.
+rebuild, so such a listener serves a new identity and a client that pins it stops trusting it.
+Configure a certificate to serve a stable one.
 
 The clients that are already connected, and the ones in the middle of their handshake, keep the
 parameters they started with; only the clients accepted afterwards are served the new ones.

@@ -18,7 +18,6 @@ use url::Url;
 
 use super::{SafeUrl, SocketAddr, get_safe_url, stream::Stream, url_is_ssl};
 
-#[cfg(feature = "openssl")]
 /// SSL parameters a listener serves to the clients it accepts.
 ///
 /// Cheap to clone, because an OpenSSL context is reference counted, so an accept loop can hand one
@@ -51,14 +50,15 @@ use super::{SafeUrl, SocketAddr, get_safe_url, stream::Stream, url_is_ssl};
 /// ```
 #[derive(Clone)]
 pub struct SslHandshaker {
+    #[cfg(feature = "openssl")]
     /// Acceptor holding the certificate served to the clients
     acceptor: ::openssl::ssl::SslAcceptor,
     /// Timeout of the SSL handshake with a client
     timeout: Duration,
 }
 
-#[cfg(feature = "openssl")]
 impl SslHandshaker {
+    #[cfg(feature = "openssl")]
     /// Method to create the SSL parameters served by a listener.
     /// By default, the SSL handshake timeout is 3 seconds
     pub fn new(acceptor: ::openssl::ssl::SslAcceptor, timeout: Option<Duration>) -> SslHandshaker {
@@ -76,43 +76,56 @@ impl SslHandshaker {
     /// Method to negotiate SSL with a client that has just been accepted.
     /// A stream that is not a plain TCP one is returned as is
     pub async fn handshake(&self, stream: Stream) -> Result<Stream, io::Error> {
-        let Stream::Tcp(tcp_stream) = stream else {
-            return Ok(stream);
-        };
-
-        let ssl = openssl::ssl::Ssl::new(self.acceptor.context())
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-        let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-        if let Err(e) = tokio::time::timeout(self.timeout, std::pin::Pin::new(&mut stream).accept())
-            .await
-            .map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    format!(
-                        "SSL timeout[{} ms] for {stream:?}",
-                        self.timeout.as_millis()
-                    ),
-                )
-            })?
+        #[cfg(feature = "openssl")]
         {
-            return Err(io::Error::other(format!("Can't accept the client: {e}")));
+            let Stream::Tcp(tcp_stream) = stream else {
+                return Ok(stream);
+            };
+
+            let ssl = openssl::ssl::Ssl::new(self.acceptor.context())
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+            let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+            if let Err(e) =
+                tokio::time::timeout(self.timeout, std::pin::Pin::new(&mut stream).accept())
+                    .await
+                    .map_err(|_| {
+                        io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            format!(
+                                "SSL timeout[{} ms] for {stream:?}",
+                                self.timeout.as_millis()
+                            ),
+                        )
+                    })?
+            {
+                return Err(io::Error::other(format!("Can't accept the client: {e}")));
+            }
+
+            Ok(Stream::OpenSsl(stream))
         }
 
-        Ok(Stream::OpenSsl(stream))
+        #[cfg(not(feature = "openssl"))]
+        {
+            let _ = stream;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "No SSL engine available",
+            ))
+        }
     }
 }
 
-#[cfg(feature = "openssl")]
 impl fmt::Debug for SslHandshaker {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SslHandshaker")
-            .field("ssl_timeout", &self.timeout)
-            .field(
-                "certificate",
-                &self.acceptor.context().certificate().map(|c| c.to_text()),
-            )
-            .finish()
+        let mut debug = f.debug_struct("SslHandshaker");
+        debug.field("ssl_timeout", &self.timeout);
+        #[cfg(feature = "openssl")]
+        debug.field(
+            "certificate",
+            &self.acceptor.context().certificate().map(|c| c.to_text()),
+        );
+        debug.finish()
     }
 }
 
@@ -123,12 +136,11 @@ pub enum StreamListener {
     Unix(tokio::net::UnixListener),
     /// TCP server socket
     Tcp(TcpListener),
-    #[cfg(feature = "openssl")]
-    /// OpenSSL server socket.
+    /// SSL server socket.
     ///
     /// The SSL parameters are held apart from the socket so
     /// [`StreamListener::set_handshaker`] can serve new ones on the socket it is already bound to
-    OpenSsl(TcpListener, SslHandshaker),
+    Ssl(TcpListener, SslHandshaker),
 }
 
 impl fmt::Debug for StreamListener {
@@ -137,8 +149,7 @@ impl fmt::Debug for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => f.debug_struct("Unix").field("listener", &l).finish(),
             StreamListener::Tcp(l) => f.debug_struct("Tcp").field("listener", &l).finish(),
-            #[cfg(feature = "openssl")]
-            StreamListener::OpenSsl(l, ssl) => f
+            StreamListener::Ssl(l, ssl) => f
                 .debug_struct("Ssl")
                 .field("listener", &l)
                 .field("ssl", &ssl)
@@ -176,8 +187,7 @@ impl StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(listener) => listener.local_addr().map(|addr| addr.into()),
             StreamListener::Tcp(listener) => listener.local_addr().map(|addr| addr.into()),
-            #[cfg(feature = "openssl")]
-            StreamListener::OpenSsl(listener, _) => listener.local_addr().map(|addr| addr.into()),
+            StreamListener::Ssl(listener, _) => listener.local_addr().map(|addr| addr.into()),
         }
     }
 
@@ -241,7 +251,6 @@ impl StreamListener {
         self.set_handshaker(Some(SslHandshaker::new(ssl_acceptor, ssl_timeout)))
     }
 
-    #[cfg(feature = "openssl")]
     /// Getter of the SSL parameters served to a client accepted now, [`None`] on a plain listener.
     ///
     /// Clone it into the task that handshakes the client, so the accept loop can go straight back
@@ -254,12 +263,11 @@ impl StreamListener {
     /// the handshaker held beside it is the only one
     pub fn handshaker(&self) -> Option<&SslHandshaker> {
         match self {
-            StreamListener::OpenSsl(_l, handshaker) => Some(handshaker),
+            StreamListener::Ssl(_l, handshaker) => Some(handshaker),
             _ => None,
         }
     }
 
-    #[cfg(feature = "openssl")]
     /// Method to serve new SSL parameters on the socket that is already bound.
     ///
     /// The socket is moved into the returned listener rather than bound again, so the port is
@@ -295,13 +303,13 @@ impl StreamListener {
     /// ```
     pub fn set_handshaker(self, handshaker: Option<SslHandshaker>) -> StreamListener {
         let listener = match self {
-            StreamListener::Tcp(listener) | StreamListener::OpenSsl(listener, _) => listener,
+            StreamListener::Tcp(listener) | StreamListener::Ssl(listener, _) => listener,
             #[cfg(target_family = "unix")]
             unix_listener => return unix_listener,
         };
 
         match handshaker {
-            Some(handshaker) => StreamListener::OpenSsl(listener, handshaker),
+            Some(handshaker) => StreamListener::Ssl(listener, handshaker),
             None => StreamListener::Tcp(listener),
         }
     }
@@ -336,8 +344,7 @@ impl StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.accept().await.map(|s| (Stream::Unix(s.0), s.1.into())),
             StreamListener::Tcp(l) => l.accept().await.map(|s| (Stream::Tcp(s.0), s.1.into())),
-            #[cfg(feature = "openssl")]
-            StreamListener::OpenSsl(l, handshaker) => {
+            StreamListener::Ssl(l, handshaker) => {
                 let (stream, addr) = l.accept().await?;
 
                 // Read after the accept, so a client that connects once the certificate has been
@@ -382,8 +389,7 @@ impl StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.accept().await.map(|s| (Stream::Unix(s.0), s.1.into())),
             StreamListener::Tcp(l) => l.accept().await.map(|s| (Stream::Tcp(s.0), s.1.into())),
-            #[cfg(feature = "openssl")]
-            StreamListener::OpenSsl(l, _handshaker) => {
+            StreamListener::Ssl(l, _handshaker) => {
                 l.accept().await.map(|s| (Stream::Tcp(s.0), s.1.into()))
             }
         }
@@ -391,8 +397,7 @@ impl StreamListener {
 
     /// Method to do an handshake with a client after an accept (Do nothing if the handshake is already done)
     pub async fn handshake(&self, stream: Stream) -> Result<Stream, io::Error> {
-        #[cfg(feature = "openssl")]
-        if let StreamListener::OpenSsl(_l, handshaker) = self {
+        if let StreamListener::Ssl(_l, handshaker) = self {
             return handshaker.handshake(stream).await;
         }
 
@@ -406,8 +411,7 @@ impl AsFd for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.as_fd(),
             StreamListener::Tcp(l) => l.as_fd(),
-            #[cfg(feature = "openssl")]
-            StreamListener::OpenSsl(l, _) => l.as_fd(),
+            StreamListener::Ssl(l, _) => l.as_fd(),
         }
     }
 }
@@ -418,8 +422,7 @@ impl AsRawFd for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(l) => l.as_raw_fd(),
             StreamListener::Tcp(l) => l.as_raw_fd(),
-            #[cfg(feature = "openssl")]
-            StreamListener::OpenSsl(l, _) => l.as_raw_fd(),
+            StreamListener::Ssl(l, _) => l.as_raw_fd(),
         }
     }
 }
@@ -436,8 +439,7 @@ impl fmt::Display for StreamListener {
             #[cfg(target_family = "unix")]
             StreamListener::Unix(_) => write!(f, "unix://{addr}"),
             StreamListener::Tcp(_) => write!(f, "tcp://{addr}"),
-            #[cfg(feature = "openssl")]
-            StreamListener::OpenSsl(_, _) => write!(f, "ssl://{addr}"),
+            StreamListener::Ssl(_, _) => write!(f, "ssl://{addr}"),
         }
     }
 }
@@ -569,10 +571,11 @@ impl ListenerSetting {
     /// Method to know if serving `other` needs a new socket, because it doesn't listen on the same
     /// address.
     ///
-    /// Only the host and the port are compared, so everything else is served on the socket that is
-    /// already bound, whether that rotates a certificate or turns SSL on or off. A scheme carries
-    /// SSL rather than an address, and `max_socket` is a cap the processor enforces rather than a
-    /// property of the socket, so neither of them ever needs a new one.
+    /// TCP listeners are compared by host and port. Unix listeners are compared by path, with
+    /// `unix` and `file` treated as equivalent socket schemes. Everything else is served on the
+    /// socket that is already bound, whether that rotates a certificate or turns SSL on or off.
+    /// Other scheme changes carry protocol information rather than a bind address, and
+    /// `max_socket` is a cap the processor enforces rather than a property of the socket.
     ///
     /// ```
     /// use url::Url;
@@ -594,18 +597,24 @@ impl ListenerSetting {
     /// assert!(plain.needs_rebind(&moved));
     /// ```
     pub fn needs_rebind(&self, other: &ListenerSetting) -> bool {
+        let self_is_unix = matches!(self.url.scheme(), "unix" | "file");
+        let other_is_unix = matches!(other.url.scheme(), "unix" | "file");
+        if self_is_unix || other_is_unix {
+            return self_is_unix != other_is_unix || self.url.path() != other.url.path();
+        }
+
         self.url.host() != other.url.host()
             || self.url.port_or_known_default() != other.url.port_or_known_default()
     }
 
-    #[cfg(feature = "openssl")]
     /// Method to build the SSL parameters this configuration serves, [`None`] when it listens
     /// without SSL.
     ///
     /// The certificates are read again on every call, on the blocking pool, because [`SslConfig`]
-    /// holds their *paths*: a rotation that rewrites a file in place leaves the configuration equal
-    /// to what it was, so a caller has nothing to compare and should call this on every
-    /// configuration reload.
+    /// holds their *paths*. Calling this is explicit: rebuild when the configuration changes or
+    /// when the certificate source reports a new version. The ProSA configuration watcher does not
+    /// watch certificate files, and a file rewritten at the same path does not change the parsed
+    /// configuration.
     ///
     /// Hand the result to [`StreamListener::set_handshaker`] to serve it without rebinding. It is
     /// built before the listener is touched, so a broken certificate leaves the listener serving
@@ -613,8 +622,8 @@ impl ListenerSetting {
     ///
     /// A listener that is SSL through its URL scheme alone is served a default [`SslConfig`], which
     /// signs a certificate of its own rather than reading one. That certificate is signed again on
-    /// every call, so such a listener serves a new identity on every configuration reload and a
-    /// client that pins it stops trusting it. Configure a certificate to serve a stable one.
+    /// every call, so each rebuild serves a new identity and a client that pins it stops trusting
+    /// it. Configure a certificate to serve a stable one.
     pub async fn build_handshaker(&self) -> Result<Option<SslHandshaker>, io::Error> {
         // A Unix socket never serves SSL, `bind` ignores the SSL configuration for it
         #[cfg(target_family = "unix")]
@@ -626,20 +635,29 @@ impl ListenerSetting {
             return Ok(None);
         }
 
-        let ssl_config = self.ssl.clone().unwrap_or_default();
-        let timeout = ssl_config.get_ssl_timeout();
-        let host = self.url.host_str().map(String::from);
+        #[cfg(feature = "openssl")]
+        {
+            let ssl_config = self.ssl.clone().unwrap_or_default();
+            let timeout = ssl_config.get_ssl_timeout();
+            let host = self.url.host_str().map(String::from);
 
-        let acceptor = tokio::task::spawn_blocking(move || {
-            ssl_config
-                .init_tls_server_context(host.as_deref())
-                .map(|ssl_context_builder| ssl_context_builder.build())
-        })
-        .await
-        .map_err(io::Error::other)?
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+            let acceptor = tokio::task::spawn_blocking(move || {
+                ssl_config
+                    .init_tls_server_context(host.as_deref())
+                    .map(|ssl_context_builder| ssl_context_builder.build())
+            })
+            .await
+            .map_err(io::Error::other)?
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-        Ok(Some(SslHandshaker::new(acceptor, Some(timeout))))
+            Ok(Some(SslHandshaker::new(acceptor, Some(timeout))))
+        }
+
+        #[cfg(not(feature = "openssl"))]
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "No SSL engine available",
+        ))
     }
 
     /// Bind the socket of the configuration, without SSL
@@ -654,7 +672,6 @@ impl ListenerSetting {
         StreamListener::bind(&*addrs).await
     }
 
-    #[cfg(feature = "openssl")]
     /// Method to bind the socket of the configuration and build the SSL parameters to serve on it,
     /// without attaching them to the listener.
     ///
@@ -705,23 +722,8 @@ impl ListenerSetting {
 
     /// Method to connect a ProSA stream to the remote target using the configuration
     pub async fn bind(&self) -> Result<StreamListener, io::Error> {
-        #[cfg(feature = "openssl")]
-        {
-            let (stream_listener, handshaker) = self.bind_raw().await?;
-            Ok(stream_listener.set_handshaker(handshaker))
-        }
-
-        #[cfg(not(feature = "openssl"))]
-        {
-            if self.is_ssl() {
-                return Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "No SSL engine available",
-                ));
-            }
-
-            self.bind_socket().await
-        }
+        let (stream_listener, handshaker) = self.bind_raw().await?;
+        Ok(stream_listener.set_handshaker(handshaker))
     }
 }
 
@@ -769,6 +771,7 @@ impl fmt::Display for ListenerSetting {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "openssl")]
     /// Path of a test file no other test, and no other test run, writes to
     fn unique_test_path(name: &str) -> std::path::PathBuf {
         let timestamp = std::time::SystemTime::now()
@@ -833,6 +836,30 @@ mod tests {
         );
         built.set_alpn(vec!["h2".into()]);
         assert_eq!(setting, built);
+    }
+
+    #[cfg(not(feature = "openssl"))]
+    #[tokio::test]
+    async fn listener_setting_build_handshaker_without_ssl_engine() {
+        let plain = ListenerSetting::from(
+            Url::parse("tcp://127.0.0.1:0").expect("Listener URL should be valid"),
+        );
+        assert!(
+            plain
+                .build_handshaker()
+                .await
+                .expect("A plain listener should not need an SSL engine")
+                .is_none()
+        );
+
+        let ssl = ListenerSetting::from(
+            Url::parse("https://127.0.0.1:0").expect("Listener URL should be valid"),
+        );
+        let error = ssl
+            .build_handshaker()
+            .await
+            .expect_err("An SSL listener should require an SSL engine");
+        assert_eq!(io::ErrorKind::Unsupported, error.kind());
     }
 
     #[cfg(feature = "openssl")]
@@ -1174,6 +1201,17 @@ mod tests {
                     Url::parse("https://localhost").expect("Listener url is invalid")
                 ))
         );
+
+        let unix = ListenerSetting::from(
+            Url::parse("unix:///tmp/prosa-listener.sock").expect("Listener url is invalid"),
+        );
+        assert!(unix.needs_rebind(&ListenerSetting::from(
+            Url::parse("unix:///tmp/prosa-listener-new.sock").expect("Listener url is invalid")
+        )));
+        assert!(!unix.needs_rebind(&ListenerSetting::from(
+            Url::parse("file:///tmp/prosa-listener.sock").expect("Listener url is invalid")
+        )));
+        assert!(unix.needs_rebind(&plain));
     }
 
     #[test]
