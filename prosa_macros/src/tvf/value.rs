@@ -65,7 +65,16 @@ pub(crate) fn generate_value(
     value_stream: &TokenStream,
 ) -> Result<(TokenStream, ValueType), Error> {
     // Process the token tree
-    let mut tokens = value_stream.clone().into_iter();
+    let mut tokens = value_stream.clone().into_iter().peekable();
+
+    // Check if the first element is a sign (+ or -)
+    let is_negative = if let Some(TokenTree::Punct(punct)) = tokens.peek() {
+        let negative = punct.as_char() == '-';
+        tokens.next(); // move to next token
+        negative
+    } else {
+        false
+    };
 
     // in all cases, we expect to find a value
     let value = tokens.next().ok_or(Error::new_spanned(
@@ -98,14 +107,21 @@ pub(crate) fn generate_value(
     match value {
         TokenTree::Literal(literal) => {
             if let Some(output_type) = output_type {
-                Ok((convert_literal(&literal, &output_type)?, output_type))
+                Ok((
+                    convert_literal(&literal, &output_type, is_negative)?,
+                    output_type,
+                ))
             } else {
                 let literal_type = identify_literal(&literal)?;
+
+                // Integers and Floats may be prefixed with a negative sign
+                let sign = make_sign(is_negative);
+
                 let token_stream = match literal_type {
                     ValueType::Byte => quote! [ #literal as u8 ],
-                    ValueType::Signed => quote! [ #literal as i64 ],
+                    ValueType::Signed => quote! [ #sign #literal as i64 ],
                     ValueType::Unsigned => quote! [ #literal as u64 ],
-                    ValueType::Float => quote! [ #literal as f64 ],
+                    ValueType::Float => quote! [ #sign #literal as f64 ],
                     _ => literal.to_token_stream(),
                 };
                 Ok((token_stream, literal_type))
@@ -158,5 +174,14 @@ pub(crate) fn generate_value(
             }
         }
         TokenTree::Punct(_) => Err(Error::new_spanned(value, "Unexpected punctuation.")),
+    }
+}
+
+#[inline]
+pub(crate) fn make_sign(is_negative: bool) -> TokenStream {
+    if is_negative {
+        quote![-]
+    } else {
+        TokenStream::new()
     }
 }
