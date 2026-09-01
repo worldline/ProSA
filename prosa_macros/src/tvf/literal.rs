@@ -59,7 +59,7 @@ pub(crate) fn convert_literal(
                 ValueType::Signed => quote! [ #sign #literal as i64 ],
                 ValueType::Unsigned => quote! [ #literal as u64 ],
                 ValueType::Float => quote! [ #sign #literal as f64 ],
-                ValueType::String => quote! [ #literal.to_string() ],
+                ValueType::String => quote! [ (#sign #literal).to_string() ],
                 ValueType::Bytes => {
                     // Enable special conversion for literals written in
                     // hexadecimal or in binary to be converted directly to bytes.
