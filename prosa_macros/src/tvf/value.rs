@@ -119,9 +119,9 @@ pub(crate) fn generate_value(
 
                 let token_stream = match literal_type {
                     ValueType::Byte => quote! [ #literal as u8 ],
-                    ValueType::Signed => quote! [ #sign #literal as i64 ],
+                    ValueType::Signed => quote! [ (#sign #literal) as i64 ],
                     ValueType::Unsigned => quote! [ #literal as u64 ],
-                    ValueType::Float => quote! [ #sign #literal as f64 ],
+                    ValueType::Float => quote! [ (#sign #literal) as f64 ],
                     _ => literal.to_token_stream(),
                 };
                 Ok((token_stream, literal_type))
@@ -134,7 +134,10 @@ pub(crate) fn generate_value(
                 "false" => Ok((quote![0u8], output_type.unwrap_or(ValueType::Byte))),
                 _ => {
                     if let Some(output_type) = output_type {
-                        Ok((quote![#ident], output_type))
+                        // Integers and Floats may be prefixed with a negative sign
+                        let sign = make_sign(is_negative);
+
+                        Ok((quote![#sign #ident], output_type))
                     } else {
                         Err(Error::new_spanned(
                             ident,
