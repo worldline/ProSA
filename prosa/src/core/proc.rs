@@ -116,11 +116,15 @@
 //!                        // TODO process the error
 //!                     },
 //!                     InternalMsg::Config(config) => {
-//!                         if let Some(settings) =
-//!                             config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)
-//!                         {
-//!                             // TODO apply the difference between `settings` and `self.settings`
-//!                             self.settings = settings;
+//!                         match config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor) {
+//!                             Ok(settings) => {
+//!                                 // TODO apply the difference between `settings` and `self.settings`
+//!                                 self.settings = settings;
+//!                             }
+//!                             Err(err) => prosa::tracing::warn!(
+//!                                 "Failed to reload configuration for processor {}: {err}",
+//!                                 self.name()
+//!                             ),
 //!                         }
 //!                     },
 //!                     InternalMsg::Service(table) => self.service = table,

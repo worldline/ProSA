@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
-use crate::tracing::{debug, info};
+use crate::tracing::{debug, info, warn};
 use prosa_macros::proc_settings;
 use serde::{Deserialize, Serialize};
 
@@ -118,36 +118,44 @@ where
                         err
                     ),
                     InternalMsg::Config(config) => {
-                        if let Some(settings) =
-                            config.reload_proc::<StubSettings>(self.proc.as_ref(), adaptor.as_ref())
+                        match config
+                            .reload_proc::<StubSettings>(self.proc.as_ref(), adaptor.as_ref())
                         {
-                            let current_services =
-                                self.settings.service_names.iter().collect::<HashSet<_>>();
-                            let new_services =
-                                settings.service_names.iter().collect::<HashSet<_>>();
+                            Ok(settings) => {
+                                let current_services =
+                                    self.settings.service_names.iter().collect::<HashSet<_>>();
+                                let new_services =
+                                    settings.service_names.iter().collect::<HashSet<_>>();
 
-                            let services_to_remove = current_services
-                                .difference(&new_services)
-                                .map(|service| (*service).clone())
-                                .collect::<Vec<_>>();
-                            if !services_to_remove.is_empty() {
-                                self.proc.remove_service_proc(services_to_remove).await?;
+                                let services_to_remove = current_services
+                                    .difference(&new_services)
+                                    .map(|service| (*service).clone())
+                                    .collect::<Vec<_>>();
+                                if !services_to_remove.is_empty() {
+                                    self.proc.remove_service_proc(services_to_remove).await?;
+                                }
+
+                                let services_to_add = new_services
+                                    .difference(&current_services)
+                                    .map(|service| (*service).clone())
+                                    .collect::<Vec<_>>();
+                                if !services_to_add.is_empty() {
+                                    self.proc.add_service_proc(services_to_add).await?;
+                                }
+
+                                info!(
+                                    "{} reloaded settings for services: {}",
+                                    self.name(),
+                                    settings.service_names.join(", ")
+                                );
+                                self.settings = settings;
                             }
-
-                            let services_to_add = new_services
-                                .difference(&current_services)
-                                .map(|service| (*service).clone())
-                                .collect::<Vec<_>>();
-                            if !services_to_add.is_empty() {
-                                self.proc.add_service_proc(services_to_add).await?;
+                            Err(err) => {
+                                warn!(
+                                    "Failed to reload configuration for processor {}: {err}",
+                                    self.name()
+                                );
                             }
-
-                            info!(
-                                "{} reloaded settings for services: {}",
-                                self.name(),
-                                settings.service_names.join(", ")
-                            );
-                            self.settings = settings;
                         }
                     }
                     InternalMsg::Service(table) => self.service = table,

@@ -68,10 +68,12 @@ pub trait Adaptor {
     ///
     /// ```rust,ignore
     /// InternalMsg::Config(config) => {
-    ///     if let Some(settings) =
-    ///         config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)
-    ///     {
-    ///         self.settings = settings;
+    ///     match config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor) {
+    ///         Ok(settings) => self.settings = settings,
+    ///         Err(err) => prosa::tracing::warn!(
+    ///             "Failed to reload configuration for processor {}: {err}",
+    ///             self.name()
+    ///         ),
     ///     }
     /// }
     /// ```

@@ -52,10 +52,14 @@ There are three important methods you need to use for this object:
                             info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
                         },
                         InternalMsg::Config(config) => {
-                            if let Some(settings) = config
+                            match config
                                 .reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)
                             {
-                                self.settings = settings;
+                                Ok(settings) => self.settings = settings,
+                                Err(err) => warn!(
+                                    "Failed to reload configuration for processor {}: {err}",
+                                    self.name()
+                                ),
                             }
                         },
                         InternalMsg::Service(table) => {

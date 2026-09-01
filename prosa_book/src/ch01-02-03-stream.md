@@ -65,8 +65,6 @@ every target connection has a cost. Performance-sensitive clients can build an `
 snapshot with `SslConfigContext`, use the lower-level `Stream::connect_openssl` API, and replace the
 snapshot only when their certificate source reports a change.
 
-Both settings implement `PartialEq`, and `set_alpn()` is idempotent, so normalise before comparing.
-
 A target reconnects, so on a configuration reload compare the new settings with the current ones
 and reconnect only when they differ.
 
