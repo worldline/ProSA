@@ -1,6 +1,6 @@
 use super::buffer::{generate_list, generate_map};
 use super::literal::{convert_literal, identify_literal};
-use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Punct, TokenStream, TokenTree};
 use quote::{ToTokens, quote};
 use syn::{Error, Ident};
 
@@ -68,12 +68,12 @@ pub(crate) fn generate_value(
     let mut tokens = value_stream.clone().into_iter().peekable();
 
     // Check if the first element is a sign (+ or -)
-    let is_negative = if let Some(TokenTree::Punct(punct)) = tokens.peek() {
-        let negative = punct.as_char() == '-';
+    let unary_op = if let Some(TokenTree::Punct(punct)) = tokens.peek() {
+        let unary_op = UnaryOp::new(punct)?;
         tokens.next(); // move to next token
-        negative
+        unary_op
     } else {
-        false
+        UnaryOp::None
     };
 
     // in all cases, we expect to find a value
@@ -103,25 +103,23 @@ pub(crate) fn generate_value(
         return Err(Error::new_spanned(token, "Unexpected token"));
     }
 
+    let sign = unary_op.make_sign();
+
     // check the type of value provided
     match value {
         TokenTree::Literal(literal) => {
             if let Some(output_type) = output_type {
                 Ok((
-                    convert_literal(&literal, &output_type, is_negative)?,
+                    convert_literal(&literal, &output_type, unary_op)?,
                     output_type,
                 ))
             } else {
                 let literal_type = identify_literal(&literal)?;
-
-                // Integers and Floats may be prefixed with a negative sign
-                let sign = make_sign(is_negative);
-
                 let token_stream = match literal_type {
-                    ValueType::Byte => quote! [ #literal as u8 ],
-                    ValueType::Signed => quote! [ (#sign #literal) as i64 ],
-                    ValueType::Unsigned => quote! [ #literal as u64 ],
-                    ValueType::Float => quote! [ (#sign #literal) as f64 ],
+                    ValueType::Byte => quote! [ #sign #literal as u8 ],
+                    ValueType::Signed => quote! [ #sign #literal as i64 ],
+                    ValueType::Unsigned => quote! [ #sign #literal as u64 ],
+                    ValueType::Float => quote! [ #sign #literal as f64 ],
                     _ => literal.to_token_stream(),
                 };
                 Ok((token_stream, literal_type))
@@ -130,13 +128,24 @@ pub(crate) fn generate_value(
         TokenTree::Ident(ident) => {
             // check if the identifier is a boolean
             match ident.to_string().as_str() {
-                "true" => Ok((quote![1u8], output_type.unwrap_or(ValueType::Byte))),
-                "false" => Ok((quote![0u8], output_type.unwrap_or(ValueType::Byte))),
+                "true" => {
+                    let t = if unary_op == UnaryOp::LogicalNot {
+                        quote![0u8]
+                    } else {
+                        quote![1u8]
+                    };
+                    Ok((t, output_type.unwrap_or(ValueType::Byte)))
+                }
+                "false" => {
+                    let t = if unary_op == UnaryOp::LogicalNot {
+                        quote![1u8]
+                    } else {
+                        quote![0u8]
+                    };
+                    Ok((t, output_type.unwrap_or(ValueType::Byte)))
+                }
                 _ => {
                     if let Some(output_type) = output_type {
-                        // Integers and Floats may be prefixed with a negative sign
-                        let sign = make_sign(is_negative);
-
                         Ok((quote![#sign #ident], output_type))
                     } else {
                         Err(Error::new_spanned(
@@ -166,7 +175,7 @@ pub(crate) fn generate_value(
                 }
                 _ => {
                     if let Some(output_type) = output_type {
-                        Ok((group.to_token_stream(), output_type))
+                        Ok((quote![ #sign #group ], output_type))
                     } else {
                         Err(Error::new_spanned(
                             group,
@@ -180,11 +189,52 @@ pub(crate) fn generate_value(
     }
 }
 
-#[inline]
-pub(crate) fn make_sign(is_negative: bool) -> TokenStream {
-    if is_negative {
-        quote![-]
-    } else {
-        TokenStream::new()
+/// Define a unary operator that may precede a literal, a variable or an expression
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnaryOp {
+    /// No operator
+    #[default]
+    None,
+
+    /// + sign, results in no operator being added
+    Positive,
+
+    /// - sign, negate the following value
+    Negative,
+
+    /// logical not for boolean values
+    LogicalNot,
+
+    /// * dereference
+    Dereference,
+
+    /// & borrow
+    Borrow,
+}
+
+impl UnaryOp {
+    /// Identify unary operation from punctuation mark
+    pub(crate) fn new(punct: &Punct) -> Result<Self, Error> {
+        match punct.as_char() {
+            '+' => Ok(Self::Positive),
+            '-' => Ok(Self::Negative),
+            '!' => Ok(Self::LogicalNot),
+            '*' => Ok(Self::Dereference),
+            '&' => Ok(Self::Borrow),
+            _ => Err(Error::new_spanned(punct, "Unsupported punctuation")),
+        }
+    }
+
+    /// Generate token for current unary operator
+    #[rustfmt::skip]
+    pub(crate) fn make_sign(self) -> TokenStream {
+        match self {
+            UnaryOp::None        => TokenStream::new(),
+            UnaryOp::Positive    => TokenStream::new(),
+            UnaryOp::Negative    => quote![ - ],
+            UnaryOp::LogicalNot  => quote![ ! ],
+            UnaryOp::Dereference => quote![ * ],
+            UnaryOp::Borrow      => quote![ & ],
+        }
     }
 }

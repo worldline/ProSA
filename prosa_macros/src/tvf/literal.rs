@@ -1,8 +1,8 @@
 use super::value::ValueType;
-use crate::tvf::value::make_sign;
+use crate::tvf::value::UnaryOp;
 use chrono::Datelike;
 use proc_macro2::{Literal, TokenStream};
-use quote::{ToTokens, quote};
+use quote::quote;
 use std::num::ParseIntError;
 use syn::{Error, Lit, parse_quote};
 
@@ -36,28 +36,23 @@ pub(crate) fn identify_literal(literal: &Literal) -> Result<ValueType, Error> {
 pub(crate) fn convert_literal(
     literal: &Literal,
     output_type: &ValueType,
-    is_negative: bool,
+    unary_op: UnaryOp,
 ) -> Result<TokenStream, Error> {
+    let sign = unary_op.make_sign();
+
     // Check if the literal is already of the expected type
     // in that case we can return it as is
     let lit_type = identify_literal(literal)?;
     if lit_type == *output_type {
-        if is_negative {
-            return Ok(quote![ - #literal ]);
-        } else {
-            return Ok(literal.to_token_stream());
-        }
+        return Ok(quote![ #sign #literal ]);
     }
 
     let token_stream = match lit_type {
         ValueType::Byte | ValueType::Signed | ValueType::Unsigned | ValueType::Float => {
-            // Integers and Floats may be prefixed with a negative sign
-            let sign = make_sign(is_negative);
-
             match output_type {
-                ValueType::Byte => quote! [ #literal as u8 ],
+                ValueType::Byte => quote! [ #sign #literal as u8 ],
                 ValueType::Signed => quote! [ #sign #literal as i64 ],
-                ValueType::Unsigned => quote! [ #literal as u64 ],
+                ValueType::Unsigned => quote! [ #sign #literal as u64 ],
                 ValueType::Float => quote! [ #sign #literal as f64 ],
                 ValueType::String => quote! [ (#sign #literal).to_string() ],
                 ValueType::Bytes => {
