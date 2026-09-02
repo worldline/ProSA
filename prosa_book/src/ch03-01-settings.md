@@ -18,7 +18,7 @@ let settings = config.try_deserialize::<MyRunSettings>()?;
 
 `ProsaConfig::from_path()` uses the same configuration loading rules as ProSA itself: the path can be a single configuration file or a directory recursively containing `yml`, `yaml`, or `toml` files, and `PROSA_*` environment variables are applied on top of the file sources.
 
-When the main task notifies a processor about a configuration change, the message contains the same `ProsaConfig` wrapper. Processors should reload their own section with `config.get_proc(self.proc.as_ref())?`.
+When the main task notifies a processor about a configuration change, the message contains the same `ProsaConfig` wrapper. Processors should reload their own section with `config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)`, which deserializes the processor settings and reloads the adaptor configuration in one step. If it returns a `ConfigError`, the processor should log the failure with its name and keep using its current settings.
 If the processor section has `adaptor_config_path`, `ProsaConfig` also loads that adaptor configuration and watches it as part of the global configuration reload flow.
 
 ## Creation

@@ -118,50 +118,45 @@ where
                         err
                     ),
                     InternalMsg::Config(config) => {
-                        let settings = match config.get_proc::<StubSettings>(self.proc.as_ref()) {
-                            Ok(settings) => settings,
-                            Err(err) => {
-                                warn!("Can't reload settings for processor {}: {err}", self.name());
-                                continue;
-                            }
-                        };
-
-                        if let Err(err) =
-                            adaptor.reload_config(config.get_adaptor_config(self.proc.as_ref()))
+                        match config
+                            .reload_proc::<StubSettings>(self.proc.as_ref(), adaptor.as_ref())
                         {
-                            warn!(
-                                "Can't reload adaptor configuration for processor {}: {err}",
-                                self.name()
-                            );
-                            continue;
+                            Ok(settings) => {
+                                let current_services =
+                                    self.settings.service_names.iter().collect::<HashSet<_>>();
+                                let new_services =
+                                    settings.service_names.iter().collect::<HashSet<_>>();
+
+                                let services_to_remove = current_services
+                                    .difference(&new_services)
+                                    .map(|service| (*service).clone())
+                                    .collect::<Vec<_>>();
+                                if !services_to_remove.is_empty() {
+                                    self.proc.remove_service_proc(services_to_remove).await?;
+                                }
+
+                                let services_to_add = new_services
+                                    .difference(&current_services)
+                                    .map(|service| (*service).clone())
+                                    .collect::<Vec<_>>();
+                                if !services_to_add.is_empty() {
+                                    self.proc.add_service_proc(services_to_add).await?;
+                                }
+
+                                info!(
+                                    "{} reloaded settings for services: {}",
+                                    self.name(),
+                                    settings.service_names.join(", ")
+                                );
+                                self.settings = settings;
+                            }
+                            Err(err) => {
+                                warn!(
+                                    "Failed to reload configuration for processor {}: {err}",
+                                    self.name()
+                                );
+                            }
                         }
-
-                        let current_services =
-                            self.settings.service_names.iter().collect::<HashSet<_>>();
-                        let new_services = settings.service_names.iter().collect::<HashSet<_>>();
-
-                        let services_to_remove = current_services
-                            .difference(&new_services)
-                            .map(|service| (*service).clone())
-                            .collect::<Vec<_>>();
-                        if !services_to_remove.is_empty() {
-                            self.proc.remove_service_proc(services_to_remove).await?;
-                        }
-
-                        let services_to_add = new_services
-                            .difference(&current_services)
-                            .map(|service| (*service).clone())
-                            .collect::<Vec<_>>();
-                        if !services_to_add.is_empty() {
-                            self.proc.add_service_proc(services_to_add).await?;
-                        }
-
-                        info!(
-                            "{} reloaded settings for services: {}",
-                            self.name(),
-                            settings.service_names.join(", ")
-                        );
-                        self.settings = settings;
                     }
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {

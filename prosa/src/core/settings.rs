@@ -20,6 +20,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio::sync::mpsc;
 
+use super::adaptor::Adaptor;
 use super::proc::ProcBusParam;
 
 /// Re-export of prosa_utils for observability config
@@ -312,7 +313,7 @@ impl ProsaConfig {
     }
 
     /// Deserialize a processor configuration from its processor name.
-    pub fn get_proc<C>(&self, proc: &impl ProcBusParam) -> Result<C, config::ConfigError>
+    pub fn get_proc<C>(&self, proc: &(impl ProcBusParam + ?Sized)) -> Result<C, config::ConfigError>
     where
         C: DeserializeOwned,
     {
@@ -320,8 +321,39 @@ impl ProsaConfig {
     }
 
     /// Access a processor adaptor configuration from its processor name.
-    pub fn get_adaptor_config(&self, proc: &impl ProcBusParam) -> Option<&Config> {
+    pub fn get_adaptor_config(&self, proc: &(impl ProcBusParam + ?Sized)) -> Option<&Config> {
         self.adaptor_configs.get(&proc.get_proc_config_key())
+    }
+
+    /// Reload a processor's settings and adaptor configuration in one step.
+    ///
+    /// Returns an error if either cannot be reloaded:
+    ///
+    /// ```rust,ignore
+    /// InternalMsg::Config(config) => {
+    ///     match config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor) {
+    ///         Ok(settings) => {
+    ///             // ... apply the difference between `settings` and `self.settings`
+    ///             self.settings = settings;
+    ///         }
+    ///         Err(err) => prosa::tracing::warn!(
+    ///             "Failed to reload configuration for processor {}: {err}",
+    ///             self.name()
+    ///         ),
+    ///     }
+    /// }
+    /// ```
+    pub fn reload_proc<S>(
+        &self,
+        proc: &dyn ProcBusParam,
+        adaptor: &dyn Adaptor,
+    ) -> Result<S, config::ConfigError>
+    where
+        S: DeserializeOwned,
+    {
+        let settings = self.get_proc::<S>(proc)?;
+        adaptor.reload_config(self.get_adaptor_config(proc))?;
+        Ok(settings)
     }
 
     /// Return every configuration path watched to maintain this configuration.
@@ -658,6 +690,93 @@ mod tests {
         assert!(current.has_proc_changed(&new, "proc_1"));
 
         fs::remove_dir_all(config_path)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reload_proc() -> Result<(), config::ConfigError> {
+        struct TestProc(&'static str);
+        impl ProcBusParam for TestProc {
+            fn get_proc_id(&self) -> u32 {
+                1
+            }
+
+            fn name(&self) -> &str {
+                self.0
+            }
+        }
+
+        struct TestAdaptor {
+            fail: bool,
+        }
+        impl Adaptor for TestAdaptor {
+            fn reload_config(&self, _config: Option<&Config>) -> Result<(), config::ConfigError> {
+                if self.fail {
+                    Err(config::ConfigError::Message("adaptor failure".into()))
+                } else {
+                    Ok(())
+                }
+            }
+
+            fn terminate(&self) {}
+        }
+
+        #[derive(serde::Deserialize)]
+        struct TestProcSettings {
+            service_name: String,
+        }
+
+        let config = ProsaConfig::from_config(
+            Config::builder()
+                .set_override("proc_1.service_name", "PROC_TEST")?
+                .build()?,
+        )?;
+
+        let settings = config
+            .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: false })
+            .expect("Processor settings should be reloaded");
+        assert_eq!("PROC_TEST", settings.service_name);
+
+        assert!(matches!(
+            config
+                .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: true }),
+            Err(config::ConfigError::Message(message)) if message == "adaptor failure"
+        ));
+
+        // A processor without a configuration section returns the deserialization error
+        assert!(matches!(
+            config.reload_proc::<TestProcSettings>(
+                &TestProc("proc-unknown"),
+                &TestAdaptor { fail: false }
+            ),
+            Err(config::ConfigError::NotFound(_))
+        ));
+
+        // An invalid section returns the deserialization error
+        let invalid_config = ProsaConfig::from_config(
+            Config::builder()
+                .set_override("proc_1.service_name", vec!["not", "a", "string"])?
+                .build()?,
+        )?;
+        assert!(matches!(
+            invalid_config
+                .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: false }),
+            Err(config::ConfigError::Type { .. })
+        ));
+
+        // A section that misses a mandatory setting returns `At` rather than the `NotFound` of an
+        // absent section
+        let incomplete_config = ProsaConfig::from_config(
+            Config::builder()
+                .set_override("proc_1.unrelated", "value")?
+                .build()?,
+        )?;
+        assert!(matches!(
+            incomplete_config
+                .reload_proc::<TestProcSettings>(&TestProc("proc-1"), &TestAdaptor { fail: false }),
+            Err(config::ConfigError::At { .. })
+        ));
 
         Ok(())
     }

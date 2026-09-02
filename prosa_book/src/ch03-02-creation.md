@@ -58,7 +58,16 @@ where
                         // TODO: process the error
                     }
                     InternalMsg::Config(config) => {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                        match config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor) {
+                            Ok(settings) => {
+                                // TODO: apply the difference between `settings` and `self.settings`
+                                self.settings = settings;
+                            }
+                            Err(err) => prosa::tracing::warn!(
+                                "Failed to reload configuration for processor {}: {err}",
+                                self.name()
+                            ),
+                        }
                     },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
@@ -73,7 +82,9 @@ where
 }
 ```
 
-When receiving `InternalMsg::Config(config)`, call `config.get_proc(self.proc.as_ref())?` to deserialize the section matching the processor configuration key (the processor name with `-` replaced by `_`) into the processor settings type. The main task only sends this message to processors whose own configuration section changed.
+When receiving `InternalMsg::Config(config)`, call `config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor)` to deserialize the section matching the processor configuration key (the processor name with `-` replaced by `_`) into the processor settings type, and reload the adaptor configuration in the same step. It returns a `ConfigError` if either operation fails. Handle that error in the processor so the log identifies the processor by name, and keep using the current settings.
+
+The main task sends this message once when the processor registers, then on every reload that changes its own configuration section. So compare the new settings with the ones the processor already holds, and apply only the difference.
 
 The generic parameter `A` represents the adaptor type your processor uses.
 Specify in the _where_ clause which traits your adaptor must implement (commonly, [`Adaptor`](https://docs.rs/prosa/latest/prosa/core/adaptor/trait.Adaptor.html) plus `Send` and `Sync`)

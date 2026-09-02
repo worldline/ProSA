@@ -62,12 +62,19 @@ pub trait Adaptor {
     /// existing adaptors compatible by ignoring the configuration.
     ///
     /// Processor implementations should call this from their loop when they
-    /// receive [`InternalMsg::Config`](crate::core::msg::InternalMsg::Config):
+    /// receive [`InternalMsg::Config`](crate::core::msg::InternalMsg::Config), which
+    /// [`ProsaConfig::reload_proc`](crate::core::settings::ProsaConfig::reload_proc) does along with
+    /// the processor settings:
     ///
     /// ```rust,ignore
     /// InternalMsg::Config(config) => {
-    ///     self.settings = config.get_proc(self.proc.as_ref())?;
-    ///     adaptor.reload_config(config.get_adaptor_config(self.proc.as_ref()))?;
+    ///     match config.reload_proc::<MyProcSettings>(self.proc.as_ref(), &adaptor) {
+    ///         Ok(settings) => self.settings = settings,
+    ///         Err(err) => prosa::tracing::warn!(
+    ///             "Failed to reload configuration for processor {}: {err}",
+    ///             self.name()
+    ///         ),
+    ///     }
     /// }
     /// ```
     fn reload_config(&self, _config: Option<&config::Config>) -> Result<(), config::ConfigError> {

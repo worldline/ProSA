@@ -554,11 +554,10 @@ mod tests {
             .expect("Certificate path should exist")
             .to_string();
 
-        let mut server_ssl_config = SslConfig::new_self_cert(cert_path.clone());
-        server_ssl_config.set_alpn(vec!["prosa/1".into(), "h2".into()]);
-
-        let listener_settings =
+        let server_ssl_config = SslConfig::new_self_cert(cert_path.clone());
+        let mut listener_settings =
             listener::ListenerSetting::new(addr.clone(), Some(server_ssl_config));
+        listener_settings.set_alpn(vec!["prosa/1".into(), "h2".into()]);
         assert!(
             format!("{listener_settings:?}").contains("tls")
                 && format!("{listener_settings:?}").contains("localhost")
@@ -599,9 +598,9 @@ mod tests {
         };
 
         let mut client_ssl_config = SslConfig::default();
-        client_ssl_config.set_alpn(vec!["http/1.1".into(), "prosa/1".into()]);
         client_ssl_config.set_store(Store::File { path: cert_path });
-        let target_settings = stream::TargetSetting::new(addr, Some(client_ssl_config), None);
+        let mut target_settings = stream::TargetSetting::new(addr, Some(client_ssl_config), None);
+        target_settings.set_alpn(vec!["http/1.1".into(), "prosa/1".into()]);
         assert_eq!(addr_str, target_settings.to_string());
 
         let client = async {

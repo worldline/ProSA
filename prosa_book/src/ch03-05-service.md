@@ -41,8 +41,8 @@ To start listening to a specific service, call [`add_service_proc()`](https://do
                     InternalMsg::Error(err) => {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Config(config) => {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) => {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
@@ -108,8 +108,8 @@ In this case, you can declare multiple listener subtasks, each of which subscrib
                         InternalMsg::Error(err) => {
                             // Handle errors as if they were responses
                         },
-                        InternalMsg::Config(config) => {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        InternalMsg::Config(_config) => {
+                            // Reload the settings, see the processor creation chapter
                         },
                         InternalMsg::Service(table) => service = table,
                         InternalMsg::Shutdown => {
@@ -133,8 +133,8 @@ In this case, you can declare multiple listener subtasks, each of which subscrib
                     InternalMsg::Error(err) => {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Config(config) => {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) => {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
@@ -181,8 +181,8 @@ After that, you are free to call any services.
                     InternalMsg::Error(err) => {
                         // Handle errors
                     },
-                    InternalMsg::Config(config) => {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) => {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) => self.service = table,
                     InternalMsg::Shutdown => {
@@ -248,8 +248,8 @@ The logic is similar to single senders, but you specify the queue when sending m
                         InternalMsg::Error(err) => {
                             // Handle errors for this subtask
                         },
-                        InternalMsg::Config(config) => {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        InternalMsg::Config(_config) => {
+                            // Reload the settings, see the processor creation chapter
                         },
                         InternalMsg::Service(table) => self.service = table,
                         InternalMsg::Shutdown => {
