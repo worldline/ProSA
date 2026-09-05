@@ -114,6 +114,8 @@ pub(crate) enum Value<'e> {
     Bytes(Bytes),
     Date(NaiveDate),
     DateTime(NaiveDateTime),
+
+    #[allow(dead_code)]
     Buffer(&'e [TvfExpr]),
 }
 
