@@ -7,8 +7,9 @@ pub(crate) mod parser;
 /// Convert the expressions into tokens to be passed to the compiler
 pub(crate) mod tokens;
 
-use crate::tvf::parser::TvfParser;
+use crate::tvf::{parser::TvfParser, tokens::buffer_to_tokens};
 use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use quote::quote;
 use syn::spanned::Spanned;
 
 pub(crate) fn gen_tvf_impl(input: TokenStream) -> Result<TokenStream, syn::Error> {
@@ -27,28 +28,30 @@ pub(crate) fn gen_tvf_impl(input: TokenStream) -> Result<TokenStream, syn::Error
     };
 
     // The second token must be the content enclosed in {} or []
-    let result = if let Some(TokenTree::Group(group)) = tokens.next() {
+    let output = if let Some(TokenTree::Group(group)) = tokens.next() {
         match group.delimiter() {
             Delimiter::Brace => {
-                let mut parser = TvfParser::new(group.stream(), false);
-                let exprs = parser.collect_expr()?;
-                todo!()
-            }
-            Delimiter::Bracket => {
                 let mut parser = TvfParser::new(group.stream(), true);
                 let exprs = parser.collect_expr()?;
-                todo!()
+                buffer_to_tokens(&buffer_type, &exprs)?
             }
-            _ => Err(syn::Error::new(
-                span,
-                "Invalid delimiter, expected {} or []",
-            )),
+            Delimiter::Bracket => {
+                let mut parser = TvfParser::new(group.stream(), false);
+                let exprs = parser.collect_expr()?;
+                buffer_to_tokens(&buffer_type, &exprs)?
+            }
+            _ => {
+                return Err(syn::Error::new(
+                    span,
+                    "Invalid delimiter, expected {} or []",
+                ));
+            }
         }
     } else {
-        Err(syn::Error::new(
+        return Err(syn::Error::new(
             span,
             "Second argument must be the content enclosed in {} or []",
-        ))
+        ));
     };
 
     // Raise an error on any extra tokens
@@ -56,5 +59,12 @@ pub(crate) fn gen_tvf_impl(input: TokenStream) -> Result<TokenStream, syn::Error
         return Err(syn::Error::new_spanned(token, "Unexpected token"));
     }
 
-    result
+    Ok(quote![
+        {
+            use ::prosa_utils::msg::tvf as __tvf;
+            use ::prosa_utils::msg::bytes as __bytes;
+            use ::prosa_utils::msg::chrono as __chrono;
+            #output
+        }
+    ])
 }
