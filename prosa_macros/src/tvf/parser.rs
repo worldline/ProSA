@@ -509,20 +509,11 @@ impl Bytes {
         let span = literal.span();
 
         match literal {
-            syn::Lit::Str(lit) => {
-                // convert the string into bytes
-                todo!()
-            }
-            syn::Lit::ByteStr(lit) => {
-                // convert the string into bytes
-                todo!()
-            }
-            syn::Lit::CStr(lit) => {
-                // convert the string into bytes
-                todo!()
-            }
-            syn::Lit::Byte(lit) => todo!(),
-            syn::Lit::Char(lit) => todo!(),
+            syn::Lit::Str(lit) => Ok(Self(lit.value().into_bytes())),
+            syn::Lit::CStr(lit) => Ok(Self(lit.value().into_bytes())),
+            syn::Lit::ByteStr(lit) => Ok(Self(lit.value())),
+            syn::Lit::Byte(lit) => Ok(Self(vec![lit.value()])),
+            syn::Lit::Char(lit) => Ok(Self(vec![lit.value() as u8])),
             syn::Lit::Int(lit) => {
                 // Remove underscores from the literal
                 let digits = lit.to_string().replace('_', "");
