@@ -33,8 +33,8 @@ mod macro_tests {
             12 => -2 as Signed,
             13 => +2.125 as Float,
             14 => 100 as String,
-            //15 => -1000 as String,
-            //16 => -amount as Signed,
+            15 => -1000 as String,
+            16 => -amount as Signed,
             200 => "2023-06-05 15:02:00.000" as DateTime,
         });
 

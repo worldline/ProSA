@@ -332,13 +332,14 @@ impl<'e> Value<'e> {
     pub(crate) fn from_literal_with_type(
         literal: &syn::Lit,
         explicit: TvfType,
+        modifier: Modifier,
     ) -> Result<Self, syn::Error> {
         match explicit {
             TvfType::Byte => Ok(Self::Byte(parse_int(literal)?)),
             TvfType::Signed => Ok(Self::Signed(parse_int(literal)?)),
             TvfType::Unsigned => Ok(Self::Unsigned(parse_int(literal)?)),
             TvfType::Float => Ok(Self::Float(parse_float(literal)?)),
-            TvfType::String => Ok(Self::String(parse_string(literal)?)),
+            TvfType::String => Ok(Self::String(parse_string(literal, modifier)?)),
             TvfType::Bytes => Ok(Self::Bytes(Bytes::from_literal(literal)?)),
             TvfType::Date => Ok(Self::Date(parse_date(literal)?)),
             TvfType::DateTime => Ok(Self::DateTime(parse_datetime(literal)?)),
@@ -389,7 +390,8 @@ pub(crate) fn parse_float(literal: &syn::Lit) -> Result<f64, syn::Error> {
 }
 
 /// Given a literal deduce a String
-pub(crate) fn parse_string(literal: &syn::Lit) -> Result<String, syn::Error> {
+/// We pass an extra modifier argument for primitives before being converted into string literals
+pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<String, syn::Error> {
     let span = literal.span();
 
     // Try to convert the literal into a string
@@ -405,11 +407,51 @@ pub(crate) fn parse_string(literal: &syn::Lit) -> Result<String, syn::Error> {
             }
         },
         syn::Lit::CStr(s) => s.value().to_string_lossy().to_string(),
-        syn::Lit::Bool(s) => if s.value { "true" } else { "false" }.to_string(),
-        syn::Lit::Byte(s) => s.value().to_string(),
-        syn::Lit::Char(s) => s.value().to_string(),
-        syn::Lit::Int(s) => s.to_string(),
-        syn::Lit::Float(s) => s.to_string(),
+        syn::Lit::Bool(s) => {
+            let value = match modifier {
+                Modifier::None | Modifier::Positive | Modifier::Dereference => s.value,
+                Modifier::LogicalNot | Modifier::Negative => !s.value,
+                _ => return Err(syn::Error::new(span, "Unsupported operator for boolean")),
+            };
+            if value { "true" } else { "false" }.to_string()
+        }
+        syn::Lit::Byte(s) => {
+            let value = s.value();
+            match modifier {
+                Modifier::None | Modifier::Positive | Modifier::Dereference => value,
+                Modifier::LogicalNot => !value,
+                Modifier::Negative => -(value as i8) as u8,
+                _ => {
+                    return Err(syn::Error::new(span, "Unsupported operatory for byte"));
+                }
+            }
+            .to_string()
+        }
+        syn::Lit::Char(s) => {
+            let value = s.value();
+            match modifier {
+                Modifier::None | Modifier::Positive | Modifier::Dereference => value,
+                _ => {
+                    return Err(syn::Error::new(span, "Unsupported operatory for character"));
+                }
+            }
+            .to_string()
+        }
+        syn::Lit::Int(s) => match modifier {
+            Modifier::None | Modifier::Positive | Modifier::Dereference => s.to_string(),
+            Modifier::LogicalNot => (!s.base10_parse::<u64>()?).to_string(),
+            Modifier::Negative => (-s.base10_parse::<i64>()?).to_string(),
+            _ => {
+                return Err(syn::Error::new(span, "Unsupported operatory for integer"));
+            }
+        },
+        syn::Lit::Float(s) => match modifier {
+            Modifier::None | Modifier::Positive | Modifier::Dereference => s.to_string(),
+            Modifier::Negative => (-s.base10_parse::<f64>()?).to_string(),
+            _ => {
+                return Err(syn::Error::new(span, "Unsupported operatory for integer"));
+            }
+        },
         _ => {
             return Err(syn::Error::new(span, "Unsupported literal"));
         }
@@ -419,22 +461,46 @@ pub(crate) fn parse_string(literal: &syn::Lit) -> Result<String, syn::Error> {
 
 /// Given a literal deduce a Date
 pub(crate) fn parse_date(literal: &syn::Lit) -> Result<NaiveDate, syn::Error> {
-    const FORMAT: &'static str = "%Y-%m-%d";
+    const FORMAT: &str = "%Y-%m-%d";
     let span = literal.span();
 
-    let string = parse_string(literal)?;
+    let string = parse_str(literal)?;
     NaiveDate::parse_from_str(&string, FORMAT)
         .map_err(|err| syn::Error::new(span, format!["Failed to parse date: {}", err]))
 }
 
 /// Given a literal deduce a DateTime
 pub(crate) fn parse_datetime(literal: &syn::Lit) -> Result<NaiveDateTime, syn::Error> {
-    const FORMAT: &'static str = "%Y-%m-%d %H:%M:%S%.3f";
+    const FORMAT: &str = "%Y-%m-%d %H:%M:%S%.3f";
     let span = literal.span();
 
-    let string = parse_string(literal)?;
+    let string = parse_str(literal)?;
     NaiveDateTime::parse_from_str(&string, FORMAT)
         .map_err(|err| syn::Error::new(span, format!["Failed to parse date: {}", err]))
+}
+
+/// Given a literal deduce a String
+fn parse_str(literal: &syn::Lit) -> Result<String, syn::Error> {
+    let span = literal.span();
+
+    // Try to convert the literal into a string
+    let string = match literal {
+        syn::Lit::Str(s) => s.value(),
+        syn::Lit::ByteStr(s) => match String::from_utf8(s.value()) {
+            Ok(s) => s,
+            Err(err) => {
+                return Err(syn::Error::new(
+                    span,
+                    format!["Failed to parse UTF-8 string: {}", err],
+                ));
+            }
+        },
+        syn::Lit::CStr(s) => s.value().to_string_lossy().to_string(),
+        _ => {
+            return Err(syn::Error::new(span, "Unsupported literal"));
+        }
+    };
+    Ok(string)
 }
 
 impl Bytes {
