@@ -8,6 +8,8 @@ mod macro_tests {
 
     #[test]
     fn test_tvf_macro() {
+        let amount = 64i64;
+
         let buffer = tvf!(SimpleStringTvf {
             1 => 2,
             3 => 4usize,
@@ -26,10 +28,17 @@ mod macro_tests {
             7 => false,
             8 => true,
             9 => b"string from bytes" as String,
+            10 => -10,
+            11 => -10.25,
+            12 => -2 as Signed,
+            13 => +2.125 as Float,
+            14 => 100 as String,
+            15 => -1000 as String,
+            16 => -amount as Signed,
             200 => "2023-06-05 15:02:00.000" as DateTime,
         });
 
-        assert_eq!(8, buffer.len());
+        assert_eq!(15, buffer.len());
         assert_eq!(Ok(2), buffer.get_unsigned(1));
         assert_eq!(Ok(4), buffer.get_signed(3));
         assert_eq!(Ok(0), buffer.get_byte(7));
@@ -68,6 +77,19 @@ mod macro_tests {
             Ok(NaiveDate::from_ymd_opt(1995, 1, 10).expect("NaiveDate should be build")),
             buffer.get_date(6)
         );
+        assert_eq!(Ok(-10), buffer.get_signed(10));
+        assert_eq!(Ok(-10.25), buffer.get_float(11));
+        assert_eq!(Ok(-2), buffer.get_signed(12));
+        assert_eq!(Ok(2.125), buffer.get_float(13));
+        assert_eq!(
+            Ok("100"),
+            buffer.get_string(14).map(|s| s.to_string()).as_deref()
+        );
+        assert_eq!(
+            Ok("-1000"),
+            buffer.get_string(15).map(|s| s.to_string()).as_deref()
+        );
+        assert_eq!(Ok(-64), buffer.get_signed(16));
         assert_eq!(
             Ok(NaiveDate::from_ymd_opt(2023, 6, 5)
                 .expect("NaiveDate should be build")
