@@ -33,7 +33,7 @@ impl TvfExpr {
         let (out_type, value) = match &self.value {
             TvfValue::Lit(lit) => {
                 if let Some(explicit) = self.explicit_type {
-                    let value = Value::from_literal_with_type(lit, explicit)?;
+                    let value = Value::from_literal_with_type(lit, explicit, self.modifier)?;
                     (explicit, value.to_tokens())
                 } else {
                     let value = Value::from_literal(lit)?;
@@ -98,7 +98,7 @@ impl TvfType {
             Self::Signed   => quote![ (#md #value) as i64 ],
             Self::Unsigned => quote![ (#md #value) as u64 ],
             Self::Float    => quote![ (#md #value) as f64 ],
-            Self::String   => quote![ (#md #value).to_string() ],
+            Self::String   => value,
             Self::Bytes    => value,
             Self::Date     => value,
             Self::DateTime => value,
