@@ -1,11 +1,12 @@
-use proc_macro2::TokenStream;
+use chrono::{NaiveDate, NaiveDateTime};
+use proc_macro2::{Span, TokenStream};
+use syn::spanned::Spanned;
 
 /// Define a field expression which includes the following elements
 /// - a target field identifier
 /// - a modifier (unary operator)
 /// - a literal / variable / rust-expression
 /// - a implicit or explicit target type
-#[derive(Debug, Clone)]
 pub(crate) struct TvfExpr {
     /// Field identifier to use
     pub id: TvfId,
@@ -17,11 +18,10 @@ pub(crate) struct TvfExpr {
     pub value: TvfValue,
 
     /// Output type to insert the field in the buffer
-    pub out_type: TvfType,
+    pub explicit_type: Option<TvfType>,
 }
 
 /// Identifier of a field
-#[derive(Debug, Clone)]
 pub(crate) enum TvfId {
     /// We directly have an integer value
     Int(usize),
@@ -34,7 +34,6 @@ pub(crate) enum TvfId {
 }
 
 /// Define a value to insert into the buffer
-#[derive(Debug, Clone)]
 pub(crate) enum TvfValue {
     /// Simple literal which can be used to implicitely identify the type of the value
     Lit(syn::Lit),
@@ -46,7 +45,18 @@ pub(crate) enum TvfValue {
     Expr(TokenStream),
 
     /// Sub-buffer
-    Buffer(Vec<TvfExpr>),
+    Buffer(Vec<TvfExpr>, Span),
+}
+
+impl TvfValue {
+    pub(crate) fn span(&self) -> Span {
+        match self {
+            TvfValue::Lit(lit) => lit.span(),
+            TvfValue::Ident(ident) => ident.span(),
+            TvfValue::Expr(stream) => stream.span(),
+            TvfValue::Buffer(_, span) => *span,
+        }
+    }
 }
 
 /// The types that can be added to a TVF buffer
@@ -92,3 +102,36 @@ pub(crate) enum Modifier {
 /// Simple sequence of bytes to serialize
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Bytes(pub Vec<u8>);
+
+/// Values that have been identified
+pub(crate) enum Value<'e> {
+    Bool(bool),
+    Byte(u8),
+    Signed(i64),
+    Unsigned(u64),
+    Float(f64),
+    String(String),
+    Bytes(Bytes),
+    Date(NaiveDate),
+    DateTime(NaiveDateTime),
+    Buffer(&'e [TvfExpr]),
+}
+
+impl<'e> Value<'e> {
+    /// Process the TvfValue to identify its type
+    #[rustfmt::skip]
+    pub(crate) fn identify(&self) -> TvfType {
+        match self {
+            Self::Bool     (_) => TvfType::Byte,
+            Self::Byte     (_) => TvfType::Byte,
+            Self::Signed   (_) => TvfType::Signed,
+            Self::Unsigned (_) => TvfType::Unsigned,
+            Self::Float    (_) => TvfType::Float,
+            Self::String   (_) => TvfType::String,
+            Self::Bytes    (_) => TvfType::Bytes,
+            Self::Date     (_) => TvfType::Date,
+            Self::DateTime (_) => TvfType::DateTime,
+            Self::Buffer   (_) => TvfType::Buffer,
+        }
+    }
+}

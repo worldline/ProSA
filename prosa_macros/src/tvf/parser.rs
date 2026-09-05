@@ -4,13 +4,16 @@ use num_traits::FromPrimitive;
 use proc_macro2::{
     Delimiter, Literal, Punct, Spacing, Span, TokenStream, TokenTree, token_stream::IntoIter,
 };
-use std::{fmt::Display, iter::Peekable, str::FromStr, string::FromUtf8Error};
+use std::{fmt::Display, iter::Peekable, str::FromStr};
 use syn::{Ident, parse_quote, spanned::Spanned};
 
 /// Store context to consume tokens and produce expressions
 pub(crate) struct TvfParser {
     /// Tokens to iterate over
     pub tokens: Peekable<IntoIter>,
+
+    /// Whole span of the block of tokens
+    pub whole_span: Span,
 
     /// Span of the last successfull token parsing
     pub last_span: Span,
@@ -26,10 +29,11 @@ impl TvfParser {
     /// Wrap the iterable tokenstream into the parser
     #[inline]
     pub(crate) fn new(tokens: TokenStream, is_map: bool) -> Self {
-        let last_span = tokens.span();
+        let whole_span = tokens.span();
         Self {
             tokens: tokens.into_iter().peekable(),
-            last_span,
+            whole_span,
+            last_span: whole_span,
             is_map,
             field_count: 0,
         }
@@ -82,6 +86,7 @@ impl TvfParser {
             while self.peek().is_some() {
                 let expr = TvfExpr::parse_from_map(self)?;
                 expressions.push(expr);
+                self.field_count += 1;
                 self.check_for_comma()?;
             }
         } else {
@@ -89,6 +94,7 @@ impl TvfParser {
             while self.peek().is_some() {
                 let expr = TvfExpr::parse_from_list(self)?;
                 expressions.push(expr);
+                self.field_count += 1;
                 self.check_for_comma()?;
             }
         }
@@ -99,16 +105,22 @@ impl TvfParser {
     /// Check if the next token is a comma ','
     /// If so, move on to the next token to read the next expression
     fn check_for_comma(&mut self) -> Result<(), syn::Error> {
-        if let Some(TokenTree::Punct(comma)) = self.peek()
-            && comma.as_char() == ','
-        {
-            self.consume();
-            Ok(())
+        if let Some(tt) = self.peek() {
+            if let TokenTree::Punct(comma) = tt
+                && comma.as_char() == ','
+            {
+                // consume the comma
+                self.consume();
+                Ok(())
+            } else {
+                Err(syn::Error::new(
+                    self.last_span,
+                    "Next token is not a comma ','",
+                ))
+            }
         } else {
-            Err(syn::Error::new(
-                self.last_span,
-                "Next token is not a comma ','",
-            ))
+            // No more token is fine too
+            Ok(())
         }
     }
 }
@@ -174,7 +186,7 @@ impl TvfExpr {
         let value = TvfValue::from_tokens(&value)?;
 
         // Next we might have a `as` keyword to indicate the expected type
-        let out_type = if let Some(TokenTree::Ident(word)) = parser.peek()
+        let explicit_type = if let Some(TokenTree::Ident(word)) = parser.peek()
             && word == "as"
         {
             // move past the "as" and look at the next token
@@ -183,24 +195,13 @@ impl TvfExpr {
 
             // Following keyword must be a type name
             if let TokenTree::Ident(type_name) = cast_to {
-                TvfType::from_as_cast(type_name)?
+                Some(TvfType::from_as_cast(type_name)?)
             } else {
                 return Err(syn::Error::new_spanned(cast_to, "Expected type."));
             }
         } else {
             // No explicity type is specified,
-            // fallback to deducing the type from the value
-            // This only works if the value is a literal or a sub-buffer
-            match &value {
-                TvfValue::Lit(lit) => TvfType::from_literal(lit)?,
-                TvfValue::Buffer(_) => TvfType::Buffer,
-                _ => {
-                    return Err(syn::Error::new(
-                        parser.last_span,
-                        "Cannot deduce type of field, please use a `as` indication",
-                    ));
-                }
-            }
+            None
         };
 
         // Complete the expression
@@ -208,7 +209,7 @@ impl TvfExpr {
             id,
             modifier,
             value,
-            out_type,
+            explicit_type,
         })
     }
 }
@@ -241,27 +242,26 @@ impl TvfId {
 impl TvfValue {
     /// Identify the value form a token-tree
     fn from_tokens(tt: &TokenTree) -> Result<Self, syn::Error> {
+        let span = tt.span();
         match tt {
             TokenTree::Ident(ident) => Ok(Self::Ident(ident.clone())),
             TokenTree::Literal(literal) => Ok(Self::Lit(convert_lit(literal)?)),
             TokenTree::Group(group) => match group.delimiter() {
                 Delimiter::Parenthesis => Ok(Self::Expr(group.stream())),
                 Delimiter::Bracket => {
-                    let mut parser = TvfParser::new(group.stream(), true);
-                    let exprs = parser.collect_expr()?;
-                    Ok(Self::Buffer(exprs))
-                }
-                Delimiter::Brace => {
                     let mut parser = TvfParser::new(group.stream(), false);
                     let exprs = parser.collect_expr()?;
-                    Ok(Self::Buffer(exprs))
+                    Ok(Self::Buffer(exprs, parser.whole_span))
                 }
-                Delimiter::None => {
-                    Err(syn::Error::new_spanned(tt, "Missing expression delimiters"))
+                Delimiter::Brace => {
+                    let mut parser = TvfParser::new(group.stream(), true);
+                    let exprs = parser.collect_expr()?;
+                    Ok(Self::Buffer(exprs, parser.whole_span))
                 }
+                Delimiter::None => Err(syn::Error::new(span, "Missing expression delimiters")),
             },
-            TokenTree::Punct(punct) => Err(syn::Error::new_spanned(
-                tt,
+            TokenTree::Punct(punct) => Err(syn::Error::new(
+                span,
                 format!["Punctuation '{}' cannot be used as value", punct],
             )),
         }
@@ -269,30 +269,6 @@ impl TvfValue {
 }
 
 impl TvfType {
-    /// Given a literal, identify the corresponding TVF type
-    fn from_literal(literal: &syn::Lit) -> Result<Self, syn::Error> {
-        match literal {
-            syn::Lit::Bool(_) => Ok(Self::Byte),
-            syn::Lit::Byte(_) => Ok(Self::Byte),
-            syn::Lit::Char(_) => Ok(Self::Byte),
-            syn::Lit::Int(int) => {
-                let suffix = int.suffix();
-                if suffix == "u8" {
-                    Ok(Self::Byte)
-                } else if suffix.starts_with('u') {
-                    Ok(Self::Unsigned)
-                } else {
-                    Ok(Self::Signed)
-                }
-            }
-            syn::Lit::Float(_) => Ok(Self::Float),
-            syn::Lit::Str(_) => Ok(Self::String),
-            syn::Lit::CStr(_) => Ok(Self::String),
-            syn::Lit::ByteStr(_) => Ok(Self::Bytes),
-            _ => Err(syn::Error::new_spanned(literal, "Invalid literal")),
-        }
-    }
-
     /// Deduce the value type from the type provided in a `as` cast
     #[rustfmt::skip]
     fn from_as_cast(ident: Ident) -> Result<Self, syn::Error> {
@@ -325,6 +301,55 @@ impl Modifier {
     }
 }
 
+impl<'e> Value<'e> {
+    /// Given a literal, identify the corresponding TVF value and type
+    pub(crate) fn from_literal(literal: &syn::Lit) -> Result<Self, syn::Error> {
+        match literal {
+            syn::Lit::Bool(lit) => Ok(Self::Bool(lit.value)),
+            syn::Lit::Byte(lit) => Ok(Self::Byte(lit.value())),
+            syn::Lit::Char(lit) => Ok(Self::Byte(lit.value() as u8)),
+            syn::Lit::Int(int) => {
+                let suffix = int.suffix();
+                if suffix == "u8" {
+                    Ok(Self::Byte(int.base10_parse()?))
+                } else if suffix.starts_with('u') {
+                    Ok(Self::Unsigned(int.base10_parse()?))
+                } else {
+                    Ok(Self::Signed(int.base10_parse()?))
+                }
+            }
+            syn::Lit::Float(float) => Ok(Self::Float(float.base10_parse()?)),
+            syn::Lit::Str(string) => Ok(Self::String(string.value())),
+            syn::Lit::CStr(string) => {
+                Ok(Self::String(string.value().to_string_lossy().to_string()))
+            }
+            syn::Lit::ByteStr(bytes) => Ok(Self::Bytes(Bytes(bytes.value()))),
+            _ => Err(syn::Error::new_spanned(literal, "Invalid literal")),
+        }
+    }
+
+    /// Given a literal and an explicity type, identify the corresponding TVF value
+    pub(crate) fn from_literal_with_type(
+        literal: &syn::Lit,
+        explicit: TvfType,
+    ) -> Result<Self, syn::Error> {
+        match explicit {
+            TvfType::Byte => Ok(Self::Byte(parse_int(literal)?)),
+            TvfType::Signed => Ok(Self::Signed(parse_int(literal)?)),
+            TvfType::Unsigned => Ok(Self::Unsigned(parse_int(literal)?)),
+            TvfType::Float => Ok(Self::Float(parse_float(literal)?)),
+            TvfType::String => Ok(Self::String(parse_string(literal)?)),
+            TvfType::Bytes => Ok(Self::Bytes(Bytes::from_literal(literal)?)),
+            TvfType::Date => Ok(Self::Date(parse_date(literal)?)),
+            TvfType::DateTime => Ok(Self::DateTime(parse_datetime(literal)?)),
+            TvfType::Buffer => Err(syn::Error::new_spanned(
+                literal,
+                "Cannot build sub-buffer from literal",
+            )),
+        }
+    }
+}
+
 /// Convert a `proc_macro2::Literal` into a `syn::Lit`
 fn convert_lit(literal: &Literal) -> Result<syn::Lit, syn::Error> {
     if let syn::Expr::Lit(literal) = parse_quote! [ #literal ] {
@@ -335,7 +360,7 @@ fn convert_lit(literal: &Literal) -> Result<syn::Lit, syn::Error> {
 }
 
 /// Get an integer value from a literal
-fn parse_int<I>(literal: &syn::Lit) -> Result<I, syn::Error>
+pub(crate) fn parse_int<I>(literal: &syn::Lit) -> Result<I, syn::Error>
 where
     I: FromPrimitive + FromStr,
     <I as FromStr>::Err: Display,
@@ -351,68 +376,109 @@ where
     }
 }
 
-/// Error encountered when parsing a value from a string literal
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum StrParseError {
-    /// Unsupported literal
-    #[error("Unsupported literal")]
-    Literal,
-
-    /// Failed to convert bytes into UTF-8 string
-    #[error("UTF-8: {0}")]
-    Utf8(#[from] FromUtf8Error),
-
-    /// chrono error
-    #[error("chono: {0}")]
-    Chrono(#[from] chrono::ParseError),
+/// Get a float value from a literal
+pub(crate) fn parse_float(literal: &syn::Lit) -> Result<f64, syn::Error> {
+    let span = literal.span();
+    match literal {
+        syn::Lit::Byte(byte) => Ok(byte.value() as f64),
+        syn::Lit::Char(chr) => Ok(chr.value() as u32 as f64),
+        syn::Lit::Int(int) => Ok(int.base10_parse()?),
+        syn::Lit::Float(float) => Ok(float.base10_parse()?),
+        _ => Err(syn::Error::new(span, "Invalid literal")),
+    }
 }
 
 /// Given a literal deduce a String
-fn parse_string(literal: &syn::Lit) -> Result<String, StrParseError> {
+pub(crate) fn parse_string(literal: &syn::Lit) -> Result<String, syn::Error> {
+    let span = literal.span();
+
     // Try to convert the literal into a string
     let string = match literal {
         syn::Lit::Str(s) => s.value(),
-        syn::Lit::ByteStr(s) => String::from_utf8(s.value())?,
+        syn::Lit::ByteStr(s) => match String::from_utf8(s.value()) {
+            Ok(s) => s,
+            Err(err) => {
+                return Err(syn::Error::new(
+                    span,
+                    format!["Failed to parse UTF-8 string: {}", err],
+                ));
+            }
+        },
         syn::Lit::CStr(s) => s.value().to_string_lossy().to_string(),
+        syn::Lit::Bool(s) => if s.value { "true" } else { "false" }.to_string(),
+        syn::Lit::Byte(s) => s.value().to_string(),
+        syn::Lit::Char(s) => s.value().to_string(),
+        syn::Lit::Int(s) => s.to_string(),
+        syn::Lit::Float(s) => s.to_string(),
         _ => {
-            return Err(StrParseError::Literal);
+            return Err(syn::Error::new(span, "Unsupported literal"));
         }
     };
     Ok(string)
 }
 
 /// Given a literal deduce a Date
-fn parse_date(literal: &syn::Lit) -> Result<NaiveDate, StrParseError> {
+pub(crate) fn parse_date(literal: &syn::Lit) -> Result<NaiveDate, syn::Error> {
     const FORMAT: &'static str = "%Y-%m-%d";
+    let span = literal.span();
+
     let string = parse_string(literal)?;
-    Ok(NaiveDate::parse_from_str(&string, FORMAT)?)
+    NaiveDate::parse_from_str(&string, FORMAT)
+        .map_err(|err| syn::Error::new(span, format!["Failed to parse date: {}", err]))
 }
 
 /// Given a literal deduce a DateTime
-fn parse_datetime(literal: &syn::Lit) -> Result<NaiveDateTime, StrParseError> {
+pub(crate) fn parse_datetime(literal: &syn::Lit) -> Result<NaiveDateTime, syn::Error> {
     const FORMAT: &'static str = "%Y-%m-%d %H:%M:%S%.3f";
+    let span = literal.span();
+
     let string = parse_string(literal)?;
-    Ok(NaiveDateTime::parse_from_str(&string, FORMAT)?)
+    NaiveDateTime::parse_from_str(&string, FORMAT)
+        .map_err(|err| syn::Error::new(span, format!["Failed to parse date: {}", err]))
 }
 
 impl Bytes {
     /// Parse a integer literal an build a sequence of bytes from it
-    fn from_literal(literal: &syn::LitInt) -> Result<Self, syn::Error> {
-        // Remove underscores from the literal
-        let digits = literal.to_string().replace('_', "");
+    pub(crate) fn from_literal(literal: &syn::Lit) -> Result<Self, syn::Error> {
+        let span = literal.span();
 
-        // convert the digits to a sequence of bytes
-        if digits.starts_with("0x") {
-            // hexadecimal string
-            Self::digits_to_bytes(literal.span(), &digits, 16, 2)
-        } else if digits.starts_with("0b") {
-            // binary string
-            Self::digits_to_bytes(literal.span(), &digits, 2, 8)
-        } else {
-            Err(syn::Error::new_spanned(
-                literal,
-                "Cannot convert number to bytes, only hexadecimal and binary literals are supported.",
-            ))
+        match literal {
+            syn::Lit::Str(lit) => {
+                // convert the string into bytes
+                todo!()
+            }
+            syn::Lit::ByteStr(lit) => {
+                // convert the string into bytes
+                todo!()
+            }
+            syn::Lit::CStr(lit) => {
+                // convert the string into bytes
+                todo!()
+            }
+            syn::Lit::Byte(lit) => todo!(),
+            syn::Lit::Char(lit) => todo!(),
+            syn::Lit::Int(lit) => {
+                // Remove underscores from the literal
+                let digits = lit.to_string().replace('_', "");
+
+                // convert the digits to a sequence of bytes
+                if digits.starts_with("0x") {
+                    // hexadecimal string
+                    Self::digits_to_bytes(literal.span(), &digits, 16, 2)
+                } else if digits.starts_with("0b") {
+                    // binary string
+                    Self::digits_to_bytes(literal.span(), &digits, 2, 8)
+                } else {
+                    Err(syn::Error::new_spanned(
+                        literal,
+                        "Cannot convert number to bytes, only hexadecimal and binary literals are supported.",
+                    ))
+                }
+            }
+            _ => Err(syn::Error::new(
+                span,
+                "Unsupported literal for sequence of bytes",
+            )),
         }
     }
 

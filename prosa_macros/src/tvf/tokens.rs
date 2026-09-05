@@ -1,15 +1,78 @@
 use crate::tvf::expr::*;
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{ToTokens, quote};
+
+/// Generate the tokens to build a TVF buffer from a list of expressions
+pub(crate) fn buffer_to_tokens(
+    buffer_type: &syn::Ident,
+    expressions: &[TvfExpr],
+) -> Result<TokenStream, syn::Error> {
+    // collect the expressions to build the buffer
+    let mut lines = Vec::with_capacity(expressions.len());
+    for expr in expressions.iter() {
+        lines.push(expr.to_tokens(buffer_type)?);
+    }
+
+    Ok(quote![
+        {
+            let mut __buffer = <#buffer_type as Default>::default();
+             #(#lines)*
+            __buffer
+        }
+    ])
+}
 
 impl TvfExpr {
-    fn to_tokens(&self, buffer: &syn::Ident) -> TokenStream {
-        let ident = self.id.to_tokens();
-        let value = self.value.to_tokens();
-        let put_method = self.out_type.put_method();
+    /// Convert the expression into tokens
+    fn to_tokens(&self, buffer_type: &syn::Ident) -> Result<TokenStream, syn::Error> {
+        let id = self.id.to_tokens();
 
-        quote![ #buffer.#put_method(#ident, #value) ]
+        // Process the value
+        let value_span = self.value.span();
+        let (out_type, value) = match &self.value {
+            TvfValue::Lit(lit) => {
+                if let Some(explicit) = self.explicit_type {
+                    let value = Value::from_literal_with_type(lit, explicit)?;
+                    (explicit, value.to_tokens())
+                } else {
+                    let value = Value::from_literal(lit)?;
+                    (value.identify(), value.to_tokens())
+                }
+            }
+            TvfValue::Ident(ident) => {
+                if ident == "true" || ident == "false" {
+                    (
+                        self.explicit_type.unwrap_or(TvfType::Byte),
+                        ident.to_token_stream(),
+                    )
+                } else if let Some(explicit) = self.explicit_type {
+                    (explicit, ident.to_token_stream())
+                } else {
+                    return Err(syn::Error::new(
+                        value_span,
+                        "Missing explicit type for variable",
+                    ));
+                }
+            }
+            TvfValue::Expr(stream) => {
+                if let Some(explicit) = self.explicit_type {
+                    (explicit, stream.clone())
+                } else {
+                    return Err(syn::Error::new(
+                        value_span,
+                        "Missing explicit type for expression",
+                    ));
+                }
+            }
+            TvfValue::Buffer(sub, _) => (TvfType::Buffer, buffer_to_tokens(buffer_type, sub)?),
+        };
+
+        let put_method = out_type.put_method();
+        let value_cast = out_type.cast_type(self.modifier, value);
+        Ok(quote![
+            <#buffer_type as __tvf::Tvf>::#put_method(&mut __buffer, #id, #value_cast);
+        ])
     }
 }
 
@@ -18,22 +81,9 @@ impl TvfId {
     #[rustfmt::skip]
     fn to_tokens(&self) -> TokenStream {
         match self {
-            Self::Int  (int  ) => quote![   #int     ],
-            Self::Ident(ident) => quote![   #ident   ],
-            Self::Expr (expr ) => quote![ ( #expr  ) ],
-        }
-    }
-}
-
-impl TvfValue {
-    /// Convert the value into tokens
-    #[rustfmt::skip]
-    fn to_tokens(&self) -> TokenStream {
-        match self {
-            Self::Lit   (lit   ) => quote![   #lit     ],
-            Self::Ident (ident ) => quote![   #ident   ],
-            Self::Expr  (expr  ) => quote![ ( #expr  ) ],
-            Self::Buffer(buffer) => todo![],
+            Self::Int  (int  ) => quote![   #int     as usize ],
+            Self::Ident(ident) => quote![   #ident   as usize ],
+            Self::Expr (expr ) => quote![ ( #expr  ) as usize ],
         }
     }
 }
@@ -41,13 +91,18 @@ impl TvfValue {
 impl TvfType {
     /// Rust type corresponding to the TVF type
     #[rustfmt::skip]
-    fn cast_type(self) -> Option<TokenStream> {
+    fn cast_type(self, modifier: Modifier, value: TokenStream) -> TokenStream {
+        let md = modifier.to_token();
         match self {
-            Self::Byte     => Some(quote![ u8  ]),
-            Self::Signed   => Some(quote![ i64 ]),
-            Self::Unsigned => Some(quote![ u64 ]),
-            Self::Float    => Some(quote![ f64 ]),
-            _              => None,
+            Self::Byte     => quote![ (#md #value) as u8  ],
+            Self::Signed   => quote![ (#md #value) as i64 ],
+            Self::Unsigned => quote![ (#md #value) as u64 ],
+            Self::Float    => quote![ (#md #value) as f64 ],
+            Self::String   => quote![ (#md #value).to_string() ],
+            Self::Bytes    => value,
+            Self::Date     => value,
+            Self::DateTime => value,
+            Self::Buffer   => value,
         }
     }
 
@@ -83,13 +138,32 @@ impl Modifier {
     }
 }
 
+impl<'e> Value<'e> {
+    /// Generate token for a value
+    #[rustfmt::skip]
+    fn to_tokens(&'e self) -> TokenStream {
+        match self {
+            Value::Bool     (val) => quote![ #val ],
+            Value::Byte     (val) => quote![ #val ],
+            Value::Signed   (val) => quote![ #val ],
+            Value::Unsigned (val) => quote![ #val ],
+            Value::Float    (val) => quote![ #val ],
+            Value::String   (val) => quote![ #val ],
+            Value::Bytes    (val) => val.to_token(),
+            Value::Date     (val) => date_to_tokens    (*val),
+            Value::DateTime (val) => datetime_to_tokens(*val),
+            Value::Buffer   ( _ ) => panic!("Should not be called here"),
+        }
+    }
+}
+
 /// Write tokens to generate the given date
 fn date_to_tokens(date: NaiveDate) -> TokenStream {
     let year = date.year();
     let month = date.month();
     let day = date.day();
     quote! [
-        ::chrono::NaiveDate::from_ymd_opt( #year, #month, #day ).unwrap()
+        __chrono::NaiveDate::from_ymd_opt( #year, #month, #day ).unwrap()
     ]
 }
 
@@ -97,7 +171,7 @@ fn date_to_tokens(date: NaiveDate) -> TokenStream {
 fn datetime_to_tokens(datetime: NaiveDateTime) -> TokenStream {
     let msecs = datetime.and_utc().timestamp_millis();
     quote! [
-        ::chrono::DateTime::from_timestamp_millis(#msecs).unwrap().naive_utc()
+        __chrono::DateTime::from_timestamp_millis(#msecs).unwrap().naive_utc()
     ]
 }
 
@@ -106,6 +180,6 @@ impl Bytes {
     #[inline]
     fn to_token(&self) -> TokenStream {
         let bytes = self.0.as_slice();
-        quote! [ ::bytes::Bytes::from_static( &[ #(#bytes),* ] ) ]
+        quote! [ __bytes::Bytes::from_static( &[ #(#bytes),* ] ) ]
     }
 }
