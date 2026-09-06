@@ -182,13 +182,80 @@ flowchart LR
 As such, you can't directly send metric to it.
 It's the role of Prometheus to gather metrics from your application.
 
-To do this, you need to declare a server that exposes your ProSA metrics:
+The observability HTTP server is shared by Prometheus and the ProSA health probes. Configure its
+listening address at the top level and enable the Prometheus exporter to expose `/metrics`:
 ```yaml
 observability:
+  endpoint: "0.0.0.0:9090"
   level: debug
-  metrics:
-    prometheus:
-      endpoint: "0.0.0.0:9090"
 ```
 
-> You also need to enable the feature `prometheus` for ProSA.
+> You also need to enable the `prometheus` feature for ProSA. No additional Prometheus
+> configuration is required.
+
+Only `GET` and `HEAD` requests to `/metrics` return metrics. Other paths do not expose the
+Prometheus registry.
+
+### Health and readiness
+
+ProSA tracks readiness as part of its base observability support. The `prosa_ready` gauge is
+exported through every configured metrics exporter, including OTLP, stdout, and Prometheus. Its
+value is `1` when ready and `0` otherwise. Neither readiness requirements nor this metric require
+the HTTP feature.
+
+When the `observability-http` feature is enabled, the observability server also exposes three
+health endpoints:
+
+- `/startup` succeeds permanently after ProSA first becomes ready.
+- `/live` succeeds while the main ProSA task is running.
+- `/ready` succeeds while ProSA is running, is not shutting down, and all configured health
+  requirements are available.
+
+Processor and service requirements are optional. When both are present, every named processor and
+service is required. Empty entries are ignored:
+
+```yaml
+observability:
+  endpoint: "0.0.0.0:9090"
+  health:
+    required_processors:
+      - api_processor
+      - database_processor
+    required_services:
+      - CUSTOMER_LOOKUP
+      - PAYMENT
+```
+
+A required processor is available when it has at least one queue registered with the main task. A
+required service is available when it has at least one registered provider. Losing either makes
+`/ready` return `503 Service Unavailable`, but does not change liveness or reset `/startup`.
+Without requirements, ProSA becomes ready when the main task starts. Requirement changes are
+applied during configuration reload and immediately update readiness.
+
+The health server can be used without Prometheus by enabling the `observability-http` feature
+without the `prometheus` feature.
+
+For Kubernetes, configure startup separately so liveness and readiness checks do not interfere
+with initialization:
+
+```yaml
+startupProbe:
+  httpGet:
+    path: /startup
+    port: 9090
+  periodSeconds: 2
+  failureThreshold: 30
+livenessProbe:
+  httpGet:
+    path: /live
+    port: 9090
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 9090
+  periodSeconds: 5
+```
+
+See the [Kubernetes probe documentation](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
+for deployment-specific timing and failure thresholds.

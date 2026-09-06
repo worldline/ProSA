@@ -20,6 +20,7 @@ use crate::otel::metrics::{Meter, MeterProvider as _};
 use crate::otel::trace::TracerProvider as _;
 use crate::otel::{InstrumentationScope, KeyValue};
 use crate::tracing::{debug, info, warn};
+use prosa_utils::config::observability::{HealthCheckCfg, HealthGuard, HealthState};
 use prosa_utils::hash::{BuildIntHasher, IntHashMap, IntHashSet};
 use std::sync::{
     Arc,
@@ -57,6 +58,8 @@ where
     scope_attributes: Vec<KeyValue>,
     #[cfg(feature = "prometheus")]
     prometheus_registry: prometheus::Registry,
+    health: Arc<HealthState>,
+    health_check: HealthCheckCfg,
     meter_provider: opentelemetry_sdk::metrics::SdkMeterProvider,
     tracer_provider: opentelemetry_sdk::trace::SdkTracerProvider,
     stop: Arc<AtomicBool>,
@@ -85,36 +88,30 @@ where
         internal_tx_queue: mpsc::Sender<InternalMainMsg<M>>,
         settings: &S,
     ) -> Main<M> {
+        let observability = settings.get_observability();
+        let health = Arc::new(HealthState::default());
         #[cfg(feature = "prometheus")]
-        {
-            let prometheus_registry = prometheus::Registry::new();
-            let meter_provider = settings
-                .get_observability()
-                .build_meter_provider(&prometheus_registry);
+        let prometheus_registry = prometheus::Registry::new();
 
-            Main {
-                internal_tx_queue,
-                name: settings.get_prosa_name(),
-                scope_attributes: settings.get_observability().get_scope_attributes(),
-                prometheus_registry,
-                meter_provider,
-                tracer_provider: settings.get_observability().build_tracer_provider(),
-                stop: Arc::new(AtomicBool::new(false)),
-            }
-        }
+        #[cfg(feature = "prometheus")]
+        let meter_provider =
+            observability.build_meter_provider_with_health(&prometheus_registry, health.clone());
+        #[cfg(all(feature = "observability-http", not(feature = "prometheus")))]
+        let meter_provider = observability.build_meter_provider_with_health(health.clone());
+        #[cfg(not(feature = "observability-http"))]
+        let meter_provider = observability.build_meter_provider();
 
-        #[cfg(not(feature = "prometheus"))]
-        {
-            let meter_provider = settings.get_observability().build_meter_provider();
-
-            Main {
-                internal_tx_queue,
-                name: settings.get_prosa_name(),
-                scope_attributes: settings.get_observability().get_scope_attributes(),
-                meter_provider,
-                tracer_provider: settings.get_observability().build_tracer_provider(),
-                stop: Arc::new(AtomicBool::new(false)),
-            }
+        Main {
+            internal_tx_queue,
+            name: settings.get_prosa_name(),
+            scope_attributes: observability.get_scope_attributes(),
+            #[cfg(feature = "prometheus")]
+            prometheus_registry,
+            health,
+            health_check: observability.get_health_check().clone(),
+            meter_provider,
+            tracer_provider: observability.build_tracer_provider(),
+            stop: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -222,6 +219,7 @@ where
     /// Method to stop all processors
     pub async fn stop(&self, reason: String) -> Result<(), SendError<InternalMainMsg<M>>> {
         self.stop.store(true, Ordering::Relaxed);
+        self.health.set_ready(false);
         Ok(self
             .internal_tx_queue
             .send(InternalMainMsg::Shutdown(reason))
@@ -274,6 +272,8 @@ where
     internal_rx_queue: mpsc::Receiver<InternalMainMsg<M>>,
     meter: Meter,
     stop: Arc<AtomicBool>,
+    health: Arc<HealthState>,
+    health_check: HealthCheckCfg,
 }
 
 impl<M> ProcBusParam for MainProc<M>
@@ -293,11 +293,31 @@ impl<M> MainProc<M>
 where
     M: Sized + Clone + Debug + Tvf + Default + 'static + std::marker::Send + std::marker::Sync,
 {
+    fn update_health(&self) {
+        let processors_ready = self.health_check.required_processors().iter().all(|name| {
+            name.is_empty()
+                || self
+                    .processors
+                    .values()
+                    .flat_map(|queues| queues.values())
+                    .any(|processor| processor.name() == name)
+        });
+        let services_ready = self
+            .health_check
+            .required_services()
+            .iter()
+            .all(|name| name.is_empty() || self.services.exist_proc_service(name));
+
+        self.health
+            .set_ready(!self.stop.load(Ordering::Relaxed) && processors_ready && services_ready);
+    }
+
     async fn remove_proc(&mut self, proc_id: u32) -> Option<ProcQueueMap<M>> {
         if let Some(proc) = self.processors.remove(&proc_id) {
             let mut new_services = (*self.services).clone();
             new_services.remove_proc_services(proc_id);
             self.services = Arc::new(new_services);
+            self.update_health();
             Some(proc)
         } else {
             None
@@ -313,6 +333,7 @@ where
                     proc_queue.get_queue_id(),
                 );
                 self.services = Arc::new(new_services);
+                self.update_health();
                 Some(proc_queue)
             } else {
                 None
@@ -452,6 +473,8 @@ where
             let name = main.name().clone();
             let meter = main.meter("prosa_main_task_meter");
             let stop = main.stop.clone();
+            let health = main.health.clone();
+            let health_check = main.health_check.clone();
             (
                 main,
                 MainProc {
@@ -462,6 +485,8 @@ where
                     internal_rx_queue,
                     meter,
                     stop,
+                    health,
+                    health_check,
                 },
             )
         }
@@ -479,6 +504,19 @@ where
     }
 
     async fn run(mut self) {
+        let _health_guard = HealthGuard::new(self.health.clone());
+        self.update_health();
+
+        // Monitor readiness
+        let health = self.health.clone();
+        self.meter
+            .u64_observable_gauge("prosa_ready")
+            .with_description("Whether ProSA is ready to serve requests")
+            .with_callback(move |observer| {
+                observer.observe(u64::from(health.is_ready()), &[]);
+            })
+            .build();
+
         #[cfg(feature = "system-metrics")]
         {
             // Monitor RAM usage
@@ -608,6 +646,7 @@ where
                             }
 
                             prosa_main_record_proc!();
+                            self.update_health();
                         },
                         InternalMainMsg::DeleteProc(proc_id, proc_err) => {
                             if self.remove_proc(proc_id).await.is_some() {
@@ -644,6 +683,7 @@ where
                                     }
                                 }
                                 self.services = Arc::new(new_services);
+                                self.update_health();
                                 let _ = service_update.send(self.services.clone());
                                 self.notify_srv_proc().await;
                             }
@@ -655,6 +695,7 @@ where
                                     new_services.add_service(name, proc_queue.clone());
                                 }
                                 self.services = Arc::new(new_services);
+                                self.update_health();
                                 let _ = service_update.send(self.services.clone());
                                 self.notify_srv_proc().await;
                             }
@@ -665,6 +706,7 @@ where
                                 new_services.remove_service_proc(&name, proc_id);
                             }
                             self.services = Arc::new(new_services);
+                            self.update_health();
                             let _ = service_update.send(self.services.clone());
                             self.notify_srv_proc().await;
                         },
@@ -674,11 +716,33 @@ where
                                 new_services.remove_service(&name, proc_id, queue_id);
                             }
                             self.services = Arc::new(new_services);
+                            self.update_health();
                             let _ = service_update.send(self.services.clone());
                             self.notify_srv_proc().await;
                         },
                         InternalMainMsg::Config(config) => {
                             info!("Reloading ProSA configuration");
+
+                            let health_check = match config
+                                .config()
+                                .get::<HealthCheckCfg>("observability.health")
+                            {
+                                Ok(health_check) => Some(health_check),
+                                Err(config::ConfigError::NotFound(_)) => {
+                                    Some(HealthCheckCfg::default())
+                                }
+                                Err(error) => {
+                                    warn!("Can't reload health configuration: {error}");
+                                    None
+                                }
+                            };
+                            if let Some(health_check) = health_check
+                                && self.health_check != health_check
+                            {
+                                self.health_check = health_check;
+                                self.update_health();
+                            }
+
                             for error in self.notify_config_proc_queue(config).await {
                                 if let BusError::ProcComm(proc_id, queue_id, _) = error {
                                     if queue_id > 0 {
@@ -692,6 +756,7 @@ where
                         },
                         InternalMainMsg::Shutdown(reason) => {
                             warn!("ProSA is stopping: {}", reason);
+                            self.health.set_ready(false);
                             self.stop().await;
 
                             // The shutdown mecanism will be implemented later
@@ -701,6 +766,7 @@ where
                 },
                 _ = signal::ctrl_c() => {
                     warn!("ProSA is stopping");
+                    self.health.set_ready(false);
                     self.stop().await;
 
                     // The shutdown mecanism will be implemented later
@@ -708,5 +774,147 @@ where
                 },
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::{proc::ProcParam, service::ProcService, settings::Settings};
+    use prosa_utils::config::observability::Observability;
+    use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+    use serde::Serialize;
+    use std::time::Duration;
+
+    #[derive(Serialize)]
+    struct HealthSettings {
+        observability: Observability,
+    }
+
+    impl Settings for HealthSettings {
+        fn get_prosa_name(&self) -> String {
+            "health-test".to_string()
+        }
+
+        fn set_prosa_name(&mut self, _name: String) {}
+
+        fn get_observability(&self) -> &Observability {
+            &self.observability
+        }
+    }
+
+    async fn wait_until(condition: impl Fn() -> bool) {
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !condition() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("health state should update before the timeout");
+    }
+
+    fn config_from_yaml(yaml: &str) -> Arc<ProsaConfig> {
+        let config = config::Config::builder()
+            .add_source(config::File::from_str(yaml, config::FileFormat::Yaml))
+            .build()
+            .expect("reload configuration should build");
+        Arc::new(ProsaConfig::from_config(config).expect("reload configuration should be valid"))
+    }
+
+    #[cfg(feature = "prometheus")]
+    fn gauge_value(registry: &prometheus::Registry, name: &str) -> Option<f64> {
+        registry
+            .gather()
+            .into_iter()
+            .find(|family| family.name() == name)
+            .and_then(|family| {
+                family
+                    .get_metric()
+                    .first()
+                    .map(|metric| metric.get_gauge().get_value())
+            })
+    }
+
+    #[tokio::test]
+    async fn readiness_tracks_required_processors_and_services() {
+        let observability = serde_yaml::from_str(
+            r#"
+health:
+  required_processors: ["", required_processor]
+  required_services: ["", REQUIRED_SERVICE]
+"#,
+        )
+        .expect("health configuration should deserialize");
+        let settings = HealthSettings { observability };
+        let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings, Some(1));
+        let health = bus.health.clone();
+        #[cfg(feature = "prometheus")]
+        let registry = bus.get_prometheus_registry().clone();
+        let main_task = tokio::spawn(main.run());
+
+        wait_until(|| health.is_live()).await;
+        assert!(!health.is_started());
+        assert!(!health.is_ready());
+        #[cfg(feature = "prometheus")]
+        assert_eq!(Some(0.0), gauge_value(&registry, "prosa_ready"));
+
+        let (processor_queue, mut processor_receiver) = mpsc::channel(1);
+        let processor = ProcParam::new(
+            1,
+            "required_processor".to_string(),
+            processor_queue,
+            bus.clone(),
+        );
+        bus.add_proc_queue(ProcService::new_proc(&processor, 0))
+            .await
+            .expect("processor should register");
+        bus.add_service(vec!["REQUIRED_SERVICE".to_string()], 1, 0)
+            .await
+            .expect("service should register");
+
+        wait_until(|| health.is_ready()).await;
+        assert!(health.is_started());
+        #[cfg(feature = "prometheus")]
+        assert_eq!(Some(1.0), gauge_value(&registry, "prosa_ready"));
+
+        let processor_drain =
+            tokio::spawn(async move { while processor_receiver.recv().await.is_some() {} });
+
+        bus.remove_service(vec!["REQUIRED_SERVICE".to_string()], 1, 0)
+            .await
+            .expect("service should unregister");
+        wait_until(|| !health.is_ready()).await;
+        assert!(health.is_started());
+        assert!(health.is_live());
+
+        bus.add_service(vec!["REQUIRED_SERVICE".to_string()], 1, 0)
+            .await
+            .expect("service should register again");
+        wait_until(|| health.is_ready()).await;
+
+        bus.update_config(config_from_yaml(
+            r#"
+observability:
+  health:
+    required_services: [MISSING_SERVICE]
+"#,
+        ))
+        .await
+        .expect("health configuration should reload");
+        wait_until(|| !health.is_ready()).await;
+
+        bus.update_config(config_from_yaml("observability: {}"))
+            .await
+            .expect("missing health configuration should restore defaults");
+        wait_until(|| health.is_ready()).await;
+
+        bus.stop("health test complete".to_string())
+            .await
+            .expect("main task should stop");
+        assert!(!health.is_ready());
+        main_task.await.expect("main task should finish");
+        processor_drain.abort();
+        assert!(!health.is_live());
+        assert!(health.is_started());
     }
 }
