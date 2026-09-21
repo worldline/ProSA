@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
+            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -225,7 +225,16 @@ where
                         // TODO: process the error
                     }
                     InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                        match config.reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor) {
+                            Ok(settings) =&gt; {
+                                // TODO: apply the difference between `settings` and `self.settings`
+                                self.settings = settings;
+                            }
+                            Err(err) =&gt; prosa::tracing::warn!(
+                                "Failed to reload configuration for processor {}: {err}",
+                                self.name()
+                            ),
+                        }
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -238,7 +247,8 @@ where
         }
     }
 }</code></pre>
-<p>When receiving <code>InternalMsg::Config(config)</code>, call <code>config.get_proc(self.proc.as_ref())?</code> to deserialize the section matching the processor configuration key (the processor name with <code>-</code> replaced by <code>_</code>) into the processor settings type. The main task only sends this message to processors whose own configuration section changed.</p>
+<p>When receiving <code>InternalMsg::Config(config)</code>, call <code>config.reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor)</code> to deserialize the section matching the processor configuration key (the processor name with <code>-</code> replaced by <code>_</code>) into the processor settings type, and reload the adaptor configuration in the same step. It returns a <code>ConfigError</code> if either operation fails. Handle that error in the processor so the log identifies the processor by name, and keep using the current settings.</p>
+<p>The main task sends this message once when the processor registers, then on every reload that changes its own configuration section. So compare the new settings with the ones the processor already holds, and apply only the difference.</p>
 <p>The generic parameter <code>A</code> represents the adaptor type your processor uses.
 Specify in the <em>where</em> clause which traits your adaptor must implement (commonly, <a href="https://docs.rs/prosa/latest/prosa/core/adaptor/trait.Adaptor.html"><code>Adaptor</code></a> plus <code>Send</code> and <code>Sync</code>)</p>
 <h3 id="specific-tvf"><a class="header" href="#specific-tvf">Specific TVF</a></h3>

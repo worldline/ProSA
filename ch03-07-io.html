@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
+            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -192,6 +192,43 @@ It can be instantiated from a <a href="ch01-02-03-stream.html#listener"><code>Li
 </ul>
 <p>Once the object is created, you must call the <code>accept</code> method in a loop to accept client connections.
 Each accepted connection will create a <code>Stream</code> socket, which can be managed just like a client socket.</p>
+<p><code>accept</code> negotiates SSL before it returns, so the loop carries the handshake of every client. A
+handshake lasts up to the configured <code>ssl_timeout</code>, which is long enough for a slow client to keep
+the loop from accepting anyone else. An SSL server should instead accept with <code>accept_raw</code>, take an
+owned snapshot of the SSL parameters with <code>handshaker()</code>, and handshake in a spawned task:</p>
+<pre><code class="language-rust ignore">let (stream, addr) = listener.accept_raw().await?;
+
+// An OpenSSL context is reference counted, so the snapshot costs an atomic increment
+let handshaker = listener.handshaker().cloned();
+tokio::spawn(async move {
+    let stream = match handshaker {
+        Some(handshaker) =&gt; handshaker.handshake(stream).await?,
+        None =&gt; stream,
+    };
+
+    // ... serve the client
+});</code></pre>
+<p>The snapshot is taken when the client is accepted, so a certificate rotated meanwhile applies to
+the clients accepted afterwards and leaves the handshakes in flight alone.</p>
+<h3 id="sharing-the-listener"><a class="header" href="#sharing-the-listener">Sharing the listener</a></h3>
+<p><code>set_handshaker</code> takes the listener by value, so a listener that is shared — held in an <code>Arc</code> by the
+accept loop and by whatever else drives it — cannot be replaced to rotate its certificate. Bind it
+with <code>bind_raw</code> instead: it binds the socket and hands the SSL parameters back beside it rather than
+inside it, so the handshaker you hold is the only copy and rotating it is an assignment.</p>
+<pre><code class="language-rust ignore">let (listener, mut handshaker) = listener_setting.bind_raw().await?;
+let listener = Arc::new(listener);
+
+// Accept loop, same shape, from the handshaker held next to the listener
+let (stream, addr) = listener.accept_raw().await?;
+let client_handshaker = handshaker.clone();
+tokio::spawn(async move { /* ... */ });
+
+// Configuration reload or certificate-source change notification
+handshaker = listener_setting.build_handshaker().await?;</code></pre>
+<p>A listener bound this way carries no SSL parameters of its own: it formats as <code>tcp://</code>, its
+<code>handshaker()</code> is <code>None</code>, and <code>accept</code> returns a plain TCP stream. That is what keeps a rotation
+honest — there is no copy left inside the listener for <code>accept</code>, <code>handshake</code> or <code>Debug</code> to serve
+after you have replaced yours.</p>
 <h2 id="stream"><a class="header" href="#stream">Stream</a></h2>
 <p>A <code>Stream</code> represents a client socket or a socket created by a <code>StreamListener</code> when a client connects.
 It can be instantiated from a <a href="ch01-02-03-stream.html#client"><code>TargetSetting</code></a> using the <a href="https://docs.rs/prosa/latest/prosa/io/stream/struct.TargetSetting.html#method.connect"><code>connect</code></a> method.</p>

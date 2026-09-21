@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
+            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -191,7 +191,7 @@ You’ll specify your processor settings object when you create your processor i
 let config = ProsaConfig::from_path("prosa.yml")?;
 let settings = config.try_deserialize::&lt;MyRunSettings&gt;()?;</code></pre>
 <p><code>ProsaConfig::from_path()</code> uses the same configuration loading rules as ProSA itself: the path can be a single configuration file or a directory recursively containing <code>yml</code>, <code>yaml</code>, or <code>toml</code> files, and <code>PROSA_*</code> environment variables are applied on top of the file sources.</p>
-<p>When the main task notifies a processor about a configuration change, the message contains the same <code>ProsaConfig</code> wrapper. Processors should reload their own section with <code>config.get_proc(self.proc.as_ref())?</code>.
+<p>When the main task notifies a processor about a configuration change, the message contains the same <code>ProsaConfig</code> wrapper. Processors should reload their own section with <code>config.reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor)</code>, which deserializes the processor settings and reloads the adaptor configuration in one step. If it returns a <code>ConfigError</code>, the processor should log the failure with its name and keep using its current settings.
 If the processor section has <code>adaptor_config_path</code>, <code>ProsaConfig</code> also loads that adaptor configuration and watches it as part of the global configuration reload flow.</p>
 <h2 id="creation"><a class="header" href="#creation">Creation</a></h2>
 <p>To create a processor settings, declare a <code>struct</code> and use the <a href="https://docs.rs/prosa/latest/prosa/core/proc/attr.proc_settings.html"><code>proc_settings</code></a> macro.

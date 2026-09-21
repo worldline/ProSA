@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
+            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -215,8 +215,8 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) =&gt; {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -276,8 +276,8 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                         InternalMsg::Error(err) =&gt; {
                             // Handle errors as if they were responses
                         },
-                        InternalMsg::Config(config) =&gt; {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        InternalMsg::Config(_config) =&gt; {
+                            // Reload the settings, see the processor creation chapter
                         },
                         InternalMsg::Service(table) =&gt; service = table,
                         InternalMsg::Shutdown =&gt; {
@@ -301,8 +301,8 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) =&gt; {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -343,8 +343,8 @@ After that, you are free to call any services.</p>
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors
                     },
-                    InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) =&gt; {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -405,8 +405,8 @@ The logic is similar to single senders, but you specify the queue when sending m
                         InternalMsg::Error(err) =&gt; {
                             // Handle errors for this subtask
                         },
-                        InternalMsg::Config(config) =&gt; {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        InternalMsg::Config(_config) =&gt; {
+                            // Reload the settings, see the processor creation chapter
                         },
                         InternalMsg::Service(table) =&gt; self.service = table,
                         InternalMsg::Shutdown =&gt; {

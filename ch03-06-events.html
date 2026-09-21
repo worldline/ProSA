@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
+            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -190,7 +190,7 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
 <li><a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull"><code>pull_msg()</code></a> Remove your message when you have received its response and no longer need to check its timeout.</li>
 <li><a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull"><code>pull()</code></a> Async method to retrieve all messages that have expired (timed out).</li>
 </ul>
-<pre><code class="language-rust ignore"><span class="boring">#[proc]
+<pre><code class="language-rust ignore"><span class="boring">#[proc(settings = MyProcSettings)]
 </span><span class="boring">struct MyProc {}
 </span><span class="boring">
 </span><span class="boring">#[proc]
@@ -198,10 +198,7 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
 </span><span class="boring">where
 </span><span class="boring">    A: Default + Adaptor + std::marker::Send + std::marker::Sync,
 </span><span class="boring">{
-</span>    async fn internal_run(
-        &amp;mut self,
-        _name: String,
-    ) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+</span>    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         let mut adaptor = A::default();
         self.proc.add_proc().await?;
         self.proc
@@ -230,7 +227,15 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
                             info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
                         },
                         InternalMsg::Config(config) =&gt; {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                            match config
+                                .reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor)
+                            {
+                                Ok(settings) =&gt; self.settings = settings,
+                                Err(err) =&gt; warn!(
+                                    "Failed to reload configuration for processor {}: {err}",
+                                    self.name()
+                                ),
+                            }
                         },
                         InternalMsg::Service(table) =&gt; {
                             debug!("New service table received:\n{}\n", table);
@@ -252,7 +257,7 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
             }
         }
     }
-}</code></pre>
+<span class="boring">}</span></code></pre>
 <h2 id="regulator---regulator"><a class="header" href="#regulator---regulator">Regulator - <code>Regulator</code></a></h2>
 <p>The <a href="https://docs.rs/prosa/latest/prosa/event/speed/struct.Regulator.html"><code>Regulator</code></a> is used to regulate the flow of transaction to avoid overwhelming a remote peer.
 It can be useful if you have a contract with a maximum number of parallel transactions, or limitations on transactions per second.</p>

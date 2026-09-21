@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c39c5df2.js";
+            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -192,7 +192,7 @@ the <a href="https://www.gnu.org/licenses/lgpl-3.0.html">LGPLv3</a>.</p>
 <p>This license has been chosen to keep the framework and some modules open source, while allowing for other modules to be proprietary.
 In fact, ProSA contains no direct references to Worldline’s private properties.</p>
 <h2 id="version"><a class="header" href="#version">Version</a></h2>
-<p>This book is intended for version 0.5.0 of ProSA.</p>
+<p>This book is intended for version 0.5.1 of ProSA.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="foreword"><a class="header" href="#foreword">Foreword</a></h1>
 <p>While programming languages continue to change and evolve, the foundational architectural concepts in software development remain steadfast.</p>
@@ -926,6 +926,50 @@ proxy and TLS handshakes.</p>
 are masked, while query parameters and fragments are omitted. URL paths are preserved and should
 not contain secrets. <code>TargetSetting::get_safe_url()</code> returns the same borrowed <code>SafeUrl</code> view, so
 the caller chooses whether to format it or convert it into either form of owned sanitized URL.</p>
+<h2 id="ssl-configuration-of-a-listener-or-a-target"><a class="header" href="#ssl-configuration-of-a-listener-or-a-target">SSL configuration of a listener or a target</a></h2>
+<p>Read the SSL configuration with <code>ssl()</code>, and change it with <code>set_ssl()</code> or <code>set_alpn()</code>.</p>
+<p><code>set_alpn()</code> creates a default SSL configuration when the listener or the target uses SSL but has
+none, and does nothing on a plain one. <code>is_ssl()</code> tells whether SSL applies: an SSL configuration
+<strong>or</strong> an SSL URL scheme is enough, so a plain <code>tcp://</code> URL with an explicit <code>ssl</code> block does
+negotiate ALPN.</p>
+<p>The OpenSSL context is built from that configuration every time a listener binds or a target
+connects. This makes the convenience API pick up certificate changes, but parsing certificates for
+every target connection has a cost. Performance-sensitive clients can build an <code>SslConnector</code>
+snapshot with <code>SslConfigContext</code>, use the lower-level <code>Stream::connect_openssl</code> API, and replace the
+snapshot only when their certificate source reports a change.</p>
+<p>A target reconnects, so on a configuration reload compare the new settings with the current ones
+and reconnect only when they differ.</p>
+<p>A listener owns a bound socket, and rebinding it releases the port: another process can take it,
+and every client is refused until the new socket is bound. So only change the socket when the
+listener has to listen somewhere else, which is what <code>needs_rebind()</code> answers by comparing the host
+and port of TCP listeners or the path of Unix listeners. Everything else is served on the socket
+that is already bound: build the new SSL parameters with <code>build_handshaker()</code>, then hand them to
+<code>set_handshaker()</code>, which moves the socket into the returned listener. That covers rotating a
+certificate, turning SSL on and turning SSL off, whether SSL is declared by the <code>ssl</code> block or by
+the URL scheme.</p>
+<pre><code class="language-rust ignore">listener_setting.set_alpn(vec!["h2".into()]);
+if self.settings.listener.needs_rebind(&amp;listener_setting) {
+    listener = listener_setting.bind().await?;
+} else {
+    // Built before the listener is touched, so a broken certificate leaves it serving the one it
+    // already has
+    let handshaker = listener_setting.build_handshaker().await?;
+    listener = listener.set_handshaker(handshaker);
+}</code></pre>
+<p><code>build_handshaker()</code> reads certificate paths again on every call, on the blocking pool, but deciding
+when to call it belongs to the certificate source. A processor can react to a configuration change,
+a filesystem watcher can react to a replaced certificate, and a remote secret provider can react to
+a new version or lease. ProSA’s configuration watcher does not watch certificate files and does not
+notify processors when only a file referenced by an unchanged configuration is replaced.</p>
+<p>The handshaker is the common runtime snapshot for those sources. File-backed configurations can use
+<code>build_handshaker()</code>; another provider can build an OpenSSL <code>SslAcceptor</code>, wrap it with
+<code>SslHandshaker::new</code>, and install it through the same <code>set_handshaker()</code> operation.</p>
+<p>A listener that is SSL through its URL scheme alone is served a default SSL configuration, which
+signs a certificate of its own rather than reading one. That certificate is signed again on every
+rebuild, so such a listener serves a new identity and a client that pins it stops trusting it.
+Configure a certificate to serve a stable one.</p>
+<p>The clients that are already connected, and the ones in the middle of their handshake, keep the
+parameters they started with; only the clients accepted afterwards are served the new ones.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="run-prosa"><a class="header" href="#run-prosa">Run ProSA</a></h1>
 <p>Once you have created a binary using <code>cargo-prosa</code>, the next step is to run this binary.</p>
@@ -1704,7 +1748,7 @@ You’ll specify your processor settings object when you create your processor i
 let config = ProsaConfig::from_path("prosa.yml")?;
 let settings = config.try_deserialize::&lt;MyRunSettings&gt;()?;</code></pre>
 <p><code>ProsaConfig::from_path()</code> uses the same configuration loading rules as ProSA itself: the path can be a single configuration file or a directory recursively containing <code>yml</code>, <code>yaml</code>, or <code>toml</code> files, and <code>PROSA_*</code> environment variables are applied on top of the file sources.</p>
-<p>When the main task notifies a processor about a configuration change, the message contains the same <code>ProsaConfig</code> wrapper. Processors should reload their own section with <code>config.get_proc(self.proc.as_ref())?</code>.
+<p>When the main task notifies a processor about a configuration change, the message contains the same <code>ProsaConfig</code> wrapper. Processors should reload their own section with <code>config.reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor)</code>, which deserializes the processor settings and reloads the adaptor configuration in one step. If it returns a <code>ConfigError</code>, the processor should log the failure with its name and keep using its current settings.
 If the processor section has <code>adaptor_config_path</code>, <code>ProsaConfig</code> also loads that adaptor configuration and watches it as part of the global configuration reload flow.</p>
 <h2 id="creation"><a class="header" href="#creation">Creation</a></h2>
 <p>To create a processor settings, declare a <code>struct</code> and use the <a href="https://docs.rs/prosa/latest/prosa/core/proc/attr.proc_settings.html"><code>proc_settings</code></a> macro.
@@ -1795,7 +1839,16 @@ where
                         // TODO: process the error
                     }
                     InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                        match config.reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor) {
+                            Ok(settings) =&gt; {
+                                // TODO: apply the difference between `settings` and `self.settings`
+                                self.settings = settings;
+                            }
+                            Err(err) =&gt; prosa::tracing::warn!(
+                                "Failed to reload configuration for processor {}: {err}",
+                                self.name()
+                            ),
+                        }
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -1808,7 +1861,8 @@ where
         }
     }
 }</code></pre>
-<p>When receiving <code>InternalMsg::Config(config)</code>, call <code>config.get_proc(self.proc.as_ref())?</code> to deserialize the section matching the processor configuration key (the processor name with <code>-</code> replaced by <code>_</code>) into the processor settings type. The main task only sends this message to processors whose own configuration section changed.</p>
+<p>When receiving <code>InternalMsg::Config(config)</code>, call <code>config.reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor)</code> to deserialize the section matching the processor configuration key (the processor name with <code>-</code> replaced by <code>_</code>) into the processor settings type, and reload the adaptor configuration in the same step. It returns a <code>ConfigError</code> if either operation fails. Handle that error in the processor so the log identifies the processor by name, and keep using the current settings.</p>
+<p>The main task sends this message once when the processor registers, then on every reload that changes its own configuration section. So compare the new settings with the ones the processor already holds, and apply only the difference.</p>
 <p>The generic parameter <code>A</code> represents the adaptor type your processor uses.
 Specify in the <em>where</em> clause which traits your adaptor must implement (commonly, <a href="https://docs.rs/prosa/latest/prosa/core/adaptor/trait.Adaptor.html"><code>Adaptor</code></a> plus <code>Send</code> and <code>Sync</code>)</p>
 <h3 id="specific-tvf"><a class="header" href="#specific-tvf">Specific TVF</a></h3>
@@ -1941,8 +1995,8 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) =&gt; {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -2002,8 +2056,8 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                         InternalMsg::Error(err) =&gt; {
                             // Handle errors as if they were responses
                         },
-                        InternalMsg::Config(config) =&gt; {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        InternalMsg::Config(_config) =&gt; {
+                            // Reload the settings, see the processor creation chapter
                         },
                         InternalMsg::Service(table) =&gt; service = table,
                         InternalMsg::Shutdown =&gt; {
@@ -2027,8 +2081,8 @@ To start listening to a specific service, call <a href="https://docs.rs/prosa/la
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors as if they were responses
                     },
-                    InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) =&gt; {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -2069,8 +2123,8 @@ After that, you are free to call any services.</p>
                     InternalMsg::Error(err) =&gt; {
                         // Handle errors
                     },
-                    InternalMsg::Config(config) =&gt; {
-                        self.settings = config.get_proc(self.proc.as_ref())?;
+                    InternalMsg::Config(_config) =&gt; {
+                        // Reload the settings, see the processor creation chapter
                     },
                     InternalMsg::Service(table) =&gt; self.service = table,
                     InternalMsg::Shutdown =&gt; {
@@ -2131,8 +2185,8 @@ The logic is similar to single senders, but you specify the queue when sending m
                         InternalMsg::Error(err) =&gt; {
                             // Handle errors for this subtask
                         },
-                        InternalMsg::Config(config) =&gt; {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                        InternalMsg::Config(_config) =&gt; {
+                            // Reload the settings, see the processor creation chapter
                         },
                         InternalMsg::Service(table) =&gt; self.service = table,
                         InternalMsg::Shutdown =&gt; {
@@ -2170,7 +2224,7 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
 <li><a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull"><code>pull_msg()</code></a> Remove your message when you have received its response and no longer need to check its timeout.</li>
 <li><a href="https://docs.rs/prosa/latest/prosa/event/pending/struct.PendingMsgs.html#method.pull"><code>pull()</code></a> Async method to retrieve all messages that have expired (timed out).</li>
 </ul>
-<pre><code class="language-rust ignore"><span class="boring">#[proc]
+<pre><code class="language-rust ignore"><span class="boring">#[proc(settings = MyProcSettings)]
 </span><span class="boring">struct MyProc {}
 </span><span class="boring">
 </span><span class="boring">#[proc]
@@ -2178,10 +2232,7 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
 </span><span class="boring">where
 </span><span class="boring">    A: Default + Adaptor + std::marker::Send + std::marker::Sync,
 </span><span class="boring">{
-</span>    async fn internal_run(
-        &amp;mut self,
-        _name: String,
-    ) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
+</span>    async fn internal_run(&amp;mut self) -&gt; Result&lt;(), Box&lt;dyn ProcError + Send + Sync&gt;&gt; {
         let mut adaptor = A::default();
         self.proc.add_proc().await?;
         self.proc
@@ -2210,7 +2261,15 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
                             info!("Proc {} receive an error: {:?}", self.get_proc_id(), err);
                         },
                         InternalMsg::Config(config) =&gt; {
-                            self.settings = config.get_proc(self.proc.as_ref())?;
+                            match config
+                                .reload_proc::&lt;MyProcSettings&gt;(self.proc.as_ref(), &amp;adaptor)
+                            {
+                                Ok(settings) =&gt; self.settings = settings,
+                                Err(err) =&gt; warn!(
+                                    "Failed to reload configuration for processor {}: {err}",
+                                    self.name()
+                                ),
+                            }
                         },
                         InternalMsg::Service(table) =&gt; {
                             debug!("New service table received:\n{}\n", table);
@@ -2232,7 +2291,7 @@ That’s the purpose of the <a href="https://docs.rs/prosa/latest/prosa/event/pe
             }
         }
     }
-}</code></pre>
+<span class="boring">}</span></code></pre>
 <h2 id="regulator---regulator"><a class="header" href="#regulator---regulator">Regulator - <code>Regulator</code></a></h2>
 <p>The <a href="https://docs.rs/prosa/latest/prosa/event/speed/struct.Regulator.html"><code>Regulator</code></a> is used to regulate the flow of transaction to avoid overwhelming a remote peer.
 It can be useful if you have a contract with a maximum number of parallel transactions, or limitations on transactions per second.</p>
@@ -2290,6 +2349,43 @@ It can be instantiated from a <a href="#listener"><code>ListenerSetting</code></
 </ul>
 <p>Once the object is created, you must call the <code>accept</code> method in a loop to accept client connections.
 Each accepted connection will create a <code>Stream</code> socket, which can be managed just like a client socket.</p>
+<p><code>accept</code> negotiates SSL before it returns, so the loop carries the handshake of every client. A
+handshake lasts up to the configured <code>ssl_timeout</code>, which is long enough for a slow client to keep
+the loop from accepting anyone else. An SSL server should instead accept with <code>accept_raw</code>, take an
+owned snapshot of the SSL parameters with <code>handshaker()</code>, and handshake in a spawned task:</p>
+<pre><code class="language-rust ignore">let (stream, addr) = listener.accept_raw().await?;
+
+// An OpenSSL context is reference counted, so the snapshot costs an atomic increment
+let handshaker = listener.handshaker().cloned();
+tokio::spawn(async move {
+    let stream = match handshaker {
+        Some(handshaker) =&gt; handshaker.handshake(stream).await?,
+        None =&gt; stream,
+    };
+
+    // ... serve the client
+});</code></pre>
+<p>The snapshot is taken when the client is accepted, so a certificate rotated meanwhile applies to
+the clients accepted afterwards and leaves the handshakes in flight alone.</p>
+<h3 id="sharing-the-listener"><a class="header" href="#sharing-the-listener">Sharing the listener</a></h3>
+<p><code>set_handshaker</code> takes the listener by value, so a listener that is shared — held in an <code>Arc</code> by the
+accept loop and by whatever else drives it — cannot be replaced to rotate its certificate. Bind it
+with <code>bind_raw</code> instead: it binds the socket and hands the SSL parameters back beside it rather than
+inside it, so the handshaker you hold is the only copy and rotating it is an assignment.</p>
+<pre><code class="language-rust ignore">let (listener, mut handshaker) = listener_setting.bind_raw().await?;
+let listener = Arc::new(listener);
+
+// Accept loop, same shape, from the handshaker held next to the listener
+let (stream, addr) = listener.accept_raw().await?;
+let client_handshaker = handshaker.clone();
+tokio::spawn(async move { /* ... */ });
+
+// Configuration reload or certificate-source change notification
+handshaker = listener_setting.build_handshaker().await?;</code></pre>
+<p>A listener bound this way carries no SSL parameters of its own: it formats as <code>tcp://</code>, its
+<code>handshaker()</code> is <code>None</code>, and <code>accept</code> returns a plain TCP stream. That is what keeps a rotation
+honest — there is no copy left inside the listener for <code>accept</code>, <code>handshake</code> or <code>Debug</code> to serve
+after you have replaced yours.</p>
 <h2 id="stream-1"><a class="header" href="#stream-1">Stream</a></h2>
 <p>A <code>Stream</code> represents a client socket or a socket created by a <code>StreamListener</code> when a client connects.
 It can be instantiated from a <a href="#client"><code>TargetSetting</code></a> using the <a href="https://docs.rs/prosa/latest/prosa/io/stream/struct.TargetSetting.html#method.connect"><code>connect</code></a> method.</p>
