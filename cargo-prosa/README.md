@@ -14,6 +14,11 @@ Install cargo-prosa using the following command:
 cargo install cargo-prosa
 ```
 
+Or, with [cargo-binstall](https://github.com/cargo-bins/cargo-binstall), to fetch a prebuilt binary instead of compiling it:
+```bash
+cargo binstall cargo-prosa
+```
+
 After installation, verify that the command is available and explore its features:
 ```bash
 cargo prosa --help
