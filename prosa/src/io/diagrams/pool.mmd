@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant P as Processor
+    participant C as SocketControl
+    participant S as Socket task
+    participant B as ProSA bus
+
+    P->>C: control_channel(settings)
+    P->>S: spawn(control receiver, queue)
+    S->>B: add_proc_queue(queue id)
+    S-->>S: serve until the connection ends
+
+    Note over P,C: Configuration reload
+    P->>C: update(settings)
+    C-->>S: read on the next attempt or tick
+
+    Note over P,S: The connection ended
+    S->>B: remove_proc_queue(queue id)
+    S-->>P: hand the socket back
+    P->>S: spawn again after Backoff::delay(retry)
+
+    Note over P,C: The slot is gone from the configuration
+    P->>C: stop()
+    C-->>S: stopped() resolves
+    S-->>P: hand the socket back
+    P->>S: retire_queue(queue)
+    S-->>B: answer UnableToReachService until the last sender is gone

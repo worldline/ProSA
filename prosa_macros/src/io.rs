@@ -74,6 +74,7 @@ fn generate_struct_impl(
 ) -> syn::parse::Result<proc_macro2::TokenStream> {
     let item_ident = &item_struct.ident;
     let item_generics = &item_struct.generics;
+    let item_vis = &item_struct.vis;
     let item_other_fields =
         if let syn::Fields::Named(syn::FieldsNamed { named, .. }) = &item_struct.fields {
             let token_other_fields =
@@ -93,6 +94,27 @@ fn generate_struct_impl(
         };
 
     Ok(quote! {
+        impl #item_generics #item_ident #item_generics
+        where
+            IO: 'static + tokio::io::AsyncReadExt + tokio::io::AsyncWriteExt + std::marker::Unpin + std::marker::Send
+        {
+            /// Getter of the socket identifier, which is the bus queue id the socket is declared
+            /// to the main task with
+            #item_vis fn socket_id(&self) -> u32 {
+                self.socket_id
+            }
+
+            /// Setter of the socket identifier.
+            ///
+            /// A socket is built with the file descriptor it happens to hold, which the system
+            /// reuses once the socket is closed and which is a different value every time the
+            /// socket reconnects. An owner that keeps a socket across its reconnections, or that
+            /// wants an identifier no closed socket can come back as, gives it one of its own here
+            /// so the bus keeps addressing the same queue.
+            #item_vis fn set_socket_id(&mut self, socket_id: u32) {
+                self.socket_id = socket_id;
+            }
+        }
         impl #item_generics std::convert::From<IO> for #item_ident #item_generics
         where
             IO: 'static + tokio::io::AsyncReadExt + tokio::io::AsyncWriteExt + std::os::fd::AsRawFd + std::marker::Unpin + std::marker::Send

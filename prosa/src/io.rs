@@ -16,6 +16,7 @@ pub use prosa_utils::config::{
 };
 
 pub mod listener;
+pub mod pool;
 pub mod stream;
 
 /// Trait to define ProSA IO.
@@ -646,5 +647,39 @@ mod tests {
         );
 
         stream.shutdown().await
+    }
+
+    /// A socket is built with the file descriptor it holds, which the system reuses once the
+    /// socket is closed and which is a different value every time the socket reconnects. An owner
+    /// that keeps a socket across its reconnections has to be able to give it one of its own, so
+    /// the bus keeps addressing the same queue.
+    #[cfg(target_family = "unix")]
+    #[tokio::test]
+    async fn io_socket_id_is_settable() -> io::Result<()> {
+        extern crate self as prosa;
+        use prosa_utils::msg::bytes;
+
+        #[io]
+        #[allow(dead_code)]
+        struct TestIo {}
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let (connected, accepted) = tokio::join!(
+            tokio::net::TcpStream::connect(listener.local_addr()?),
+            listener.accept()
+        );
+        let stream = connected?;
+        let _accepted = accepted?;
+
+        let fd = stream.as_raw_fd() as u32;
+        let mut test_io = TestIo::from(stream);
+
+        // Taken from the descriptor, which is exactly what makes it unfit as a lasting identifier
+        assert_eq!(fd, test_io.socket_id());
+
+        test_io.set_socket_id(fd + 1);
+        assert_eq!(fd + 1, test_io.socket_id());
+
+        Ok(())
     }
 }
