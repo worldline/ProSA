@@ -3,6 +3,11 @@ name: my-prosa
 observability:
   endpoint: 0.0.0.0:9100
   level: INFO
+  health:
+    required_processors:
+      - stub_proc
+    required_services:
+      - STUB_TEST
   traces:
     stdout:
       level: debug

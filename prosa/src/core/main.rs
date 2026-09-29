@@ -475,12 +475,23 @@ where
             let stop = main.stop.clone();
             let health = main.health.clone();
             let health_check = main.health_check.clone();
+
+            // Declare required services so they are visible (without processor) until a processor serve them
+            let mut services = ServiceTable::default();
+            for service_name in health_check
+                .required_services()
+                .iter()
+                .filter(|name| !name.is_empty())
+            {
+                services.declare_service(service_name);
+            }
+
             (
                 main,
                 MainProc {
                     name,
                     processors,
-                    services: Arc::new(ServiceTable::default()),
+                    services: Arc::new(services),
                     config: None,
                     internal_rx_queue,
                     meter,
