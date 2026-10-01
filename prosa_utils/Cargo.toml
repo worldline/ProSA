@@ -18,8 +18,7 @@ config-openssl = ["config", "dep:openssl"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored"]
 config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:opentelemetry-appender-tracing"]
 config-observability-gzip = ["dep:flate2", "opentelemetry-otlp/gzip-tonic", "opentelemetry-otlp/gzip-http"]
-config-observability-http = ["config-observability", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
-config-observability-prometheus = ["config-observability-http", "dep:prometheus", "dep:opentelemetry-prometheus"]
+config-observability-prometheus = ["config-observability", "dep:prometheus", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
 queue = []
 
 [package.metadata.docs.rs]
@@ -43,7 +42,7 @@ hex = "0.4"
 glob = { version = "0.3", optional = true }
 serde = { workspace = true, optional = true }
 serde_yaml = { version = "0.9", optional = true }
-base64 = { version = "0.22", optional = true }
+base64 = { version = "0.23", optional = true }
 percent-encoding = { version = "2", optional = true }
 uuid = { version = "1", optional = true, features = ["v1", "v4"] }
 
@@ -54,14 +53,14 @@ openssl = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 tracing-core = { version = "0.1", optional = true }
 tracing-subscriber = { version = ">=0.3.20, < 0.4", features = ["std", "env-filter"], optional = true }
-tracing-opentelemetry = { version = "0.33", optional = true }
+tracing-opentelemetry = { version = "0.34", optional = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
-opentelemetry-stdout = { version = "0.32", optional = true, features = ["metrics", "trace", "logs"]}
-opentelemetry-otlp = { version = "0.32", optional = true, features = ["metrics", "trace", "logs", "reqwest-rustls", "grpc-tonic", "http-json"]}
+opentelemetry-stdout = { version = "0.33", optional = true, features = ["metrics", "trace", "logs"]}
+opentelemetry-otlp = { version = "0.33", optional = true, features = ["metrics", "trace", "logs", "reqwest-rustls", "grpc-tonic", "http-json"]}
 prometheus = { workspace = true, optional = true }
-opentelemetry-prometheus = { version = "0.32", optional = true }
-opentelemetry-appender-tracing = { version = "0.32", optional = true }
+opentelemetry-prometheus = { version = "0.33", optional = true }
+opentelemetry-appender-tracing = { version = "0.33", optional = true }
 
 # Web Observability
 tokio = { workspace = true, optional = true }

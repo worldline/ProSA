@@ -8,10 +8,7 @@ use opentelemetry_sdk::{
     trace::{SdkTracerProvider, Tracer},
 };
 use serde::{Deserialize, Serialize};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::{collections::HashMap, fmt, time::Duration};
 use tracing_subscriber::{filter, prelude::*};
 use tracing_subscriber::{layer::SubscriberExt, util::TryInitError};
@@ -132,270 +129,109 @@ impl HealthCheckCfg {
     }
 }
 
+const HEALTH_STARTED: u8 = 0b01;
+const HEALTH_READY: u8 = 0b10;
+
 /// Shared ProSA health state used by observability exporters.
 #[derive(Debug, Default)]
-pub struct HealthState {
-    live: AtomicBool,
-    started: AtomicBool,
-    ready: AtomicBool,
-}
+pub struct HealthState(AtomicU8);
 
 impl HealthState {
-    #[cfg(feature = "config-observability-http")]
-    fn healthy() -> Self {
-        Self {
-            live: AtomicBool::new(true),
-            started: AtomicBool::new(true),
-            ready: AtomicBool::new(true),
-        }
-    }
-
-    /// Update whether the main ProSA task is running.
-    pub fn set_live(&self, live: bool) {
-        self.live.store(live, Ordering::Release);
-        if !live {
-            self.ready.store(false, Ordering::Release);
-        }
-    }
-
     /// Update readiness, permanently marking startup complete on the first ready state.
     pub fn set_ready(&self, ready: bool) {
-        self.ready.store(ready, Ordering::Release);
         if ready {
-            self.started.store(true, Ordering::Release);
+            self.0
+                .store(HEALTH_STARTED | HEALTH_READY, Ordering::Relaxed);
+        } else {
+            self.0.fetch_and(!HEALTH_READY, Ordering::Relaxed);
         }
-    }
-
-    /// Whether the main ProSA task is currently running.
-    pub fn is_live(&self) -> bool {
-        self.live.load(Ordering::Acquire)
     }
 
     /// Whether ProSA has reached readiness at least once.
     pub fn is_started(&self) -> bool {
-        self.started.load(Ordering::Acquire)
+        self.0.load(Ordering::Relaxed) & HEALTH_STARTED != 0
     }
 
     /// Whether ProSA currently satisfies its readiness requirements.
     pub fn is_ready(&self) -> bool {
-        self.ready.load(Ordering::Acquire)
+        self.0.load(Ordering::Relaxed) & HEALTH_READY != 0
     }
 }
 
-/// Guard marking a [`HealthState`] live for its lifetime.
-#[derive(Debug)]
-pub struct HealthGuard(Arc<HealthState>);
+#[cfg(feature = "config-observability-prometheus")]
+type ObservabilityResponse = hyper::Response<http_body_util::Full<bytes::Bytes>>;
 
-impl HealthGuard {
-    /// Mark the health state live until the returned guard is dropped.
-    pub fn new(health: Arc<HealthState>) -> Self {
-        health.set_live(true);
-        Self(health)
-    }
-}
-
-impl Drop for HealthGuard {
-    fn drop(&mut self) {
-        self.0.set_live(false);
-    }
-}
-
-#[cfg(feature = "config-observability-http")]
-type ObservabilityResponse = hyper::Response<
-    http_body_util::Either<http_body_util::Empty<bytes::Bytes>, http_body_util::Full<bytes::Bytes>>,
->;
-
-#[cfg(feature = "config-observability-http")]
-fn text_response(
-    status: hyper::StatusCode,
-    body: &'static str,
-    head: bool,
-) -> ObservabilityResponse {
-    let response_body = if head || body.is_empty() {
-        http_body_util::Either::Left(http_body_util::Empty::new())
-    } else {
-        http_body_util::Either::Right(http_body_util::Full::new(bytes::Bytes::from_static(
-            body.as_bytes(),
-        )))
-    };
-    let mut response = hyper::Response::new(response_body);
-    *response.status_mut() = status;
-    response.headers_mut().insert(
+#[cfg(feature = "config-observability-prometheus")]
+fn response_builder() -> hyper::http::response::Builder {
+    hyper::Response::builder().header(
         hyper::header::SERVER,
-        hyper::header::HeaderValue::from_static(concat!("ProSA/", env!("CARGO_PKG_VERSION"))),
-    );
-    response.headers_mut().insert(
-        hyper::header::CONTENT_TYPE,
-        hyper::header::HeaderValue::from_static("text/plain; charset=utf-8"),
-    );
-    response
+        concat!("ProSA/", env!("CARGO_PKG_VERSION")),
+    )
+}
+
+#[cfg(feature = "config-observability-prometheus")]
+fn probe_response(
+    ok: bool,
+    error: &'static str,
+) -> Result<ObservabilityResponse, hyper::http::Error> {
+    if ok {
+        response_builder().body("ok\n".into())
+    } else {
+        response_builder()
+            .status(hyper::StatusCode::SERVICE_UNAVAILABLE)
+            .body(error.into())
+    }
 }
 
 #[cfg(feature = "config-observability-prometheus")]
 fn metrics_response<B>(
     _request: &hyper::Request<B>,
     registry: &prometheus::Registry,
-    head: bool,
-) -> ObservabilityResponse {
-    if head {
-        let mut response = text_response(hyper::StatusCode::OK, "", true);
-        response.headers_mut().insert(
-            hyper::header::CONTENT_TYPE,
-            hyper::header::HeaderValue::from_static(prometheus::TEXT_FORMAT),
-        );
-        return response;
-    }
-
-    let metric_families = registry.gather();
-    let encoder = prometheus::TextEncoder::new();
-    let Ok(metric_data) = encoder.encode_to_string(&metric_families) else {
-        return text_response(
-            hyper::StatusCode::INTERNAL_SERVER_ERROR,
-            "can't serialize metrics\n",
-            false,
-        );
+) -> Result<ObservabilityResponse, hyper::http::Error> {
+    let Ok(metric_data) = prometheus::TextEncoder::new().encode_to_string(&registry.gather())
+    else {
+        return response_builder()
+            .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+            .body("can't serialize metrics\n".into());
     };
+    let response = response_builder().header(hyper::header::CONTENT_TYPE, prometheus::TEXT_FORMAT);
 
     #[cfg(feature = "config-observability-gzip")]
-    let (response_body, compressed) = {
-        let mut response_body = bytes::Bytes::from(metric_data);
-        let mut compressed = false;
-        if _request
-            .headers()
-            .get(hyper::header::ACCEPT_ENCODING)
-            .is_some_and(|encoding| encoding.to_str().is_ok_and(|value| value.contains("gzip")))
+    if _request
+        .headers()
+        .get(hyper::header::ACCEPT_ENCODING)
+        .is_some_and(|a| a.to_str().is_ok_and(|v| v.contains("gzip")))
+    {
+        let mut gz_encoder =
+            flate2::write::GzEncoder::new(Vec::with_capacity(2048), flate2::Compression::fast());
+        if std::io::Write::write_all(&mut gz_encoder, metric_data.as_bytes()).is_ok()
+            && let Ok(compressed_data) = gz_encoder.finish()
         {
-            let mut encoder = flate2::write::GzEncoder::new(
-                Vec::with_capacity(2048),
-                flate2::Compression::fast(),
-            );
-            if std::io::Write::write_all(&mut encoder, &response_body).is_ok()
-                && let Ok(compressed_data) = encoder.finish()
-            {
-                response_body = bytes::Bytes::from(compressed_data);
-                compressed = true;
-            }
+            return response
+                .header(hyper::header::CONTENT_ENCODING, "gzip")
+                .body(compressed_data.into());
         }
-        (response_body, compressed)
-    };
-    #[cfg(not(feature = "config-observability-gzip"))]
-    let (response_body, compressed) = (bytes::Bytes::from(metric_data), false);
-
-    let mut response = hyper::Response::new(http_body_util::Either::Right(
-        http_body_util::Full::new(response_body),
-    ));
-    *response.status_mut() = hyper::StatusCode::OK;
-    response.headers_mut().insert(
-        hyper::header::SERVER,
-        hyper::header::HeaderValue::from_static(concat!("ProSA/", env!("CARGO_PKG_VERSION"))),
-    );
-    response.headers_mut().insert(
-        hyper::header::CONTENT_TYPE,
-        hyper::header::HeaderValue::from_static(prometheus::TEXT_FORMAT),
-    );
-    if compressed {
-        response.headers_mut().insert(
-            hyper::header::CONTENT_ENCODING,
-            hyper::header::HeaderValue::from_static("gzip"),
-        );
     }
-    response
+
+    response.body(metric_data.into())
 }
 
-#[cfg(feature = "config-observability-http")]
-async fn handle_observability_request<B>(
-    request: hyper::Request<B>,
-    health: Arc<HealthState>,
-    #[cfg(feature = "config-observability-prometheus")] registry: prometheus::Registry,
-) -> Result<ObservabilityResponse, std::convert::Infallible> {
-    let head = request.method() == hyper::Method::HEAD;
-    if request.method() == hyper::Method::GET || head {
-        let response = match request.uri().path() {
-            #[cfg(feature = "config-observability-prometheus")]
-            "/metrics" => metrics_response(&request, &registry, head),
-            "/startup" => {
-                if health.is_started() {
-                    text_response(hyper::StatusCode::OK, "ok\n", head)
-                } else {
-                    text_response(hyper::StatusCode::SERVICE_UNAVAILABLE, "starting\n", head)
-                }
-            }
-            "/live" => {
-                if health.is_live() {
-                    text_response(hyper::StatusCode::OK, "ok\n", head)
-                } else {
-                    text_response(hyper::StatusCode::SERVICE_UNAVAILABLE, "not live\n", head)
-                }
-            }
-            "/ready" => {
-                if health.is_ready() {
-                    text_response(hyper::StatusCode::OK, "ok\n", head)
-                } else {
-                    text_response(hyper::StatusCode::SERVICE_UNAVAILABLE, "not ready\n", head)
-                }
-            }
-            _ => text_response(hyper::StatusCode::NOT_FOUND, "not found\n", head),
-        };
-
-        Ok(response)
-    } else {
-        let mut response = text_response(
-            hyper::StatusCode::METHOD_NOT_ALLOWED,
-            "method not allowed\n",
-            true,
-        );
-        response.headers_mut().insert(
-            hyper::header::ALLOW,
-            hyper::header::HeaderValue::from_static("GET, HEAD"),
-        );
-        Ok(response)
+#[cfg(feature = "config-observability-prometheus")]
+fn handle_observability_request<B>(
+    request: &hyper::Request<B>,
+    health: &HealthState,
+    registry: &prometheus::Registry,
+) -> Result<ObservabilityResponse, hyper::http::Error> {
+    match request.uri().path() {
+        "/metrics" => metrics_response(request, registry),
+        "/startup" => probe_response(health.is_started(), "starting\n"),
+        // Answering at all proves the process is alive
+        "/live" => probe_response(true, ""),
+        "/ready" => probe_response(health.is_ready(), "not ready\n"),
+        _ => response_builder()
+            .status(hyper::StatusCode::NOT_FOUND)
+            .body("not found\n".into()),
     }
-}
-
-#[cfg(feature = "config-observability-http")]
-fn init_observability_server(
-    endpoint: String,
-    health: Arc<HealthState>,
-    #[cfg(feature = "config-observability-prometheus")] registry: prometheus::Registry,
-) {
-    tokio::task::spawn(async move {
-        match tokio::net::TcpListener::bind(&endpoint).await {
-            Ok(listener) => loop {
-                match listener.accept().await {
-                    Ok((stream, _)) => {
-                        let io = hyper_util::rt::TokioIo::new(stream);
-                        let health = health.clone();
-                        #[cfg(feature = "config-observability-prometheus")]
-                        let registry = registry.clone();
-                        tokio::task::spawn(async move {
-                            if let Err(err) = hyper::server::conn::http1::Builder::new()
-                                .serve_connection(
-                                    io,
-                                    hyper::service::service_fn(move |request| {
-                                        handle_observability_request(
-                                            request,
-                                            health.clone(),
-                                            #[cfg(feature = "config-observability-prometheus")]
-                                            registry.clone(),
-                                        )
-                                    }),
-                                )
-                                .await
-                            {
-                                log::debug!(target: "prosa::observability::http_server", "Error serving observability connection: {err:?}");
-                            }
-                        });
-                    }
-                    Err(err) => {
-                        log::error!(target: "prosa::observability::http_server", "Failed to accept observability connection: {err}");
-                    }
-                }
-            },
-            Err(err) => {
-                log::error!(target: "prosa::observability::http_server", "Failed to bind observability server on {endpoint}: {err}");
-            }
-        }
-    });
 }
 
 /// Configuration struct of an stdout exporter
@@ -626,7 +462,7 @@ pub struct Observability {
     #[serde(default)]
     level: TelemetryLevel,
     /// Shared HTTP endpoint for health probes and Prometheus metrics.
-    #[cfg(feature = "config-observability-http")]
+    #[cfg(feature = "config-observability-prometheus")]
     endpoint: Option<String>,
     /// Readiness requirements.
     #[serde(default)]
@@ -669,7 +505,7 @@ impl Observability {
         Observability {
             attributes: HashMap::new(),
             level,
-            #[cfg(feature = "config-observability-http")]
+            #[cfg(feature = "config-observability-prometheus")]
             endpoint: None,
             health: HealthCheckCfg::default(),
             metrics: Some(TelemetryMetrics::default()),
@@ -749,7 +585,7 @@ impl Observability {
     }
 
     /// Get the configured shared HTTP endpoint.
-    #[cfg(feature = "config-observability-http")]
+    #[cfg(feature = "config-observability-prometheus")]
     pub fn get_endpoint(&self) -> Option<&str> {
         self.endpoint.as_deref()
     }
@@ -759,85 +595,62 @@ impl Observability {
         &self.health
     }
 
-    #[cfg(feature = "config-observability-http")]
-    fn start_http_server(
+    /// Start the observability HTTP server (metrics and health probes) if an endpoint is configured
+    #[cfg(feature = "config-observability-prometheus")]
+    pub fn start_http_server(
         &self,
-        health: Arc<HealthState>,
-        #[cfg(feature = "config-observability-prometheus")] registry: &prometheus::Registry,
+        health: std::sync::Arc<HealthState>,
+        registry: &prometheus::Registry,
     ) {
-        if let Some(endpoint) = self.get_endpoint() {
-            #[cfg(feature = "config-observability-prometheus")]
+        if let Some(endpoint) = self.endpoint.clone() {
             let registry = registry.clone();
-
-            init_observability_server(
-                endpoint.to_string(),
-                health,
-                #[cfg(feature = "config-observability-prometheus")]
-                registry,
-            );
+            tokio::task::spawn(async move {
+                let listener = match tokio::net::TcpListener::bind(&endpoint).await {
+                    Ok(listener) => listener,
+                    Err(e) => {
+                        log::error!(target: "prosa::observability::http_server", "Failed to bind observability server on {endpoint}: {e}");
+                        return;
+                    }
+                };
+                loop {
+                    if let Ok((stream, _)) = listener.accept().await {
+                        let io = hyper_util::rt::TokioIo::new(stream);
+                        let health = health.clone();
+                        let registry = registry.clone();
+                        tokio::task::spawn(async move {
+                            if let Err(err) = hyper::server::conn::http1::Builder::new()
+                                .serve_connection(
+                                    io,
+                                    hyper::service::service_fn(|req| {
+                                        std::future::ready(handle_observability_request(
+                                            &req, &health, &registry,
+                                        ))
+                                    }),
+                                )
+                                .await
+                            {
+                                log::debug!(target: "prosa::observability::http_server", "Error serving observability connection: {err:?}");
+                            }
+                        });
+                    }
+                }
+            });
         }
     }
 
     /// Meter provider builder
     #[cfg(feature = "config-observability-prometheus")]
     pub fn build_meter_provider(&self, registry: &prometheus::Registry) -> SdkMeterProvider {
-        let default_settings = TelemetryMetrics::default();
-        let settings = self.metrics.as_ref().unwrap_or(&default_settings);
-        let meter_provider = settings
+        // Prometheus exporter is always attached, even without metrics settings
+        self.metrics
+            .clone()
+            .unwrap_or_default()
             .build_provider(self.get_scope_attributes(), registry)
-            .unwrap_or_default();
-        self.start_http_server(Arc::new(HealthState::healthy()), registry);
-        meter_provider
+            .unwrap_or_default()
     }
 
     /// Meter provider builder
-    #[cfg(all(
-        feature = "config-observability-http",
-        not(feature = "config-observability-prometheus")
-    ))]
-    pub fn build_meter_provider(&self) -> SdkMeterProvider {
-        let meter_provider = if let Some(settings) = &self.metrics {
-            settings.build_provider().unwrap_or_default()
-        } else {
-            SdkMeterProvider::default()
-        };
-        self.start_http_server(Arc::new(HealthState::healthy()));
-        meter_provider
-    }
-
-    /// Build a meter provider and report managed ProSA health on the shared HTTP server.
-    #[cfg(feature = "config-observability-prometheus")]
-    pub fn build_meter_provider_with_health(
-        &self,
-        registry: &prometheus::Registry,
-        health: Arc<HealthState>,
-    ) -> SdkMeterProvider {
-        let default_settings = TelemetryMetrics::default();
-        let settings = self.metrics.as_ref().unwrap_or(&default_settings);
-        let meter_provider = settings
-            .build_provider(self.get_scope_attributes(), registry)
-            .unwrap_or_default();
-        self.start_http_server(health, registry);
-        meter_provider
-    }
-
-    /// Build a meter provider and report managed ProSA health on the shared HTTP server.
-    #[cfg(all(
-        feature = "config-observability-http",
-        not(feature = "config-observability-prometheus")
-    ))]
-    pub fn build_meter_provider_with_health(&self, health: Arc<HealthState>) -> SdkMeterProvider {
-        let meter_provider = if let Some(settings) = &self.metrics {
-            settings.build_provider().unwrap_or_default()
-        } else {
-            SdkMeterProvider::default()
-        };
-        self.start_http_server(health);
-        meter_provider
-    }
-
-    /// Meter provider builder
-    #[cfg(not(feature = "config-observability-http"))]
+    #[cfg(not(feature = "config-observability-prometheus"))]
     pub fn build_meter_provider(&self) -> SdkMeterProvider {
         if let Some(settings) = &self.metrics {
             settings.build_provider().unwrap_or_default()
@@ -963,7 +776,7 @@ impl Default for Observability {
         Self {
             attributes: HashMap::new(),
             level: TelemetryLevel::default(),
-            #[cfg(feature = "config-observability-http")]
+            #[cfg(feature = "config-observability-prometheus")]
             endpoint: None,
             health: HealthCheckCfg::default(),
             metrics: Some(TelemetryMetrics::default()),
@@ -987,25 +800,13 @@ impl Default for Observability {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "config-observability-http")]
-    async fn health_request(
-        method: hyper::Method,
-        path: &str,
-        health: Arc<HealthState>,
-    ) -> ObservabilityResponse {
-        let request = hyper::Request::builder()
-            .method(method)
-            .uri(path)
+    #[cfg(feature = "config-observability-prometheus")]
+    fn request(path: &str, health: &HealthState) -> ObservabilityResponse {
+        let request = hyper::Request::get(path)
             .body(())
-            .expect("health request should be valid");
-        handle_observability_request(
-            request,
-            health,
-            #[cfg(feature = "config-observability-prometheus")]
-            prometheus::Registry::new(),
-        )
-        .await
-        .expect("observability handler should be infallible")
+            .expect("request should be valid");
+        handle_observability_request(&request, health, &prometheus::Registry::new())
+            .expect("response should be valid")
     }
 
     #[test]
@@ -1068,19 +869,16 @@ health:
     }
 
     #[test]
-    fn health_guard_tracks_liveness() {
-        let health = Arc::new(HealthState::default());
-        {
-            let _guard = HealthGuard::new(health.clone());
-            assert!(health.is_live());
-            health.set_ready(true);
-        }
-        assert!(!health.is_live());
+    fn health_state_keeps_startup_after_ready() {
+        let health = HealthState::default();
+        assert!(!health.is_started());
+        health.set_ready(true);
+        health.set_ready(false);
         assert!(!health.is_ready());
         assert!(health.is_started());
     }
 
-    #[cfg(feature = "config-observability-http")]
+    #[cfg(feature = "config-observability-prometheus")]
     #[test]
     fn observability_endpoint_is_used() {
         let config: Observability = serde_yaml::from_str(
@@ -1093,96 +891,21 @@ endpoint: 127.0.0.1:8080
         assert_eq!(Some("127.0.0.1:8080"), config.get_endpoint());
     }
 
-    #[cfg(feature = "config-observability-http")]
-    #[tokio::test]
-    async fn health_routes_follow_lifecycle_state() {
-        use http_body_util::BodyExt as _;
-
-        let health = Arc::new(HealthState::default());
-        assert_eq!(
-            hyper::StatusCode::SERVICE_UNAVAILABLE,
-            health_request(hyper::Method::GET, "/startup", health.clone())
-                .await
-                .status()
-        );
-        assert_eq!(
-            hyper::StatusCode::SERVICE_UNAVAILABLE,
-            health_request(hyper::Method::GET, "/live", health.clone())
-                .await
-                .status()
-        );
-
-        health.set_live(true);
-        assert_eq!(
-            hyper::StatusCode::OK,
-            health_request(hyper::Method::GET, "/live", health.clone())
-                .await
-                .status()
-        );
-        health.set_ready(true);
-        health.set_ready(false);
-        assert_eq!(
-            hyper::StatusCode::OK,
-            health_request(hyper::Method::GET, "/startup", health.clone())
-                .await
-                .status()
-        );
-        assert_eq!(
-            hyper::StatusCode::SERVICE_UNAVAILABLE,
-            health_request(hyper::Method::GET, "/ready", health.clone())
-                .await
-                .status()
-        );
-
-        let response = health_request(hyper::Method::HEAD, "/startup", health.clone()).await;
-        assert_eq!(hyper::StatusCode::OK, response.status());
-        assert!(
-            response
-                .into_body()
-                .collect()
-                .await
-                .expect("response body should be readable")
-                .to_bytes()
-                .is_empty()
-        );
-        assert_eq!(
-            hyper::StatusCode::METHOD_NOT_ALLOWED,
-            health_request(hyper::Method::POST, "/ready", health.clone())
-                .await
-                .status()
-        );
-        assert_eq!(
-            hyper::StatusCode::NOT_FOUND,
-            health_request(hyper::Method::GET, "/", health)
-                .await
-                .status()
-        );
-        #[cfg(not(feature = "config-observability-prometheus"))]
-        assert_eq!(
-            hyper::StatusCode::NOT_FOUND,
-            health_request(
-                hyper::Method::GET,
-                "/metrics",
-                Arc::new(HealthState::default())
-            )
-            .await
-            .status()
-        );
-    }
-
     #[cfg(feature = "config-observability-prometheus")]
-    #[tokio::test]
-    async fn metrics_are_only_exposed_on_metrics_route_when_enabled() {
-        let health = Arc::new(HealthState::healthy());
-        let registry = prometheus::Registry::new();
-        let request = hyper::Request::builder()
-            .method(hyper::Method::GET)
-            .uri("/metrics")
-            .body(())
-            .expect("metrics request should be valid");
-        let response = handle_observability_request(request, health.clone(), registry)
-            .await
-            .expect("observability handler should be infallible");
+    #[test]
+    fn observability_routes() {
+        let health = HealthState::default();
+        let status = |path| request(path, &health).status();
+        assert_eq!(hyper::StatusCode::SERVICE_UNAVAILABLE, status("/startup"));
+        assert_eq!(hyper::StatusCode::OK, status("/live"));
+        assert_eq!(hyper::StatusCode::SERVICE_UNAVAILABLE, status("/ready"));
+        assert_eq!(hyper::StatusCode::NOT_FOUND, status("/"));
+
+        health.set_ready(true);
+        assert_eq!(hyper::StatusCode::OK, status("/startup"));
+        assert_eq!(hyper::StatusCode::OK, status("/ready"));
+
+        let response = request("/metrics", &health);
         assert_eq!(hyper::StatusCode::OK, response.status());
         assert_eq!(
             Some(prometheus::TEXT_FORMAT),
@@ -1190,42 +913,6 @@ endpoint: 127.0.0.1:8080
                 .headers()
                 .get(hyper::header::CONTENT_TYPE)
                 .and_then(|value| value.to_str().ok())
-        );
-
-        let request = hyper::Request::builder()
-            .method(hyper::Method::HEAD)
-            .uri("/metrics")
-            .body(())
-            .expect("metrics request should be valid");
-        let response =
-            handle_observability_request(request, health.clone(), prometheus::Registry::new())
-                .await
-                .expect("observability handler should be infallible");
-        assert_eq!(hyper::StatusCode::OK, response.status());
-        assert_eq!(
-            Some(prometheus::TEXT_FORMAT),
-            response
-                .headers()
-                .get(hyper::header::CONTENT_TYPE)
-                .and_then(|value| value.to_str().ok())
-        );
-
-        let request = hyper::Request::builder()
-            .method(hyper::Method::POST)
-            .uri("/metrics")
-            .body(())
-            .expect("metrics request should be valid");
-        let response =
-            handle_observability_request(request, health.clone(), prometheus::Registry::new())
-                .await
-                .expect("observability handler should be infallible");
-        assert_eq!(hyper::StatusCode::METHOD_NOT_ALLOWED, response.status());
-
-        assert_eq!(
-            hyper::StatusCode::NOT_FOUND,
-            health_request(hyper::Method::GET, "/anything", health)
-                .await
-                .status()
         );
     }
 }

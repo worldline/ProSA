@@ -193,8 +193,7 @@ observability:
 > You also need to enable the `prometheus` feature for ProSA. No additional Prometheus
 > configuration is required.
 
-Only `GET` and `HEAD` requests to `/metrics` return metrics. Other paths do not expose the
-Prometheus registry.
+Only the `/metrics` path returns metrics. Other paths do not expose the Prometheus registry.
 
 ### Health and readiness
 
@@ -203,13 +202,13 @@ exported through every configured metrics exporter, including OTLP, stdout, and 
 value is `1` when ready and `0` otherwise. Neither readiness requirements nor this metric require
 the HTTP feature.
 
-When the `observability-http` feature is enabled, the observability server also exposes three
-health endpoints:
+When the `prometheus` feature is enabled, the observability server also exposes three health
+endpoints:
 
 - `/startup` succeeds permanently after ProSA first becomes ready.
-- `/live` succeeds while the main ProSA task is running.
-- `/ready` succeeds while ProSA is running, is not shutting down, and all configured health
-  requirements are available.
+- `/live` always succeeds; answering proves the process is alive.
+- `/ready` succeeds while ProSA is not shutting down and all configured health requirements are
+  available.
 
 Processor and service requirements are optional. When both are present, every named processor and
 service is required. Empty entries are ignored:
@@ -228,12 +227,9 @@ observability:
 
 A required processor is available when it has at least one queue registered with the main task. A
 required service is available when it has at least one registered provider. Losing either makes
-`/ready` return `503 Service Unavailable`, but does not change liveness or reset `/startup`.
+`/ready` return `503 Service Unavailable`, but does not reset `/startup`.
 Without requirements, ProSA becomes ready when the main task starts. Requirement changes are
 applied during configuration reload and immediately update readiness.
-
-The health server can be used without Prometheus by enabling the `observability-http` feature
-without the `prometheus` feature.
 
 For Kubernetes, configure startup separately so liveness and readiness checks do not interfere
 with initialization:

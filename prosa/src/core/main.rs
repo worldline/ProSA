@@ -20,7 +20,7 @@ use crate::otel::metrics::{Meter, MeterProvider as _};
 use crate::otel::trace::TracerProvider as _;
 use crate::otel::{InstrumentationScope, KeyValue};
 use crate::tracing::{debug, info, warn};
-use prosa_utils::config::observability::{HealthCheckCfg, HealthGuard, HealthState};
+use prosa_utils::config::observability::{HealthCheckCfg, HealthState};
 use prosa_utils::hash::{BuildIntHasher, IntHashMap, IntHashSet};
 use std::sync::{
     Arc,
@@ -92,13 +92,11 @@ where
         let health = Arc::new(HealthState::default());
         #[cfg(feature = "prometheus")]
         let prometheus_registry = prometheus::Registry::new();
-
         #[cfg(feature = "prometheus")]
-        let meter_provider =
-            observability.build_meter_provider_with_health(&prometheus_registry, health.clone());
-        #[cfg(all(feature = "observability-http", not(feature = "prometheus")))]
-        let meter_provider = observability.build_meter_provider_with_health(health.clone());
-        #[cfg(not(feature = "observability-http"))]
+        let meter_provider = observability.build_meter_provider(&prometheus_registry);
+        #[cfg(feature = "prometheus")]
+        observability.start_http_server(health.clone(), &prometheus_registry);
+        #[cfg(not(feature = "prometheus"))]
         let meter_provider = observability.build_meter_provider();
 
         Main {
@@ -219,7 +217,6 @@ where
     /// Method to stop all processors
     pub async fn stop(&self, reason: String) -> Result<(), SendError<InternalMainMsg<M>>> {
         self.stop.store(true, Ordering::Relaxed);
-        self.health.set_ready(false);
         Ok(self
             .internal_tx_queue
             .send(InternalMainMsg::Shutdown(reason))
@@ -308,8 +305,7 @@ where
             .iter()
             .all(|name| name.is_empty() || self.services.exist_proc_service(name));
 
-        self.health
-            .set_ready(!self.stop.load(Ordering::Relaxed) && processors_ready && services_ready);
+        self.health.set_ready(processors_ready && services_ready);
     }
 
     async fn remove_proc(&mut self, proc_id: u32) -> Option<ProcQueueMap<M>> {
@@ -317,7 +313,6 @@ where
             let mut new_services = (*self.services).clone();
             new_services.remove_proc_services(proc_id);
             self.services = Arc::new(new_services);
-            self.update_health();
             Some(proc)
         } else {
             None
@@ -333,7 +328,6 @@ where
                     proc_queue.get_queue_id(),
                 );
                 self.services = Arc::new(new_services);
-                self.update_health();
                 Some(proc_queue)
             } else {
                 None
@@ -432,6 +426,7 @@ where
     /// Method to shutdown all processors (return `true` if all processor are off, `false` otherwise)
     async fn stop(&mut self) -> bool {
         self.stop.store(true, Ordering::Relaxed);
+        self.health.set_ready(false);
         let mut is_stopped = true;
         for proc in self.processors.values() {
             for proc_service in proc.values() {
@@ -515,7 +510,6 @@ where
     }
 
     async fn run(mut self) {
-        let _health_guard = HealthGuard::new(self.health.clone());
         self.update_health();
 
         // Monitor readiness
@@ -657,7 +651,6 @@ where
                             }
 
                             prosa_main_record_proc!();
-                            self.update_health();
                         },
                         InternalMainMsg::DeleteProc(proc_id, proc_err) => {
                             if self.remove_proc(proc_id).await.is_some() {
@@ -694,7 +687,6 @@ where
                                     }
                                 }
                                 self.services = Arc::new(new_services);
-                                self.update_health();
                                 let _ = service_update.send(self.services.clone());
                                 self.notify_srv_proc().await;
                             }
@@ -706,7 +698,6 @@ where
                                     new_services.add_service(name, proc_queue.clone());
                                 }
                                 self.services = Arc::new(new_services);
-                                self.update_health();
                                 let _ = service_update.send(self.services.clone());
                                 self.notify_srv_proc().await;
                             }
@@ -717,7 +708,6 @@ where
                                 new_services.remove_service_proc(&name, proc_id);
                             }
                             self.services = Arc::new(new_services);
-                            self.update_health();
                             let _ = service_update.send(self.services.clone());
                             self.notify_srv_proc().await;
                         },
@@ -727,7 +717,6 @@ where
                                 new_services.remove_service(&name, proc_id, queue_id);
                             }
                             self.services = Arc::new(new_services);
-                            self.update_health();
                             let _ = service_update.send(self.services.clone());
                             self.notify_srv_proc().await;
                         },
@@ -747,11 +736,8 @@ where
                                     None
                                 }
                             };
-                            if let Some(health_check) = health_check
-                                && self.health_check != health_check
-                            {
+                            if let Some(health_check) = health_check {
                                 self.health_check = health_check;
-                                self.update_health();
                             }
 
                             for error in self.notify_config_proc_queue(config).await {
@@ -767,7 +753,6 @@ where
                         },
                         InternalMainMsg::Shutdown(reason) => {
                             warn!("ProSA is stopping: {}", reason);
-                            self.health.set_ready(false);
                             self.stop().await;
 
                             // The shutdown mecanism will be implemented later
@@ -777,13 +762,14 @@ where
                 },
                 _ = signal::ctrl_c() => {
                     warn!("ProSA is stopping");
-                    self.health.set_ready(false);
                     self.stop().await;
 
                     // The shutdown mecanism will be implemented later
                     return;
                 },
             }
+
+            self.update_health();
         }
     }
 }
@@ -863,7 +849,8 @@ health:
         let registry = bus.get_prometheus_registry().clone();
         let main_task = tokio::spawn(main.run());
 
-        wait_until(|| health.is_live()).await;
+        #[cfg(feature = "prometheus")]
+        wait_until(|| gauge_value(&registry, "prosa_ready").is_some()).await;
         assert!(!health.is_started());
         assert!(!health.is_ready());
         #[cfg(feature = "prometheus")]
@@ -876,6 +863,8 @@ health:
             processor_queue,
             bus.clone(),
         );
+        let processor_drain =
+            tokio::spawn(async move { while processor_receiver.recv().await.is_some() {} });
         bus.add_proc_queue(ProcService::new_proc(&processor, 0))
             .await
             .expect("processor should register");
@@ -888,15 +877,11 @@ health:
         #[cfg(feature = "prometheus")]
         assert_eq!(Some(1.0), gauge_value(&registry, "prosa_ready"));
 
-        let processor_drain =
-            tokio::spawn(async move { while processor_receiver.recv().await.is_some() {} });
-
         bus.remove_service(vec!["REQUIRED_SERVICE".to_string()], 1, 0)
             .await
             .expect("service should unregister");
         wait_until(|| !health.is_ready()).await;
         assert!(health.is_started());
-        assert!(health.is_live());
 
         bus.add_service(vec!["REQUIRED_SERVICE".to_string()], 1, 0)
             .await
@@ -922,10 +907,9 @@ observability:
         bus.stop("health test complete".to_string())
             .await
             .expect("main task should stop");
-        assert!(!health.is_ready());
         main_task.await.expect("main task should finish");
         processor_drain.abort();
-        assert!(!health.is_live());
+        assert!(!health.is_ready());
         assert!(health.is_started());
     }
 }
