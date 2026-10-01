@@ -186,7 +186,7 @@ impl TvfExpr {
 
         // Check if the next token is `format`
         let value = if let TokenTree::Ident(ident) = &value
-            && ident.to_string() == "format"
+            && ident == "format"
         {
             // Check if the next token is `!`
             if let Some(TokenTree::Punct(punct)) = parser.peek()
@@ -260,7 +260,7 @@ impl TvfId {
             }
             TokenTree::Punct(punct) => Err(syn::Error::new_spanned(
                 tt,
-                format!["Punctuation '{}' cannot be used as value", punct],
+                format!("Punctuation '{}' cannot be used as value", punct),
             )),
         }
     }
@@ -289,7 +289,7 @@ impl TvfValue {
             },
             TokenTree::Punct(punct) => Err(syn::Error::new(
                 span,
-                format!["Punctuation '{}' cannot be used as value", punct],
+                format!("Punctuation '{}' cannot be used as value", punct),
             )),
         }
     }
@@ -429,7 +429,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             Err(err) => {
                 return Err(syn::Error::new(
                     span,
-                    format!["Failed to parse UTF-8 string: {}", err],
+                    format!("Failed to parse UTF-8 string: {}", err),
                 ));
             }
         },
@@ -493,7 +493,7 @@ pub(crate) fn parse_date(literal: &syn::Lit) -> Result<NaiveDate, syn::Error> {
 
     let string = parse_str(literal)?;
     NaiveDate::parse_from_str(&string, FORMAT)
-        .map_err(|err| syn::Error::new(span, format!["Failed to parse date: {}", err]))
+        .map_err(|err| syn::Error::new(span, format!("Failed to parse date: {}", err)))
 }
 
 /// Given a literal deduce a DateTime
@@ -503,7 +503,7 @@ pub(crate) fn parse_datetime(literal: &syn::Lit) -> Result<NaiveDateTime, syn::E
 
     let string = parse_str(literal)?;
     NaiveDateTime::parse_from_str(&string, FORMAT)
-        .map_err(|err| syn::Error::new(span, format!["Failed to parse date: {}", err]))
+        .map_err(|err| syn::Error::new(span, format!("Failed to parse date: {}", err)))
 }
 
 /// Given a literal deduce a String
@@ -518,7 +518,7 @@ fn parse_str(literal: &syn::Lit) -> Result<String, syn::Error> {
             Err(err) => {
                 return Err(syn::Error::new(
                     span,
-                    format!["Failed to parse UTF-8 string: {}", err],
+                    format!("Failed to parse UTF-8 string: {}", err),
                 ));
             }
         },
@@ -594,7 +594,7 @@ impl Bytes {
                     }
                     Err(e) => Err(syn::Error::new(
                         span,
-                        format!["Failed to parse integer literal: {}", e],
+                        format!("Failed to parse integer literal: {}", e),
                     )),
                 }
             })?;
