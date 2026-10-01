@@ -191,7 +191,7 @@ macro_rules! impl_consume_queue {
             if !self.is_empty() {
                 Ok(self
                     .head
-                    .fetch_update(
+                    .try_update(
                         std::sync::atomic::Ordering::Relaxed,
                         std::sync::atomic::Ordering::Relaxed,
                         |head| Some((head + 1) % self.max_capacity()),
@@ -210,7 +210,7 @@ macro_rules! impl_consume_queue {
         pub unsafe fn consume(&self) -> Result<$p, QueueError<T>> {
             if !self.is_empty() {
                 self.head
-                    .fetch_update(
+                    .try_update(
                         std::sync::atomic::Ordering::Relaxed,
                         std::sync::atomic::Ordering::Relaxed,
                         |head| Some((head + 1) % self.max_capacity()),

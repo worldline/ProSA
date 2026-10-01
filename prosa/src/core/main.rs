@@ -90,14 +90,16 @@ where
     ) -> Main<M> {
         let observability = settings.get_observability();
         let health = Arc::new(HealthState::default());
-        #[cfg(feature = "prometheus")]
-        let prometheus_registry = prometheus::Registry::new();
-        #[cfg(feature = "prometheus")]
-        let meter_provider = observability.build_meter_provider(&prometheus_registry);
-        #[cfg(feature = "prometheus")]
-        observability.start_http_server(health.clone(), &prometheus_registry);
-        #[cfg(not(feature = "prometheus"))]
-        let meter_provider = observability.build_meter_provider();
+        cfg_select! {
+            feature = "prometheus" => {
+                let prometheus_registry = prometheus::Registry::new();
+                let meter_provider = observability.build_meter_provider(&prometheus_registry);
+                observability.start_http_server(health.clone(), &prometheus_registry);
+            },
+            not(feature = "prometheus") => {
+                let meter_provider = observability.build_meter_provider();
+            },
+        }
 
         Main {
             internal_tx_queue,
@@ -834,7 +836,7 @@ mod tests {
 
     #[tokio::test]
     async fn readiness_tracks_required_processors_and_services() {
-        let observability = serde_yaml::from_str(
+        let observability = yaml_serde::from_str(
             r#"
 health:
   required_processors: ["", required_processor]

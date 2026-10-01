@@ -844,7 +844,7 @@ mod tests {
 
     #[test]
     fn health_configuration_uses_plain_requirements() {
-        let config: Observability = serde_yaml::from_str(
+        let config: Observability = yaml_serde::from_str(
             r#"
 health:
   required_processors: [api, "", worker, api]
@@ -881,7 +881,7 @@ health:
     #[cfg(feature = "config-observability-prometheus")]
     #[test]
     fn observability_endpoint_is_used() {
-        let config: Observability = serde_yaml::from_str(
+        let config: Observability = yaml_serde::from_str(
             r#"
 endpoint: 127.0.0.1:8080
 "#,

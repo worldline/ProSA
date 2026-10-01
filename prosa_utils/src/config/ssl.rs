@@ -395,7 +395,7 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
         };
         assert!(format!("{inline_store_le_x1_x2}").contains("ISRG Root X"));
 
-        let config_store_le_x1_x2: Store = serde_yaml::from_str(
+        let config_store_le_x1_x2: Store = yaml_serde::from_str(
             "certs:
   - |
     -----BEGIN CERTIFICATE-----
@@ -448,7 +448,7 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
         .expect("SSL certificate configuration should be read");
         assert!(format!("{config_store_le_x1_x2}").contains("ISRG Root X"));
 
-        let config_store_file: Store = serde_yaml::from_str("path: \"/opt\"")
+        let config_store_file: Store = yaml_serde::from_str("path: \"/opt\"")
             .expect("Certificate configuration path should be read");
         assert_eq!(
             Store::File {

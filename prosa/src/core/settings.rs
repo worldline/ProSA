@@ -122,7 +122,7 @@ pub trait Settings: Serialize {
             writeln!(
                 f,
                 "{}",
-                serde_yaml::to_string(&self)
+                yaml_serde::to_string(&self)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
             )
         }
