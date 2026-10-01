@@ -61,9 +61,9 @@ pub(crate) fn gen_tvf_impl(input: TokenStream) -> Result<TokenStream, syn::Error
 
     Ok(quote![
         {
-            use ::prosa_utils::msg::tvf as __tvf;
-            use ::prosa_utils::msg::bytes as __bytes;
-            use ::prosa_utils::msg::chrono as __chrono;
+            use prosa_utils::msg::tvf as __tvf;
+            use prosa_utils::msg::bytes as __bytes;
+            use prosa_utils::msg::chrono as __chrono;
             #output
         }
     ])
