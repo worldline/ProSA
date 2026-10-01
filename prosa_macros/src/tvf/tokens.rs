@@ -55,6 +55,18 @@ impl TvfExpr {
                     ));
                 }
             }
+            TvfValue::Format(stream) => {
+                if let Some(explicit) = self.explicit_type
+                    && !matches!(explicit, TvfType::String)
+                {
+                    return Err(syn::Error::new(
+                        value_span,
+                        "Incompatible explicit type with format expression",
+                    ));
+                } else {
+                    (TvfType::String, quote![format!(#stream)])
+                }
+            }
             TvfValue::Expr(stream) => {
                 if let Some(explicit) = self.explicit_type {
                     (explicit, stream.clone())

@@ -41,6 +41,9 @@ pub(crate) enum TvfValue {
     /// Identifier of a variable
     Ident(syn::Ident),
 
+    /// Format expression (format! macro)
+    Format(TokenStream),
+
     /// Rust expression (surrounded by parenthesis)
     Expr(TokenStream),
 
@@ -53,6 +56,7 @@ impl TvfValue {
         match self {
             TvfValue::Lit(lit) => lit.span(),
             TvfValue::Ident(ident) => ident.span(),
+            TvfValue::Format(stream) => stream.span(),
             TvfValue::Expr(stream) => stream.span(),
             TvfValue::Buffer(_, span) => *span,
         }
