@@ -104,18 +104,15 @@ impl TvfType {
     /// Rust type corresponding to the TVF type
     #[rustfmt::skip]
     fn cast_type(self, modifier: Modifier, value: TokenStream) -> TokenStream {
-        let md = modifier.to_token();
-        match self {
-            Self::Byte     => quote![ (#md #value) as u8  ],
-            Self::Signed   => quote![ (#md #value) as i64 ],
-            Self::Unsigned => quote![ (#md #value) as u64 ],
-            Self::Float    => quote![ (#md #value) as f64 ],
-            Self::String   => value,
-            Self::Bytes    => value,
-            Self::Date     => value,
-            Self::DateTime => value,
-            Self::Buffer   => value,
-        }
+        let (modifier, cast) = match self {
+            TvfType::Byte     => (modifier, quote![ as u8  ]),
+            TvfType::Signed   => (modifier, quote![ as i64 ]),
+            TvfType::Unsigned => (modifier, quote![ as u64 ]),
+            TvfType::Float    => (modifier, quote![ as f64 ]),
+            _ => (modifier.non_numeric(), TokenStream::new()),
+        };
+        let modifier = modifier.to_token();
+        quote![ (#modifier #value) #cast ]
     }
 
     /// Name of the put method expected given the type

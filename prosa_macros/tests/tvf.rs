@@ -8,7 +8,12 @@ mod macro_tests {
 
     #[test]
     fn test_tvf_macro() {
+        const SOME_FIELD: usize = 10;
         let amount = 64i64;
+        let integer_ref = &amount;
+
+        // String to modify after being inserted into the buffer
+        let mut some_string = "SOME-STRING".to_string();
 
         let buffer = tvf!(SimpleStringTvf {
             1 => 2,
@@ -22,25 +27,30 @@ mod macro_tests {
                 {
                     1 => "object",
                     2 => 0x00010203_04050607_08090A0B_0C0D0E0F_10111213_14151617_18191A1B_1C1D1E1F as Bytes
-                }
+                },
             ],
             6 => "1995-01-10" as Date,
             7 => false,
             8 => true,
             9 => b"string from bytes" as String,
-            10 => -10,
-            11 => -10.25,
+            SOME_FIELD => -10,
+            (SOME_FIELD + 1) => -10.25,
             12 => -2 as Signed,
             13 => +2.125 as Float,
             14 => 100 as String,
             15 => -1000 as String,
-            16 => -amount as Signed,
+            amount => -amount as Signed,
             17 => format!("0x{:0>4x}", 33) as String,
             18 => format!("0x{:0>6x}", 66),
+            19 => &some_string as String,
+            21 => *integer_ref as u64,
             200 => "2023-06-05 15:02:00.000" as DateTime,
         });
 
-        assert_eq!(17, buffer.len());
+        // Modify the string after being inserted into the buffer
+        some_string.push_str("-PUSHED!");
+
+        assert_eq!(19, buffer.len());
         assert_eq!(Ok(2), buffer.get_unsigned(1));
         assert_eq!(Ok(4), buffer.get_signed(3));
         assert_eq!(Ok(0), buffer.get_byte(7));
@@ -91,7 +101,7 @@ mod macro_tests {
             Ok("-1000"),
             buffer.get_string(15).map(|s| s.to_string()).as_deref()
         );
-        assert_eq!(Ok(-64), buffer.get_signed(16));
+        assert_eq!(Ok(-64), buffer.get_signed(64));
         assert_eq!(
             Ok("0x0021"),
             buffer.get_string(17).map(|s| s.to_string()).as_deref()
@@ -100,6 +110,11 @@ mod macro_tests {
             Ok("0x000042"),
             buffer.get_string(18).map(|s| s.to_string()).as_deref()
         );
+        assert_eq!(
+            Ok("SOME-STRING"),
+            buffer.get_string(19).map(|s| s.to_string()).as_deref()
+        );
+        assert_eq!(Ok(64), buffer.get_unsigned(21));
         assert_eq!(
             Ok(NaiveDate::from_ymd_opt(2023, 6, 5)
                 .expect("NaiveDate should be build")
