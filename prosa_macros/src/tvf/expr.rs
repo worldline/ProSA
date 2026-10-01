@@ -103,6 +103,18 @@ pub(crate) enum Modifier {
     Borrow,
 }
 
+impl Modifier {
+    /// Filter out numerical/logical operator (+, -, !)
+    #[inline]
+    pub(crate) fn non_numeric(self) -> Self {
+        if matches!(self, Self::Borrow | Self::Dereference) {
+            self
+        } else {
+            Self::None
+        }
+    }
+}
+
 /// Simple sequence of bytes to serialize
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Bytes(pub Vec<u8>);
