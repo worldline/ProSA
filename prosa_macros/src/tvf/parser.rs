@@ -183,7 +183,34 @@ impl TvfExpr {
 
         // Next we necessarely expect the value
         let value = parser.next(|| "Expected a value, none found.")?;
-        let value = TvfValue::from_tokens(&value)?;
+
+        // Check if the next token is `format`
+        let value = if let TokenTree::Ident(ident) = &value
+            && ident.to_string() == "format"
+        {
+            // Check if the next token is `!`
+            if let Some(TokenTree::Punct(punct)) = parser.peek()
+                && punct.as_char() == '!'
+            {
+                parser.consume();
+
+                // Check if we have a group
+                let group = parser.next(|| "Expected (), [] or {}, got none")?;
+                if let TokenTree::Group(group) = group {
+                    TvfValue::Format(group.stream())
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        group,
+                        "Expected (), [] or {}, got something else",
+                    ));
+                }
+            } else {
+                // `format` is not followed by `!` treat it as a regular identifier
+                TvfValue::Ident(ident.clone())
+            }
+        } else {
+            TvfValue::from_tokens(&value)?
+        };
 
         // Next we might have a `as` keyword to indicate the expected type
         let explicit_type = if let Some(TokenTree::Ident(word)) = parser.peek()
@@ -215,7 +242,7 @@ impl TvfExpr {
 }
 
 impl TvfId {
-    /// Identify the value form a token-tree
+    /// Identify the field identifier from a token-tree
     fn from_tokens(tt: &TokenTree) -> Result<Self, syn::Error> {
         match tt {
             TokenTree::Ident(ident) => Ok(Self::Ident(ident.clone())),
@@ -240,7 +267,7 @@ impl TvfId {
 }
 
 impl TvfValue {
-    /// Identify the value form a token-tree
+    /// Identify the value from a token-tree
     fn from_tokens(tt: &TokenTree) -> Result<Self, syn::Error> {
         let span = tt.span();
         match tt {

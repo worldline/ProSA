@@ -35,10 +35,12 @@ mod macro_tests {
             14 => 100 as String,
             15 => -1000 as String,
             16 => -amount as Signed,
+            17 => format!("0x{:0>4x}", 33) as String,
+            18 => format!("0x{:0>6x}", 66),
             200 => "2023-06-05 15:02:00.000" as DateTime,
         });
 
-        assert_eq!(15, buffer.len());
+        assert_eq!(17, buffer.len());
         assert_eq!(Ok(2), buffer.get_unsigned(1));
         assert_eq!(Ok(4), buffer.get_signed(3));
         assert_eq!(Ok(0), buffer.get_byte(7));
@@ -90,6 +92,14 @@ mod macro_tests {
             buffer.get_string(15).map(|s| s.to_string()).as_deref()
         );
         assert_eq!(Ok(-64), buffer.get_signed(16));
+        assert_eq!(
+            Ok("0x0021"),
+            buffer.get_string(17).map(|s| s.to_string()).as_deref()
+        );
+        assert_eq!(
+            Ok("0x000042"),
+            buffer.get_string(18).map(|s| s.to_string()).as_deref()
+        );
         assert_eq!(
             Ok(NaiveDate::from_ymd_opt(2023, 6, 5)
                 .expect("NaiveDate should be build")
