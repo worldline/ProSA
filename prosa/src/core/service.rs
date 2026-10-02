@@ -87,6 +87,15 @@ where
         })
     }
 
+    /// Method to declare a service without any processor that serve it
+    ///
+    /// Can be call only by the main task to declare expected services before processors are started
+    pub fn declare_service(&mut self, name: &str) {
+        self.table
+            .entry(name.into())
+            .or_insert_with(|| (Vec::new(), atomic::AtomicU64::new(0)));
+    }
+
     /// Method to add a service to the table
     ///
     /// Can be call only by the main task to modify the service table

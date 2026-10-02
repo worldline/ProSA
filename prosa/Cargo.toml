@@ -1,6 +1,6 @@
 [package]
 name = "prosa"
-version = "0.5.1"
+version = "0.5.2"
 authors.workspace = true
 description = "ProSA core"
 homepage.workspace = true
@@ -63,7 +63,7 @@ config = { version = "0.15", default-features = false, features = ["toml", "yaml
 notify = "8"
 glob = { version = "0.3" }
 toml.workspace = true
-serde_yaml = "0.9"
+yaml_serde = "0.10"
 
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true

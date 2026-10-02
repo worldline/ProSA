@@ -8,6 +8,7 @@ use opentelemetry_sdk::{
     trace::{SdkTracerProvider, Tracer},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::{collections::HashMap, fmt, time::Duration};
 use tracing_subscriber::{filter, prelude::*};
 use tracing_subscriber::{layer::SubscriberExt, util::TryInitError};
@@ -105,100 +106,131 @@ impl fmt::Debug for OTLPExporterCfg {
     }
 }
 
-#[cfg(feature = "config-observability-prometheus")]
-/// Configuration struct of a prometheus metric exporter
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
-pub struct PrometheusExporterCfg {
-    endpoint: Option<String>,
+/// Requirements used to determine whether ProSA is ready.
+#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct HealthCheckCfg {
+    /// Processor names that must currently have at least one registered queue.
+    #[serde(default)]
+    required_processors: Box<[String]>,
+    /// Service names that must currently have at least one registered provider.
+    #[serde(default)]
+    required_services: Box<[String]>,
+}
+
+impl HealthCheckCfg {
+    /// Required processor names.
+    pub fn required_processors(&self) -> &[String] {
+        &self.required_processors
+    }
+
+    /// Required service names.
+    pub fn required_services(&self) -> &[String] {
+        &self.required_services
+    }
+}
+
+const HEALTH_STARTED: u8 = 0b01;
+const HEALTH_READY: u8 = 0b10;
+
+/// Shared ProSA health state used by observability exporters.
+#[derive(Debug, Default)]
+pub struct HealthState(AtomicU8);
+
+impl HealthState {
+    /// Update readiness, permanently marking startup complete on the first ready state.
+    pub fn set_ready(&self, ready: bool) {
+        if ready {
+            self.0
+                .store(HEALTH_STARTED | HEALTH_READY, Ordering::Relaxed);
+        } else {
+            self.0.fetch_and(!HEALTH_READY, Ordering::Relaxed);
+        }
+    }
+
+    /// Whether ProSA has reached readiness at least once.
+    pub fn is_started(&self) -> bool {
+        self.0.load(Ordering::Relaxed) & HEALTH_STARTED != 0
+    }
+
+    /// Whether ProSA currently satisfies its readiness requirements.
+    pub fn is_ready(&self) -> bool {
+        self.0.load(Ordering::Relaxed) & HEALTH_READY != 0
+    }
 }
 
 #[cfg(feature = "config-observability-prometheus")]
-impl PrometheusExporterCfg {
-    /// Start an HTTP server to expose the metrics if needed
-    pub(crate) fn init_prometheus_server(
-        &self,
-        registry: &prometheus::Registry,
-    ) -> Result<(), ExporterBuildError> {
-        if let Some(endpoint) = self.endpoint.clone() {
-            let registry = registry.clone();
-            tokio::task::spawn(async move {
-                match tokio::net::TcpListener::bind(endpoint).await {
-                    Ok(listener) => {
-                        loop {
-                            if let Ok((stream, _)) = listener.accept().await {
-                                let io = hyper_util::rt::TokioIo::new(stream);
-                                let registry = registry.clone();
-                                tokio::task::spawn(async move {
-                                    if let Err(err) = hyper::server::conn::http1::Builder::new()
-                                    .serve_connection(
-                                        io,
-                                        #[allow(unused)]
-                                        hyper::service::service_fn(|req| {
-                                            let registry = registry.clone();
-                                            async move {
-                                                let metric_families = registry.gather();
-                                                let encoder = prometheus::TextEncoder::new();
-                                                if let Ok(metric_data) =
-                                                    encoder.encode_to_string(&metric_families)
-                                                {
-                                                    let response = hyper::Response::builder()
-                                                        .header(hyper::header::SERVER, concat!("ProSA/", env!("CARGO_PKG_VERSION")))
-                                                        .header(
-                                                            hyper::header::CONTENT_TYPE,
-                                                            "text/plain; version=1.0.0",
-                                                        );
+type ObservabilityResponse = hyper::Response<http_body_util::Full<bytes::Bytes>>;
 
-                                                    #[cfg(feature = "config-observability-gzip")]
-                                                    if req.headers().get(hyper::header::ACCEPT_ENCODING).is_some_and(|a| a.to_str().is_ok_and(|v| v.contains("gzip"))) {
-                                                        let mut gz_encoder = flate2::write::GzEncoder::new(Vec::with_capacity(2048), flate2::Compression::fast());
-                                                        if std::io::Write::write_all(&mut gz_encoder, metric_data.as_bytes()).is_ok()
-                                                            && let Ok(compressed_data) = gz_encoder.finish()
-                                                        {
-                                                            return response
-                                                                .header(hyper::header::CONTENT_ENCODING, "gzip")
-                                                                .body(http_body_util::Full::new(
-                                                                    bytes::Bytes::from(compressed_data)),
-                                                                )
-                                                                .map_err(|e| e.to_string());
-                                                        }
-                                                    }
+#[cfg(feature = "config-observability-prometheus")]
+fn response_builder() -> hyper::http::response::Builder {
+    hyper::Response::builder().header(
+        hyper::header::SERVER,
+        concat!("ProSA/", env!("CARGO_PKG_VERSION")),
+    )
+}
 
-                                                    response
-                                                        .body(http_body_util::Full::new(
-                                                            bytes::Bytes::from(metric_data),
-                                                        ))
-                                                        .map_err(|e| e.to_string())
-                                                } else {
-                                                    Err("Can't serialize metrics".to_string())
-                                                }
-                                            }
-                                        }),
-                                    )
-                                    .await
-                                {
-                                    log::debug!(target: "prosa::observability::prometheus_server", "Error serving prometheus connection: {err:?}");
-                                }
-                                });
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        log::error!(target: "prosa::observability::prometheus_server", "Failed to bind Prometheus metrics server: {e}");
-                    }
-                }
-            });
+#[cfg(feature = "config-observability-prometheus")]
+fn probe_response(
+    ok: bool,
+    error: &'static str,
+) -> Result<ObservabilityResponse, hyper::http::Error> {
+    if ok {
+        response_builder().body("ok\n".into())
+    } else {
+        response_builder()
+            .status(hyper::StatusCode::SERVICE_UNAVAILABLE)
+            .body(error.into())
+    }
+}
+
+#[cfg(feature = "config-observability-prometheus")]
+fn metrics_response<B>(
+    _request: &hyper::Request<B>,
+    registry: &prometheus::Registry,
+) -> Result<ObservabilityResponse, hyper::http::Error> {
+    let Ok(metric_data) = prometheus::TextEncoder::new().encode_to_string(&registry.gather())
+    else {
+        return response_builder()
+            .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+            .body("can't serialize metrics\n".into());
+    };
+    let response = response_builder().header(hyper::header::CONTENT_TYPE, prometheus::TEXT_FORMAT);
+
+    #[cfg(feature = "config-observability-gzip")]
+    if _request
+        .headers()
+        .get(hyper::header::ACCEPT_ENCODING)
+        .is_some_and(|a| a.to_str().is_ok_and(|v| v.contains("gzip")))
+    {
+        let mut gz_encoder =
+            flate2::write::GzEncoder::new(Vec::with_capacity(2048), flate2::Compression::fast());
+        if std::io::Write::write_all(&mut gz_encoder, metric_data.as_bytes()).is_ok()
+            && let Ok(compressed_data) = gz_encoder.finish()
+        {
+            return response
+                .header(hyper::header::CONTENT_ENCODING, "gzip")
+                .body(compressed_data.into());
         }
-
-        Ok(())
     }
 
-    pub(crate) fn get_resource(
-        &self,
-        attr: Vec<KeyValue>,
-    ) -> opentelemetry_sdk::resource::Resource {
-        opentelemetry_sdk::resource::Resource::builder()
-            .with_attributes(attr)
-            .build()
+    response.body(metric_data.into())
+}
+
+#[cfg(feature = "config-observability-prometheus")]
+fn handle_observability_request<B>(
+    request: &hyper::Request<B>,
+    health: &HealthState,
+    registry: &prometheus::Registry,
+) -> Result<ObservabilityResponse, hyper::http::Error> {
+    match request.uri().path() {
+        "/metrics" => metrics_response(request, registry),
+        "/startup" => probe_response(health.is_started(), "starting\n"),
+        // Answering at all proves the process is alive
+        "/live" => probe_response(true, ""),
+        "/ready" => probe_response(health.is_ready(), "not ready\n"),
+        _ => response_builder()
+            .status(hyper::StatusCode::NOT_FOUND)
+            .body("not found\n".into()),
     }
 }
 
@@ -213,8 +245,6 @@ pub(crate) struct StdoutExporterCfg {
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 pub struct TelemetryMetrics {
     otlp: Option<OTLPExporterCfg>,
-    #[cfg(feature = "config-observability-prometheus")]
-    prometheus: Option<PrometheusExporterCfg>,
     stdout: Option<StdoutExporterCfg>,
 }
 
@@ -251,8 +281,7 @@ impl TelemetryMetrics {
         }
 
         #[cfg(feature = "config-observability-prometheus")]
-        if let Some(prom) = &self.prometheus {
-            // configure OpenTelemetry to use this registry
+        {
             let exporter = opentelemetry_prometheus::exporter()
                 .with_registry(registry.clone())
                 .with_resource_selector(opentelemetry_prometheus::ResourceSelector::All)
@@ -260,11 +289,12 @@ impl TelemetryMetrics {
                 .build()
                 .map_err(|e| ExporterBuildError::InternalFailure(e.to_string()))?;
             meter_provider = meter_provider
-                .with_resource(prom.get_resource(resource_attr))
+                .with_resource(
+                    opentelemetry_sdk::resource::Resource::builder()
+                        .with_attributes(resource_attr)
+                        .build(),
+                )
                 .with_reader(exporter);
-
-            // Initialize the Prometheus server if needed
-            prom.init_prometheus_server(registry)?;
         }
 
         if self.stdout.is_some() {
@@ -431,6 +461,12 @@ pub struct Observability {
     /// Global level for observability
     #[serde(default)]
     level: TelemetryLevel,
+    /// Shared HTTP endpoint for health probes and Prometheus metrics.
+    #[cfg(feature = "config-observability-prometheus")]
+    endpoint: Option<String>,
+    /// Readiness requirements.
+    #[serde(default)]
+    health: HealthCheckCfg,
     /// Metrics settings of a ProSA
     metrics: Option<TelemetryMetrics>,
     /// Logs settings of a ProSA
@@ -469,6 +505,9 @@ impl Observability {
         Observability {
             attributes: HashMap::new(),
             level,
+            #[cfg(feature = "config-observability-prometheus")]
+            endpoint: None,
+            health: HealthCheckCfg::default(),
             metrics: Some(TelemetryMetrics::default()),
             logs: Some(TelemetryData::default()),
             traces: Some(TelemetryData::default()),
@@ -545,16 +584,69 @@ impl Observability {
         self.level
     }
 
+    /// Get the configured shared HTTP endpoint.
+    #[cfg(feature = "config-observability-prometheus")]
+    pub fn get_endpoint(&self) -> Option<&str> {
+        self.endpoint.as_deref()
+    }
+
+    /// Get the configured readiness requirements.
+    pub fn get_health_check(&self) -> &HealthCheckCfg {
+        &self.health
+    }
+
+    /// Start the observability HTTP server (metrics and health probes) if an endpoint is configured
+    #[cfg(feature = "config-observability-prometheus")]
+    pub fn start_http_server(
+        &self,
+        health: std::sync::Arc<HealthState>,
+        registry: &prometheus::Registry,
+    ) {
+        if let Some(endpoint) = self.endpoint.clone() {
+            let registry = registry.clone();
+            tokio::task::spawn(async move {
+                let listener = match tokio::net::TcpListener::bind(&endpoint).await {
+                    Ok(listener) => listener,
+                    Err(e) => {
+                        log::error!(target: "prosa::observability::http_server", "Failed to bind observability server on {endpoint}: {e}");
+                        return;
+                    }
+                };
+                loop {
+                    if let Ok((stream, _)) = listener.accept().await {
+                        let io = hyper_util::rt::TokioIo::new(stream);
+                        let health = health.clone();
+                        let registry = registry.clone();
+                        tokio::task::spawn(async move {
+                            if let Err(err) = hyper::server::conn::http1::Builder::new()
+                                .serve_connection(
+                                    io,
+                                    hyper::service::service_fn(|req| {
+                                        std::future::ready(handle_observability_request(
+                                            &req, &health, &registry,
+                                        ))
+                                    }),
+                                )
+                                .await
+                            {
+                                log::debug!(target: "prosa::observability::http_server", "Error serving observability connection: {err:?}");
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    }
+
     /// Meter provider builder
     #[cfg(feature = "config-observability-prometheus")]
     pub fn build_meter_provider(&self, registry: &prometheus::Registry) -> SdkMeterProvider {
-        if let Some(settings) = &self.metrics {
-            settings
-                .build_provider(self.get_scope_attributes(), registry)
-                .unwrap_or_default()
-        } else {
-            SdkMeterProvider::default()
-        }
+        // Prometheus exporter is always attached, even without metrics settings
+        self.metrics
+            .clone()
+            .unwrap_or_default()
+            .build_provider(self.get_scope_attributes(), registry)
+            .unwrap_or_default()
     }
 
     /// Meter provider builder
@@ -684,6 +776,9 @@ impl Default for Observability {
         Self {
             attributes: HashMap::new(),
             level: TelemetryLevel::default(),
+            #[cfg(feature = "config-observability-prometheus")]
+            endpoint: None,
+            health: HealthCheckCfg::default(),
             metrics: Some(TelemetryMetrics::default()),
             logs: Some(TelemetryData {
                 otlp: None,
@@ -704,6 +799,15 @@ impl Default for Observability {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "config-observability-prometheus")]
+    fn request(path: &str, health: &HealthState) -> ObservabilityResponse {
+        let request = hyper::Request::get(path)
+            .body(())
+            .expect("request should be valid");
+        handle_observability_request(&request, health, &prometheus::Registry::new())
+            .expect("response should be valid")
+    }
 
     #[test]
     fn otlp_http_authorization_preserves_literal_percent_triplets() {
@@ -736,5 +840,79 @@ mod tests {
         assert!(!debug.contains("user"));
         assert!(!debug.contains("password"));
         assert!(!debug.contains("secret"));
+    }
+
+    #[test]
+    fn health_configuration_uses_plain_requirements() {
+        let config: Observability = yaml_serde::from_str(
+            r#"
+health:
+  required_processors: [api, "", worker, api]
+  required_services: [PAYMENT, ""]
+"#,
+        )
+        .expect("observability configuration should deserialize");
+
+        assert_eq!(
+            &[
+                "api".to_string(),
+                String::new(),
+                "worker".to_string(),
+                "api".to_string()
+            ],
+            config.get_health_check().required_processors()
+        );
+        assert_eq!(
+            &["PAYMENT".to_string(), String::new()],
+            config.get_health_check().required_services()
+        );
+    }
+
+    #[test]
+    fn health_state_keeps_startup_after_ready() {
+        let health = HealthState::default();
+        assert!(!health.is_started());
+        health.set_ready(true);
+        health.set_ready(false);
+        assert!(!health.is_ready());
+        assert!(health.is_started());
+    }
+
+    #[cfg(feature = "config-observability-prometheus")]
+    #[test]
+    fn observability_endpoint_is_used() {
+        let config: Observability = yaml_serde::from_str(
+            r#"
+endpoint: 127.0.0.1:8080
+"#,
+        )
+        .expect("observability configuration should deserialize");
+
+        assert_eq!(Some("127.0.0.1:8080"), config.get_endpoint());
+    }
+
+    #[cfg(feature = "config-observability-prometheus")]
+    #[test]
+    fn observability_routes() {
+        let health = HealthState::default();
+        let status = |path| request(path, &health).status();
+        assert_eq!(hyper::StatusCode::SERVICE_UNAVAILABLE, status("/startup"));
+        assert_eq!(hyper::StatusCode::OK, status("/live"));
+        assert_eq!(hyper::StatusCode::SERVICE_UNAVAILABLE, status("/ready"));
+        assert_eq!(hyper::StatusCode::NOT_FOUND, status("/"));
+
+        health.set_ready(true);
+        assert_eq!(hyper::StatusCode::OK, status("/startup"));
+        assert_eq!(hyper::StatusCode::OK, status("/ready"));
+
+        let response = request("/metrics", &health);
+        assert_eq!(hyper::StatusCode::OK, response.status());
+        assert_eq!(
+            Some(prometheus::TEXT_FORMAT),
+            response
+                .headers()
+                .get(hyper::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+        );
     }
 }
