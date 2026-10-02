@@ -11,9 +11,10 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
+use syn::{DeriveInput, Token, parse::Parser, parse_macro_input, punctuated::Punctuated};
 
 mod adaptor;
+mod derive;
 mod io;
 mod proc;
 mod settings;
@@ -125,4 +126,22 @@ pub fn tvf(input: TokenStream) -> TokenStream {
     tvf::gen_tvf_impl(input.into())
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
+}
+
+#[proc_macro_derive(ToTvf, attributes(tvf))]
+pub fn derive_to_tvf(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match derive::impl_derive_to_tvf(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => syn::Error::from(err).to_compile_error().into(),
+    }
+}
+
+#[proc_macro_derive(FromTvf, attributes(tvf))]
+pub fn derive_from_tvf(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match derive::impl_derive_from_tvf(&input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => syn::Error::from(err).to_compile_error().into(),
+    }
 }
