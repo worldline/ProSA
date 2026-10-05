@@ -3,11 +3,11 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
     Attribute, DeriveInput, Expr, Lit, LitStr, Meta, MetaNameValue, Path, Token, parse_str,
-    punctuated::Punctuated, spanned::Spanned,
+    punctuated::Punctuated,
 };
 
 /// Error encountered when parsing attributes
-#[derive(thiserror::Error, Debug, Clone, Copy)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum AttrError {
     /// TVF message is missing a field for storing the variant tag
     #[error("Missing tag field to identify enum variant")]
@@ -24,6 +24,10 @@ pub enum AttrError {
     /// An enum type cannot have multiple default variants
     #[error("Multiple default variants")]
     MultiDefault,
+
+    /// There was an error in the macro attribute usage
+    #[error("Wrong usage of derive macro attribute: {0}")]
+    Syn(#[from] syn::Error),
 }
 
 /// Attributes defined on an enum type
@@ -47,21 +51,26 @@ impl AttrEnum {
             if attr.path().is_ident(ATTRIBUTE)
                 && let Meta::List(list) = &attr.meta
             {
-                let _ = list.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("tag_type") {
+                list.parse_nested_meta(|meta| {
+                    let ident = meta.path.require_ident()?;
+                    if ident == "tag_type" {
                         meta.input.parse::<Token![=]>()?;
                         let val: LitStr = meta.input.parse()?;
                         tag_type = TagType::parse(&val.value()).ok();
                         Ok(())
-                    } else if meta.path.is_ident("tag_id") {
+                    } else if ident == "tag_id" {
                         meta.input.parse::<Token![=]>()?;
                         let val: Expr = meta.input.parse()?;
                         tag_id = Some(val);
                         Ok(())
                     } else {
-                        Err(syn::Error::new(attr.span(), "Unsupported attribute value"))
+                        // Derive macro attribute is not recognized
+                        Err(syn::Error::new(
+                            ident.span(),
+                            format!("Unknown attribute {}", ident),
+                        ))
                     }
-                });
+                })?;
             }
         }
 
@@ -100,18 +109,23 @@ impl AttrVariant {
             if attr.path().is_ident(ATTRIBUTE)
                 && let Meta::List(list) = &attr.meta
             {
-                let _ = list.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("default") {
+                list.parse_nested_meta(|meta| {
+                    let ident = meta.path.require_ident()?;
+                    if ident == "default" {
                         default = true;
                         Ok(())
-                    } else if meta.path.is_ident("tag") {
+                    } else if ident == "tag" {
                         meta.input.parse::<Token![=]>()?;
                         tag = Some(meta.input.parse()?);
                         Ok(())
                     } else {
-                        Err(syn::Error::new(attr.span(), "Unsupported attribute value"))
+                        // Derive macro attribute is not recognized
+                        Err(syn::Error::new(
+                            ident.span(),
+                            format!("Unknown attribute {}", ident),
+                        ))
                     }
-                });
+                })?;
             }
         }
 
@@ -224,8 +238,8 @@ pub(crate) enum TagType {
 
 impl TagType {
     /// Identify a tag type from a string
+    #[rustfmt::skip]
     pub(crate) fn parse(label: &str) -> Result<Self, ()> {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
         match label {
             "u8"  | "byte"     => Ok(Self::Byte    ),
             "i64" | "signed"   => Ok(Self::Signed  ),
@@ -236,8 +250,8 @@ impl TagType {
     }
 
     /// Select the appropriate method to put the tag in the buffer
+    #[rustfmt::skip]
     pub(crate) fn put_method(&self) -> TokenStream {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
         let method = match self {
             TagType::Byte     => quote![ put_byte     ],
             TagType::Signed   => quote![ put_signed   ],
@@ -248,8 +262,8 @@ impl TagType {
     }
 
     /// Select the appropriate method to get the tag from the buffer
+    #[rustfmt::skip]
     pub(crate) fn get_method(&self) -> TokenStream {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
         let method = match self {
             TagType::Byte     => quote![ get_byte     ],
             TagType::Signed   => quote![ get_signed   ],

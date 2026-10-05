@@ -128,6 +128,7 @@ pub fn tvf(input: TokenStream) -> TokenStream {
         .into()
 }
 
+/// Implements `ToTvf` derive macro
 #[proc_macro_derive(ToTvf, attributes(tvf))]
 pub fn derive_to_tvf(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -137,6 +138,7 @@ pub fn derive_to_tvf(input: TokenStream) -> TokenStream {
     }
 }
 
+/// Implements `FromTvf` derive macro
 #[proc_macro_derive(FromTvf, attributes(tvf))]
 pub fn derive_from_tvf(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

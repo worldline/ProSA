@@ -98,12 +98,28 @@ impl<T: Tvf> FromField<T> for bool {
     }
 }
 
+impl<T: Tvf> FromField<T> for f32 {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        Ok(msg.get_float(id)? as f32)
+    }
+}
+
 macro_rules! impl_from_field {
     ($type:ty ; $get:ident) => {
         impl<T: Tvf> FromField<T> for $type {
             #[inline]
             fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
-                Ok(msg.$get(id)? as Self)
+                msg.$get(id)
+            }
+        }
+    };
+    ($type:ty ; $get:ident "try_from") => {
+        impl<T: Tvf> FromField<T> for $type {
+            #[inline]
+            fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+                let num = msg.$get(id)?;
+                Self::try_from(num).map_err(|err| TvfError::ConvertionError(err.to_string()))
             }
         }
     };
@@ -116,16 +132,15 @@ macro_rules! impl_from_field {
         }
     };
 }
-impl_from_field![ u8   ; get_byte     ];
-impl_from_field![ u16  ; get_unsigned ];
-impl_from_field![ u32  ; get_unsigned ];
-impl_from_field![ u64  ; get_unsigned ];
-impl_from_field![ i8   ; get_signed   ];
-impl_from_field![ i16  ; get_signed   ];
-impl_from_field![ i32  ; get_signed   ];
-impl_from_field![ i64  ; get_signed   ];
-impl_from_field![ f32  ; get_float    ];
-impl_from_field![ f64  ; get_float    ];
+impl_from_field![ u8   ; get_byte                ];
+impl_from_field![ u16  ; get_unsigned "try_from" ];
+impl_from_field![ u32  ; get_unsigned "try_from" ];
+impl_from_field![ u64  ; get_unsigned            ];
+impl_from_field![ i8   ; get_signed   "try_from" ];
+impl_from_field![ i16  ; get_signed   "try_from" ];
+impl_from_field![ i32  ; get_signed   "try_from" ];
+impl_from_field![ i64  ; get_signed              ];
+impl_from_field![ f64  ; get_float               ];
 impl_from_field![ NaiveDate     ; get_date             ];
 impl_from_field![ NaiveDateTime ; get_datetime         ];
 impl_from_field![ String        ; get_string   "owned" ];
