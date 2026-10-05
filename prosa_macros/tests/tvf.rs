@@ -45,12 +45,14 @@ mod macro_tests {
             19 => &some_string as String,
             21 => *integer_ref as u64,
             200 => "2023-06-05 15:02:00.000" as DateTime,
+            800 => -(10 - 8) as Signed, // fix: (-left - right) as i64
+            801 => 1_000u64 as String, // fix: "1_000u64"
         });
 
         // Modify the string after being inserted into the buffer
         some_string.push_str("-PUSHED!");
 
-        assert_eq!(19, buffer.len());
+        assert_eq!(21, buffer.len());
         assert_eq!(Ok(2), buffer.get_unsigned(1));
         assert_eq!(Ok(4), buffer.get_signed(3));
         assert_eq!(Ok(0), buffer.get_byte(7));
@@ -121,6 +123,11 @@ mod macro_tests {
                 .and_hms_opt(15, 2, 0)
                 .expect("NaiveDateTime should be build")),
             buffer.get_datetime(200)
+        );
+        assert_eq!(Ok(-2), buffer.get_signed(800));
+        assert_eq!(
+            Ok("1000"),
+            buffer.get_string(801).map(|s| s.to_string()).as_deref()
         );
     }
 }
