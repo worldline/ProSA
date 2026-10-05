@@ -2,7 +2,7 @@ use crate::derive::ATTRIBUTE;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-    Attribute, DeriveInput, Expr, Lit, LitStr, Meta, MetaNameValue, Path, Token, parse_str,
+    Attribute, Expr, Lit, LitStr, Meta, MetaNameValue, Path, Token, parse_str,
     punctuated::Punctuated,
 };
 
@@ -43,7 +43,7 @@ pub(crate) struct AttrEnum {
 impl AttrEnum {
     pub(crate) fn identify(attrs: &[Attribute]) -> Result<Self, AttrError> {
         let mut tag_id = None;
-        let mut tag_type = None;
+        let mut tag_type = check_repr(attrs);
 
         // Iterate over all the attributes of the field and only
         // pick the attributes of the form `#[tvf(...)]`.
@@ -195,28 +195,38 @@ fn path_from_expr(expr: &Expr) -> Result<Path, AttrError> {
     }
 }
 
-/// Checks if the input has `#[repr(u8)]`
-pub(crate) fn has_repr_u8(input: &DeriveInput) -> bool {
+/// Checks the type of representation for enum variants:
+/// - `#[repr(u8)]`
+/// - `#[repr(u64)]`
+/// - `#[repr(i64)]`
+pub(crate) fn check_repr(attrs: &[Attribute]) -> Option<TagType> {
     // 1. Iterate over all attributes of the struct/enum
-    for attr in &input.attrs {
-        // 2. Check if the attribute is `repr`
-        if attr.path().is_ident("repr") {
-            // 3. Parse the nested meta inside #[repr(...)]
-            let mut found_u8 = false;
-            let _ = attr.parse_nested_meta(|meta| {
-                // 4. Check if one of the arguments is `u8`
-                if meta.path.is_ident("u8") {
-                    found_u8 = true;
-                }
-                Ok(())
-            });
+    for attr in attrs.iter() {
+        if let Some(ident) = attr.path().get_ident() {
+            // 2. Check if the attribute is `repr`
+            if ident == "repr" {
+                // 3. Parse the nested meta inside #[repr(...)]
+                let mut tag_type = None;
+                let _ = attr.parse_nested_meta(|meta| {
+                    let int = meta.path.require_ident()?.to_string();
+                    // 4. Check if one of the arguments is any of the primitive integer types
+                    tag_type = match int.as_str() {
+                        "u8" => Some(TagType::Byte),
+                        "u16" | "u32" | "u64" | "usize" => Some(TagType::Unsigned),
+                        "i16" | "i32" | "i64" | "isize" | "i8" => Some(TagType::Signed),
+                        _ => None,
+                    };
+                    Ok(())
+                });
 
-            if found_u8 {
-                return true;
+                // Return successfully identified tag type as soon as it is found.
+                if tag_type.is_some() {
+                    return tag_type;
+                }
             }
         }
     }
-    false
+    None
 }
 
 /// Specify the type of the field which encode the variant tag
