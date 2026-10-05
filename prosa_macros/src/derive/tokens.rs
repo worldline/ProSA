@@ -12,7 +12,8 @@ impl<'f> TvfEnum<'f> {
     pub(crate) fn impl_to_tvf(&self) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
-        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
+        let [impl_generics, ty_generics, where_clause] =
+            extend_generics(self.generics.clone(), false);
 
         // handle all cases of the enumeration
         let decl_discris = self.decl_discris(self.attr.tag_type, true);
@@ -71,7 +72,8 @@ impl<'f> TvfStruct<'f> {
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
-        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
+        let [impl_generics, ty_generics, where_clause] =
+            extend_generics(self.generics.clone(), false);
 
         // (de)structure the type
         let fields = self.fields.structuring();
@@ -122,7 +124,8 @@ impl<'f> TvfEnum<'f> {
     pub(crate) fn impl_from_tvf(&self) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
-        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
+        let [impl_generics, ty_generics, where_clause] =
+            extend_generics(self.generics.clone(), true);
 
         // handle all cases of the enumeration
         let decl_discris = self.decl_discris(self.attr.tag_type, false);
@@ -189,9 +192,7 @@ impl<'f> TvfEnum<'f> {
                 {
                     #decl_discris
 
-                    let __disc = #get_variant(__msg, #tag_id).map_err(|_| {
-                        __tvf::TvfError::SerializationError("Missing tag field".to_string())
-                    })?;
+                    let __disc = #get_variant(__msg, #tag_id)?;
                     match __disc #as_str {
                         #(#cases),*
                         _ => { #def_case }
@@ -208,7 +209,8 @@ impl<'f> TvfStruct<'f> {
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
-        let [impl_generics, ty_generics, where_clause] = extend_generics(self.generics.clone());
+        let [impl_generics, ty_generics, where_clause] =
+            extend_generics(self.generics.clone(), true);
 
         // (de)structure the type
         let fields = self.fields.structuring();
@@ -308,7 +310,7 @@ impl<'f> TvfVariant<'f> {
             };
 
             // Either we can serialize the variant as a single byte or use a varint.
-            #[cfg_attr(rustfmt, rustfmt_skip)]
+            #[rustfmt::skip]
             let int_type = match tag_type {
                 TagType::Byte     => format_ident!("u8" ),
                 TagType::Signed   => format_ident!("i64"),
