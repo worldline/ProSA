@@ -156,7 +156,10 @@ impl<T: Tvf + Clone> FromField<T> for T {
 #[cfg(test)]
 mod tests {
     use super::{FromTvf, ToTvf, Tvf, TvfError};
+    use crate::msg::simple_string_tvf::SimpleStringTvf;
+    use prosa_macros::tvf;
 
+    #[derive(Debug, PartialEq)]
     struct A {
         a: u64,
         b: f64,
@@ -182,5 +185,27 @@ mod tests {
     }
 
     #[test]
-    fn test_to_tvf() {}
+    fn test_to_tvf() {
+        use crate as prosa_utils;
+
+        let a0 = tvf![SimpleStringTvf {
+            1 => 101u64,
+            2 => 0.25,
+            3 => "word",
+        }];
+        let a1 = A {
+            a: 101,
+            b: 0.25,
+            c: "word".to_string(),
+        };
+
+        // serialize to TVF
+        let mut a2 = SimpleStringTvf::default();
+        a1.to_tvf(&mut a2);
+        assert_eq!(a0, a2);
+
+        // deserialize from TVF
+        let a3 = A::from_tvf(&a0).expect("Sample struct deserialization should work");
+        assert_eq!(a1, a3);
+    }
 }
