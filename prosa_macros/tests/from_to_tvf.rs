@@ -1,55 +1,54 @@
-use prosa_macros::{FromTvf, ToTvf};
-use prosa_utils::msg::tvf::{FromField, FromTvf, ToField, ToTvf, Tvf};
-
-/// Define fields' identifier as constants
-const MY_FIELD: usize = 100;
-
-#[derive(Debug, PartialEq, FromTvf, ToTvf)]
-struct A {
-    a: u32,
-
-    #[tvf(id = 10)]
-    b: bool,
-
-    #[tvf(id = MY_FIELD)]
-    c: String,
-}
-
-// TODO: to be implemented by derive macro
-impl<__TVF: Tvf + Clone> FromField<__TVF> for A {
-    fn from_field(msg: &__TVF, id: usize) -> Result<Self, prosa_utils::msg::tvf::TvfError> {
-        let sub = msg.get_buffer(id)?;
-        A::from_tvf(sub.as_ref())
-    }
-}
-
-// TODO: to be implemented by derive macro
-impl<__TVF: Tvf + Default> ToField<__TVF> for A {
-    fn to_field(&self, id: usize, msg: &mut __TVF) {
-        let mut sub = __TVF::default();
-        self.to_tvf(&mut sub);
-        msg.put_buffer(id, sub);
-    }
-}
-
-#[derive(Debug, PartialEq, FromTvf, ToTvf)]
-#[tvf(tag_id = MY_FIELD)]
-enum B {
-    C,
-    D { a: u32, b: f32 },
-}
-
-#[derive(Debug, PartialEq, FromTvf, ToTvf)]
-struct E<T> {
-    a: u32,
-    b: T,
-}
-
 #[cfg(test)]
 mod macro_tests {
-    use super::*;
-    use prosa_macros::tvf;
-    use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+    use prosa_macros::{FromTvf, ToTvf, tvf};
+    use prosa_utils::msg::{
+        simple_string_tvf::SimpleStringTvf,
+        tvf::{FromField, FromTvf, ToField, ToTvf, Tvf},
+    };
+
+    /// Define fields' identifier as constants
+    const MY_FIELD: usize = 100;
+
+    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
+    struct A {
+        a: u32,
+
+        #[tvf(id = 10)]
+        b: bool,
+
+        #[tvf(id = MY_FIELD)]
+        c: String,
+    }
+
+    // TODO: to be implemented by derive macro
+    impl<__TVF: Tvf + Clone> FromField<__TVF> for A {
+        fn from_field(msg: &__TVF, id: usize) -> Result<Self, prosa_utils::msg::tvf::TvfError> {
+            let sub = msg.get_buffer(id)?;
+            A::from_tvf(sub.as_ref())
+        }
+    }
+
+    // TODO: to be implemented by derive macro
+    impl<__TVF: Tvf + Default> ToField<__TVF> for A {
+        fn to_field(&self, id: usize, msg: &mut __TVF) {
+            let mut sub = __TVF::default();
+            self.to_tvf(&mut sub);
+            msg.put_buffer(id, sub);
+        }
+    }
+
+    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
+    #[tvf(tag_id = MY_FIELD)]
+    enum B {
+        C,
+        D { a: u32, b: f32 },
+    }
+
+    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
+    struct E<T> {
+        a: u32,
+        b: T,
+    }
 
     #[test]
     fn test_derive_struct() {
