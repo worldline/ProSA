@@ -69,7 +69,7 @@ mod macro_tests {
         assert_eq!(a0, a2);
 
         // deserialize from TVF
-        let a3 = A::from_tvf(&a0).unwrap();
+        let a3 = A::from_tvf(&a0).expect("Deserialization from TVF should work");
         assert_eq!(a1, a3);
     }
 
@@ -81,7 +81,7 @@ mod macro_tests {
         let mut bc2 = SimpleStringTvf::default();
         bc1.to_tvf(&mut bc2);
         assert_eq!(bc0, bc2);
-        let bc3 = B::from_tvf(&bc0).unwrap();
+        let bc3 = B::from_tvf(&bc0).expect("Deserialization from TVF should work");
         assert_eq!(bc1, bc3);
 
         // D variant
@@ -94,7 +94,7 @@ mod macro_tests {
         let mut bd2 = SimpleStringTvf::default();
         bd1.to_tvf(&mut bd2);
         assert_eq!(bd0, bd2);
-        let bd3 = B::from_tvf(&bd0).unwrap();
+        let bd3 = B::from_tvf(&bd0).expect("Deserialization from TVF should work");
         assert_eq!(bd1, bd3);
     }
 
@@ -123,7 +123,7 @@ mod macro_tests {
         assert_eq!(e0, e2);
 
         // deserialize from TVF
-        let e3 = E::<A>::from_tvf(&e0).unwrap();
+        let e3 = E::<A>::from_tvf(&e0).expect("Deserialization from TVF should work");
         assert_eq!(e1, e3);
     }
 }
