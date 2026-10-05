@@ -104,9 +104,15 @@ pub(crate) enum Modifier {
 }
 
 impl Modifier {
+    /// Check if the modifier is intended for numerical/logical types (+, -, !)
+    #[inline]
+    pub(crate) fn is_numeric(self) -> bool {
+        matches!(self, Self::LogicalNot | Self::Positive | Self::Negative)
+    }
+
     /// Filter out numerical/logical operator (+, -, !)
     #[inline]
-    pub(crate) fn non_numeric(self) -> Self {
+    pub(crate) fn filter_out_numeric(self) -> Self {
         if matches!(self, Self::Borrow | Self::Dereference) {
             self
         } else {

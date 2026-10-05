@@ -27,13 +27,14 @@ impl TvfExpr {
     /// Convert the expression into tokens
     fn to_tokens(&self, buffer_type: &syn::Ident) -> Result<TokenStream, syn::Error> {
         let id = self.id.to_tokens();
+        let modifier = self.modifier;
 
         // Process the value
         let value_span = self.value.span();
         let (out_type, value) = match &self.value {
             TvfValue::Lit(lit) => {
                 if let Some(explicit) = self.explicit_type {
-                    let value = Value::from_literal_with_type(lit, explicit, self.modifier)?;
+                    let value = Value::from_literal_with_type(lit, explicit, modifier)?;
                     (explicit, value.to_tokens())
                 } else {
                     let value = Value::from_literal(lit)?;
@@ -81,7 +82,7 @@ impl TvfExpr {
         };
 
         let put_method = out_type.put_method();
-        let value_cast = out_type.cast_type(self.modifier, value);
+        let value_cast = out_type.cast_type(modifier, value);
         Ok(quote![
             <#buffer_type as __tvf::Tvf>::#put_method(&mut __buffer, #id, #value_cast);
         ])
@@ -109,10 +110,10 @@ impl TvfType {
             TvfType::Signed   => (modifier, quote![ as i64 ]),
             TvfType::Unsigned => (modifier, quote![ as u64 ]),
             TvfType::Float    => (modifier, quote![ as f64 ]),
-            _ => (modifier.non_numeric(), TokenStream::new()),
+            _ => (modifier.filter_out_numeric(), TokenStream::new()),
         };
         let modifier = modifier.to_token();
-        quote![ (#modifier #value) #cast ]
+        quote![ (#modifier (#value)) #cast ]
     }
 
     /// Name of the put method expected given the type

@@ -423,17 +423,41 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
 
     // Try to convert the literal into a string
     let string = match literal {
-        syn::Lit::Str(s) => s.value(),
-        syn::Lit::ByteStr(s) => match String::from_utf8(s.value()) {
-            Ok(s) => s,
-            Err(err) => {
+        syn::Lit::Str(s) => {
+            if modifier.is_numeric() {
                 return Err(syn::Error::new(
                     span,
-                    format!("Failed to parse UTF-8 string: {}", err),
+                    format!("Unsupported operator on string literal"),
                 ));
             }
-        },
-        syn::Lit::CStr(s) => s.value().to_string_lossy().to_string(),
+            s.value()
+        }
+        syn::Lit::ByteStr(s) => {
+            if modifier.is_numeric() {
+                return Err(syn::Error::new(
+                    span,
+                    format!("Unsupported operator on byte string literal"),
+                ));
+            }
+            match String::from_utf8(s.value()) {
+                Ok(s) => s,
+                Err(err) => {
+                    return Err(syn::Error::new(
+                        span,
+                        format!("Failed to parse UTF-8 string: {}", err),
+                    ));
+                }
+            }
+        }
+        syn::Lit::CStr(s) => {
+            if modifier.is_numeric() {
+                return Err(syn::Error::new(
+                    span,
+                    format!("Unsupported operator on C-string literal"),
+                ));
+            }
+            s.value().to_string_lossy().to_string()
+        }
         syn::Lit::Bool(s) => {
             let value = match modifier {
                 Modifier::None | Modifier::Positive | Modifier::Dereference => s.value,
@@ -465,7 +489,9 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             .to_string()
         }
         syn::Lit::Int(s) => match modifier {
-            Modifier::None | Modifier::Positive | Modifier::Dereference => s.to_string(),
+            Modifier::None | Modifier::Positive | Modifier::Dereference => {
+                s.base10_parse::<u64>()?.to_string()
+            }
             Modifier::LogicalNot => (!s.base10_parse::<u64>()?).to_string(),
             Modifier::Negative => (-s.base10_parse::<i64>()?).to_string(),
             _ => {
@@ -473,7 +499,9 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             }
         },
         syn::Lit::Float(s) => match modifier {
-            Modifier::None | Modifier::Positive | Modifier::Dereference => s.to_string(),
+            Modifier::None | Modifier::Positive | Modifier::Dereference => {
+                s.base10_parse::<f64>()?.to_string()
+            }
             Modifier::Negative => (-s.base10_parse::<f64>()?).to_string(),
             _ => {
                 return Err(syn::Error::new(span, "Unsupported operatory for integer"));
