@@ -21,6 +21,15 @@ enum B {
     D { a: u32, b: f32 },
 }
 
+#[derive(Debug, FromTvf, ToTvf)]
+struct C<T> {
+    #[tvf(id = 1)]
+    a: u32,
+
+    #[tvf(id = 2)]
+    b: T,
+}
+
 #[cfg(test)]
 mod macro_tests {
 

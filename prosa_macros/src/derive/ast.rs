@@ -1,7 +1,9 @@
 use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrVariant};
 use proc_macro2::TokenStream;
-use quote::quote;
-use syn::{Attribute, DataEnum, DataStruct, Expr, Fields, Generics, Ident, parse_quote};
+use quote::{ToTokens, quote};
+use syn::{
+    Attribute, DataEnum, DataStruct, Expr, Fields, GenericParam, Generics, Ident, parse_quote,
+};
 
 /// Container for an enumeration
 #[derive(Clone)]
@@ -139,7 +141,7 @@ impl<'f> TvfStruct<'f> {
     /// Analyze the struct
     pub(crate) fn new(
         type_ident: &'f Ident,
-        attrs: &[Attribute],
+        _attrs: &[Attribute],
         generics: &'f Generics,
         struct_data: &'f DataStruct,
     ) -> Result<Self, AttrError> {
@@ -174,18 +176,48 @@ impl<'f> TvfFields<'f> {
     }
 }
 
-/// Add the generic bound `__TVF: __tvf::Tvf` to an impl-block
+/// Add the generic bound `__TVF: __tvf::Tvf` to an impl-block.
+/// Indicate if we are implementing the `FromTvf` trait or the `ToTvf` trait.
 /// Output [ImplGenerics, TypeGenerics, WhereClause]
-pub(crate) fn extend_generics(mut generics: Generics) -> [TokenStream; 3] {
+pub(crate) fn extend_generics(mut generics: Generics, impl_from: bool) -> [TokenStream; 3] {
     // Pick current type's generics and where clause as is
-    let (_, type_g, clause) = generics.split_for_impl();
+    let (_, type_g, _) = generics.split_for_impl();
     let type_g = quote![ #type_g ];
-    let clause = quote![ #clause ];
+
+    // For each generic type, introduce a `FromField` or `ToField` trait bound.
+    let count = generics.params.len();
+    let mut bounds = Vec::with_capacity(count);
+    if impl_from {
+        // Add `FromField` trait bound to each generic type
+        for param in generics.params.iter() {
+            if let GenericParam::Type(gtype) = param {
+                bounds.push(parse_quote![ #gtype: __tvf::FromField<__TVF> ]);
+            }
+        }
+    } else {
+        // Add `ToField` trait bound to each generic type
+        for param in generics.params.iter() {
+            if let GenericParam::Type(gtype) = param {
+                bounds.push(parse_quote![ #gtype: __tvf::ToField<__TVF> ]);
+            }
+        }
+    }
 
     // Add extra `__TVF` generics and force a `Tvf` trait bound
     generics.params.push(parse_quote![ __TVF: __tvf::Tvf ]);
     let (impl_g, _, _) = generics.split_for_impl();
     let impl_g = quote![ #impl_g ];
+
+    // Construct the where clause
+    let clause = if !bounds.is_empty() || generics.where_clause.is_some() {
+        let clause = generics.make_where_clause();
+        for bound in bounds {
+            clause.predicates.push(bound);
+        }
+        clause.to_token_stream()
+    } else {
+        TokenStream::new()
+    };
 
     // Output the new three parts generics blocks
     [impl_g, type_g, clause]
