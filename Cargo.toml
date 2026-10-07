@@ -33,6 +33,7 @@ serde = { version = "1", features = ["derive"] }
 url = { version = "2", features = ["serde"] }
 tokio = { version = "1", features = ["fs", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time"] }
 toml = "0.9"
+notify = "8"
 
 # Config Observability
 log = "0.4"
