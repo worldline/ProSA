@@ -9,7 +9,7 @@ mod macro_tests {
     /// Define fields' identifier as constants
     const MY_FIELD: usize = 100;
 
-    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf)]
     struct A {
         a: u32,
 
@@ -37,17 +37,38 @@ mod macro_tests {
         }
     }
 
-    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
-    #[tvf(tag_id = MY_FIELD)]
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf)]
+    #[tvf(tag_id = MY_FIELD, tag_type = "string")]
     enum B {
         C,
         D { a: u32, b: f32 },
     }
 
+    // TODO: to be implemented by derive macro
+    impl<__TVF: Tvf + Clone> FromField<__TVF> for B {
+        fn from_field(msg: &__TVF, id: usize) -> Result<Self, prosa_utils::msg::tvf::TvfError> {
+            let sub = msg.get_buffer(id)?;
+            B::from_tvf(sub.as_ref())
+        }
+    }
+
+    // TODO: to be implemented by derive macro
+    impl<__TVF: Tvf + Default> ToField<__TVF> for B {
+        fn to_field(&self, id: usize, msg: &mut __TVF) {
+            let mut sub = __TVF::default();
+            self.to_tvf(&mut sub);
+            msg.put_buffer(id, sub);
+        }
+    }
+
     #[derive(Debug, PartialEq, FromTvf, ToTvf)]
-    struct E<T> {
+    struct E<T: Clone, S>
+    where
+        S: Clone,
+    {
         a: u32,
         b: T,
+        c: S,
     }
 
     #[test]
@@ -107,14 +128,16 @@ mod macro_tests {
                 10  => 0u8,
                 100 => "BYE",
             },
+            2 => { MY_FIELD => "C" }
         }];
-        let e1 = E::<A> {
+        let e1 = E::<A, B> {
             a: 12,
             b: A {
                 a: 24,
                 b: false,
                 c: "BYE".to_string(),
             },
+            c: B::C,
         };
 
         // serialize to TVF
@@ -123,7 +146,7 @@ mod macro_tests {
         assert_eq!(e0, e2);
 
         // deserialize from TVF
-        let e3 = E::<A>::from_tvf(&e0).expect("Deserialization from TVF should work");
+        let e3 = E::<A, B>::from_tvf(&e0).expect("Deserialization from TVF should work");
         assert_eq!(e1, e3);
     }
 }
