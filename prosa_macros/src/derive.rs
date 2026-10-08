@@ -11,7 +11,7 @@ use crate::derive::{
     ast::{TvfEnum, TvfStruct},
     attr::AttrError,
 };
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use syn::{Data, DeriveInput};
 
 /// name of the attribute to find in the list of attributes
@@ -29,8 +29,11 @@ pub enum TvfError {
 
 /// Convert the error into a syn::Error
 impl From<TvfError> for syn::Error {
-    fn from(value: TvfError) -> Self {
-        syn::Error::new_spanned(TokenStream::new(), value.to_string())
+    fn from(error: TvfError) -> Self {
+        match &error {
+            TvfError::Union => Self::new(Span::call_site(), error.to_string()),
+            TvfError::Attr(attr) => Self::new(attr.span, error.to_string()),
+        }
     }
 }
 
