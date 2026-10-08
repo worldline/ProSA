@@ -195,8 +195,7 @@ pub trait ProcSettings {
         C: serde::de::Deserialize<'static>,
     {
         if let Some(config_path) = &self.get_adaptor_config_path() {
-            let (config, _) = crate::core::settings::ProsaConfig::load_adaptor_config(config_path)?;
-            config.try_deserialize()
+            crate::core::settings::ProsaConfig::load_adaptor_config(config_path)?.try_deserialize()
         } else {
             Err(ConfigError::NotFound(
                 "No configuration set for processor's adaptor".to_string(),
