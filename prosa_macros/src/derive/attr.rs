@@ -1,14 +1,29 @@
 use crate::derive::ATTRIBUTE;
-use proc_macro2::TokenStream;
-use quote::quote;
+use proc_macro2::{Span, TokenStream};
+use quote::{ToTokens, quote};
 use syn::{
-    Attribute, Expr, Lit, LitStr, Meta, MetaNameValue, Path, Token, parse_str,
-    punctuated::Punctuated,
+    Attribute, Expr, Lit, Meta, MetaNameValue, Path, Token, parse_str, punctuated::Punctuated,
+    spanned::Spanned,
 };
 
 /// Error encountered when parsing attributes
 #[derive(thiserror::Error, Debug, Clone)]
-pub enum AttrError {
+#[error("Attr: {error}")]
+pub struct AttrError {
+    /// Where the error occured
+    pub span: Span,
+
+    // THe type of error
+    pub error: ErrorKind,
+}
+
+/// Error encountered when parsing attributes
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum ErrorKind {
+    /// Misuse of the derive macro
+    #[error("Unrecognized attribute: {0}")]
+    Invalid(String),
+
     /// TVF message is missing a field for storing the variant tag
     #[error("Missing tag field to identify enum variant")]
     MissingTag,
@@ -24,10 +39,13 @@ pub enum AttrError {
     /// An enum type cannot have multiple default variants
     #[error("Multiple default variants")]
     MultiDefault,
+}
 
-    /// There was an error in the macro attribute usage
-    #[error("Wrong usage of derive macro attribute: {0}")]
-    Syn(#[from] syn::Error),
+impl AttrError {
+    #[inline]
+    pub fn new(span: Span, error: ErrorKind) -> Self {
+        Self { span, error }
+    }
 }
 
 /// Attributes defined on an enum type
@@ -51,26 +69,42 @@ impl AttrEnum {
             if attr.path().is_ident(ATTRIBUTE)
                 && let Meta::List(list) = &attr.meta
             {
-                list.parse_nested_meta(|meta| {
-                    let ident = meta.path.require_ident()?;
-                    if ident == "tag_type" {
-                        meta.input.parse::<Token![=]>()?;
-                        let val: LitStr = meta.input.parse()?;
-                        tag_type = TagType::parse(&val.value()).ok();
-                        Ok(())
-                    } else if ident == "tag_id" {
-                        meta.input.parse::<Token![=]>()?;
-                        let val: Expr = meta.input.parse()?;
-                        tag_id = Some(val);
-                        Ok(())
-                    } else {
-                        // Derive macro attribute is not recognized
-                        Err(syn::Error::new(
-                            ident.span(),
-                            format!("Unknown attribute {}", ident),
-                        ))
+                // Now look at the list of tags
+                let name_values = list
+                    .parse_args_with(Punctuated::<MetaNameValue, Token![,]>::parse_terminated)
+                    .map_err(|_| AttrError::new(list.span(), ErrorKind::Format))?;
+                for name_value in name_values {
+                    if let Some(name) = name_value.path.get_ident() {
+                        let name = name.to_string();
+                        match name.as_str() {
+                            "tag_type" => {
+                                // The value is expected to be a literal
+                                if let Expr::Lit(literal) = &name_value.value
+                                    && let Lit::Str(string) = &literal.lit
+                                    && let Ok(tag) = TagType::parse(&string.value())
+                                {
+                                    tag_type = Some(tag);
+                                } else {
+                                    return Err(AttrError::new(
+                                        name_value.value.span(),
+                                        ErrorKind::Invalid(
+                                            name_value.value.to_token_stream().to_string(),
+                                        ),
+                                    ));
+                                }
+                            }
+                            "tag_id" => {
+                                tag_id = Some(name_value.value);
+                            }
+                            _ => {
+                                return Err(AttrError::new(
+                                    name_value.span(),
+                                    ErrorKind::Invalid(name),
+                                ));
+                            }
+                        }
                     }
-                })?;
+                }
             }
         }
 
@@ -81,7 +115,7 @@ impl AttrEnum {
                 tag_type: tag_type.unwrap_or_default(),
             })
         } else {
-            Err(AttrError::MissingTag)
+            Err(AttrError::new(Span::call_site(), ErrorKind::MissingTag))
         }
     }
 }
@@ -95,7 +129,7 @@ pub(crate) struct AttrVariant {
     /// Variant tag value
     /// Default to variant name if tag type is set to string
     /// Default to variant discriminant otherwise
-    pub tag: Option<Lit>,
+    pub tag: Option<Expr>,
 }
 
 impl AttrVariant {
@@ -109,23 +143,36 @@ impl AttrVariant {
             if attr.path().is_ident(ATTRIBUTE)
                 && let Meta::List(list) = &attr.meta
             {
-                list.parse_nested_meta(|meta| {
-                    let ident = meta.path.require_ident()?;
-                    if ident == "default" {
-                        default = true;
-                        Ok(())
-                    } else if ident == "tag" {
-                        meta.input.parse::<Token![=]>()?;
-                        tag = Some(meta.input.parse()?);
-                        Ok(())
-                    } else {
-                        // Derive macro attribute is not recognized
-                        Err(syn::Error::new(
-                            ident.span(),
-                            format!("Unknown attribute {}", ident),
-                        ))
+                // Now look at the list of tags
+                let metas = list
+                    .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+                    .map_err(|_| AttrError::new(list.span(), ErrorKind::Format))?;
+                for meta in metas {
+                    match meta {
+                        Meta::Path(path) if path.is_ident("default") => {
+                            default = true;
+                        }
+                        Meta::NameValue(name_value) => {
+                            if let Some(name) = name_value.path.get_ident() {
+                                let name = name.to_string();
+                                match name.as_str() {
+                                    "tag" => {
+                                        tag = Some(name_value.value);
+                                    }
+                                    _ => {
+                                        return Err(AttrError::new(
+                                            name_value.span(),
+                                            ErrorKind::Invalid(name),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(AttrError::new(meta.span(), ErrorKind::Format));
+                        }
                     }
-                })?;
+                }
             }
         }
 
@@ -162,15 +209,27 @@ impl AttrField {
                 // Now look at the list of tags
                 let name_values = list
                     .parse_args_with(Punctuated::<MetaNameValue, Token![,]>::parse_terminated)
-                    .map_err(|_| AttrError::Format)?;
+                    .map_err(|_| AttrError::new(list.span(), ErrorKind::Format))?;
                 for name_value in name_values {
-                    let name = name_value.path;
-                    if name.is_ident("id") {
-                        field_id = Some(name_value.value);
-                    } else if name.is_ident("to_tvf") {
-                        custom_to_tvf = Some(path_from_expr(&name_value.value)?);
-                    } else if name.is_ident("from_tvf") {
-                        custom_from_tvf = Some(path_from_expr(&name_value.value)?);
+                    if let Some(name) = name_value.path.get_ident() {
+                        let name = name.to_string();
+                        match name.as_str() {
+                            "id" => {
+                                field_id = Some(name_value.value);
+                            }
+                            "to_tvf" => {
+                                custom_to_tvf = Some(path_from_expr(&name_value.value)?);
+                            }
+                            "from_tvf" => {
+                                custom_from_tvf = Some(path_from_expr(&name_value.value)?);
+                            }
+                            _ => {
+                                return Err(AttrError::new(
+                                    name_value.span(),
+                                    ErrorKind::Invalid(name),
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -191,7 +250,7 @@ fn path_from_expr(expr: &Expr) -> Result<Path, AttrError> {
     {
         Ok(path)
     } else {
-        Err(AttrError::Path)
+        Err(AttrError::new(expr.span(), ErrorKind::Path))
     }
 }
 

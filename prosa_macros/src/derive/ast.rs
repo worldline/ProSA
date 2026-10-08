@@ -1,5 +1,5 @@
-use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrVariant};
-use proc_macro2::TokenStream;
+use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrVariant, ErrorKind};
+use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
     Attribute, DataEnum, DataStruct, Expr, Fields, GenericParam, Generics, Ident, parse_quote,
@@ -123,7 +123,7 @@ impl<'f> TvfEnum<'f> {
         }
 
         if count_def > 1 {
-            Err(AttrError::MultiDefault)
+            Err(AttrError::new(Span::call_site(), ErrorKind::MultiDefault))
         } else {
             // Return the ordered list of fields
             Ok(Self {
@@ -191,6 +191,7 @@ pub(crate) fn extend_generics(mut generics: Generics, impl_from: bool) -> [Token
         // Add `FromField` trait bound to each generic type
         for param in generics.params.iter() {
             if let GenericParam::Type(gtype) = param {
+                let gtype = &gtype.ident;
                 bounds.push(parse_quote![ #gtype: __tvf::FromField<__TVF> ]);
             }
         }
@@ -198,6 +199,7 @@ pub(crate) fn extend_generics(mut generics: Generics, impl_from: bool) -> [Token
         // Add `ToField` trait bound to each generic type
         for param in generics.params.iter() {
             if let GenericParam::Type(gtype) = param {
+                let gtype = &gtype.ident;
                 bounds.push(parse_quote![ #gtype: __tvf::ToField<__TVF> ]);
             }
         }
