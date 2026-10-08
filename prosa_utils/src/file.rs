@@ -18,7 +18,7 @@
 //! ```
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt, fs,
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Component, Path, PathBuf},
@@ -27,7 +27,7 @@ use std::{
 
 use notify::{
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _,
-    event::{AccessKind, AccessMode, Flag},
+    event::{AccessKind, AccessMode, Flag, ModifyKind, RemoveKind},
 };
 
 /// Callback of a [`FileWatch`]
@@ -50,7 +50,9 @@ impl FileWatch {
     /// Method to watch `paths`, each one a file, a directory or a glob pattern, and call
     /// `on_change` whenever one of them changes.
     ///
-    /// A directory is watched with everything under it. A path that doesn't exist yet is watched
+    /// A directory is watched with everything under it, including symlink targets. Nested globs
+    /// also report directory changes and renames below their fixed prefix, which may change their
+    /// matches. A path that doesn't exist yet is watched
     /// through the directory it will appear in. A path that can't be watched is logged rather than
     /// returned, and watched again on the next change around it. The only error is the watcher of
     /// the process failing to start.
@@ -292,7 +294,12 @@ fn dispatch(event: notify::Result<Event>) {
         let mut ids = Vec::new();
         let mut callbacks = Vec::new();
         for (id, entry) in registry.entries.iter_mut() {
-            if event.need_rescan() || event.paths.iter().any(|path| entry.targets.matches(path)) {
+            if event.need_rescan()
+                || event
+                    .paths
+                    .iter()
+                    .any(|path| entry.targets.matches(path, &event.kind))
+            {
                 entry.targets = Targets::resolve(&entry.sources);
                 ids.push(*id);
                 callbacks.push(entry.on_change.clone());
@@ -335,6 +342,8 @@ enum Trigger {
     Under(PathBuf),
     /// A path matching this pattern, or under one that does
     Glob(glob::Pattern),
+    /// Directory changes that can introduce or remove nested glob matches
+    Structure(PathBuf),
 }
 
 /// Directories to watch for some paths, and the changes that concern them
@@ -342,6 +351,7 @@ enum Trigger {
 struct Targets {
     watches: BTreeMap<PathBuf, RecursiveMode>,
     triggers: Vec<Trigger>,
+    directories: Vec<PathBuf>,
 }
 
 impl Targets {
@@ -354,10 +364,29 @@ impl Targets {
             }
         }
 
+        // Recursive native watches don't follow symlinks inside directories.
+        let mut visited = BTreeSet::new();
+        while let Some(dir) = targets.directories.pop() {
+            if !visited.insert(dir.clone()) {
+                continue;
+            }
+            if let Ok(entries) = fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    if let Ok(kind) = entry.file_type() {
+                        if kind.is_symlink() {
+                            targets.add_path(&entry.path());
+                        } else if kind.is_dir() {
+                            targets.directories.push(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+
         targets
     }
 
-    fn matches(&self, path: &Path) -> bool {
+    fn matches(&self, path: &Path, kind: &EventKind) -> bool {
         let options = glob::MatchOptions {
             require_literal_separator: true,
             ..Default::default()
@@ -368,6 +397,15 @@ impl Targets {
             Trigger::Glob(pattern) => path
                 .ancestors()
                 .any(|ancestor| pattern.matches_path_with(ancestor, options)),
+            Trigger::Structure(dir) => {
+                path.starts_with(dir)
+                    && (matches!(
+                        kind,
+                        EventKind::Any
+                            | EventKind::Remove(RemoveKind::Folder | RemoveKind::Any)
+                            | EventKind::Modify(ModifyKind::Name(_) | ModifyKind::Any)
+                    ) || path.is_dir())
+            }
         })
     }
 
@@ -389,6 +427,7 @@ impl Targets {
         if resolved.is_dir() {
             self.watch(&resolved, RecursiveMode::Recursive);
             self.triggers.push(Trigger::Under(resolved.clone()));
+            self.directories.push(resolved.clone());
         }
         self.triggers.push(Trigger::Path(resolved));
     }
@@ -433,6 +472,9 @@ impl Targets {
             self.watch(parent, RecursiveMode::NonRecursive);
         }
         self.watch(&real_dir, mode);
+        if mode == RecursiveMode::Recursive {
+            self.triggers.push(Trigger::Structure(real_dir.clone()));
+        }
         self.triggers.push(Trigger::Path(real_dir));
         // Each match is followed as a path, so a symlink swapped behind it is a change too
         for matched in glob::glob(&real_pattern).into_iter().flatten().flatten() {
@@ -516,12 +558,12 @@ mod tests {
     }
 
     /// Watch `paths`, counting the changes
-    fn watch(paths: &[&Path]) -> (FileWatch, mpsc::Receiver<()>) {
+    fn watch(paths: &[&Path]) -> (FileWatch, mpsc::Receiver<Event>) {
         let (tx, rx) = mpsc::channel();
         let watch = FileWatch::new(
             paths.iter().map(|path| path.to_path_buf()).collect(),
-            move |_| {
-                let _ = tx.send(());
+            move |event| {
+                let _ = tx.send(event.clone());
             },
         )
         .expect("The watcher should start");
@@ -529,15 +571,23 @@ mod tests {
     }
 
     /// Whether a change was reported, then forget the ones that came with it
-    fn changed(rx: &mpsc::Receiver<()>) -> bool {
+    fn changed(rx: &mpsc::Receiver<Event>) -> bool {
         let changed = rx.recv_timeout(Duration::from_secs(5)).is_ok();
         std::thread::sleep(Duration::from_millis(100));
         while rx.try_recv().is_ok() {}
         changed
     }
 
-    fn unchanged(rx: &mpsc::Receiver<()>) -> bool {
-        rx.recv_timeout(Duration::from_millis(300)).is_err()
+    fn unchanged(rx: &mpsc::Receiver<Event>) -> bool {
+        let deadline = std::time::Instant::now() + Duration::from_millis(300);
+        while let Ok(event) =
+            rx.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+        {
+            if !event.need_rescan() {
+                return false;
+            }
+        }
+        true
     }
 
     /// Save a file the way editors and configuration tools do, renaming a new file over it
@@ -545,6 +595,53 @@ mod tests {
         let staging = path.with_extension("staging");
         fs::write(&staging, content)?;
         fs::rename(&staging, path)
+    }
+
+    #[test]
+    fn nested_glob_reports_directory_publication_and_removal() -> std::io::Result<()> {
+        let root = unique_test_dir("prosa-watch-published-glob").canonicalize()?;
+        let dir = root.join("conf");
+        fs::create_dir(&dir)?;
+        fs::create_dir(root.join("staged"))?;
+        fs::write(root.join("staged/main.yml"), "published")?;
+        let targets = Targets::resolve(&[dir.join("*/*.yml")]);
+
+        fs::rename(root.join("staged"), dir.join("new"))?;
+        assert!(targets.matches(
+            &dir.join("new"),
+            &EventKind::Modify(ModifyKind::Name(notify::event::RenameMode::Any))
+        ));
+        fs::remove_dir_all(dir.join("new"))?;
+        assert!(targets.matches(&dir.join("new"), &EventKind::Remove(RemoveKind::Folder)));
+        assert!(!targets.matches(
+            &dir.join("unrelated.log"),
+            &EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any))
+        ));
+        fs::remove_dir_all(root)
+    }
+
+    #[cfg(target_family = "unix")]
+    #[test]
+    fn directory_follows_external_symlinks_without_cycles() -> std::io::Result<()> {
+        use std::os::unix::fs::symlink;
+
+        let root = unique_test_dir("prosa-watch-external-links").canonicalize()?;
+        let dir = root.join("conf");
+        let outside = root.join("outside");
+        fs::create_dir_all(dir.join("nested"))?;
+        fs::create_dir_all(outside.join("store"))?;
+        fs::write(outside.join("config.yml"), "initial")?;
+        symlink(outside.join("config.yml"), dir.join("nested/config.yml"))?;
+        symlink(outside.join("store"), dir.join("store"))?;
+        symlink(&dir, outside.join("store/cycle"))?;
+        let targets = Targets::resolve(std::slice::from_ref(&dir));
+
+        let write = EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Any));
+        assert!(targets.matches(&outside.join("config.yml"), &write));
+        assert!(targets.matches(&outside.join("store/new.crt"), &write));
+        assert!(targets.watches.contains_key(&outside));
+        assert!(targets.watches.contains_key(&outside.join("store")));
+        fs::remove_dir_all(root)
     }
 
     #[test]

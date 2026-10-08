@@ -74,9 +74,11 @@ impl<C: SslContextBuild> SslContextCache<C> {
     ) -> std::io::Result<C> {
         if let Some((context, built)) = self.current() {
             if built != config.generation() && !self.rebuilding.swap(true, Ordering::AcqRel) {
-                let (cache, config) = (self.clone(), config.clone());
+                let (rebuilding, config) = (Rebuilding(self.clone()), config.clone());
                 let (host, name) = (host.map(String::from), name.to_string());
-                tokio::task::spawn_blocking(move || cache.rebuild(&config, host.as_deref(), &name));
+                tokio::task::spawn_blocking(move || {
+                    rebuilding.0.rebuild(&config, host.as_deref(), &name)
+                });
             }
 
             return Ok(context);
@@ -113,8 +115,15 @@ impl<C: SslContextBuild> SslContextCache<C> {
                 }
             }
         }
+    }
+}
 
-        self.rebuilding.store(false, Ordering::Release);
+/// Release the rebuild flag even if the task panics or is dropped before running.
+struct Rebuilding<C>(Arc<SslContextCache<C>>);
+
+impl<C> Drop for Rebuilding<C> {
+    fn drop(&mut self) {
+        self.0.rebuilding.store(false, Ordering::Release);
     }
 }
 
@@ -433,6 +442,32 @@ mod tests {
     };
     use prosa_utils::config::ssl::SslConfigContext as _;
 
+    #[test]
+    fn rebuild_flag_is_released_when_a_task_is_dropped_or_panics() {
+        #[derive(Clone)]
+        struct PanickingContext;
+
+        impl SslContextBuild for PanickingContext {
+            fn build(_: &SslConfig, _: Option<&str>) -> io::Result<Self> {
+                panic!("context build panic");
+            }
+        }
+
+        let cache = Arc::new(SslContextCache::<PanickingContext>::default());
+        for run in [false, true] {
+            cache.rebuilding.store(true, Ordering::Release);
+            let rebuilding = Rebuilding(cache.clone());
+            let task = move || rebuilding.0.rebuild(&SslConfig::default(), None, "test");
+            assert!(cache.rebuilding.load(Ordering::Acquire));
+            if run {
+                assert!(std::panic::catch_unwind(task).is_err());
+            } else {
+                drop(task);
+            }
+            assert!(!cache.rebuilding.load(Ordering::Acquire));
+        }
+    }
+
     #[tokio::test]
     async fn listener_serves_the_certificate_renewed_on_disk() -> io::Result<()> {
         use prosa_utils::config::ssl::Store;
@@ -590,51 +625,47 @@ mod tests {
         let connected = async |target: &TargetSetting| {
             let (served, connected) =
                 futures_util::future::join(listener.accept(), target.connect()).await;
-            served.and(connected).map(|_| ())
+            served
+                .and(connected)
+                .map(|stream| peer_certificate(&stream))
         };
-        let context = |target: &TargetSetting| {
-            target
-                .ssl_context
-                .current()
-                .map(|(connector, _)| std::ptr::from_ref(connector.context()) as usize)
-        };
-        // Connects until the target holds another context than `previous`, at most `rounds` times
-        let connect_until_rebuilt = async |target: &TargetSetting, previous, rounds: usize| {
-            for _ in 0..rounds {
-                let _ = connected(target).await;
-                if context(target) != previous {
-                    return true;
+        // A rescan may rebuild an equivalent context; compare the certificate actually served.
+        let connect_until_renewed =
+            async |target: &TargetSetting, expected: &[u8], rounds: usize| {
+                for _ in 0..rounds {
+                    if connected(target).await.is_ok_and(|cert| cert == expected) {
+                        return true;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            }
-            false
-        };
+                false
+            };
 
-        // Built once, and kept by the target and its clones
-        connected(&target).await?;
-        let first = context(&target);
-        assert!(first.is_some());
+        // The target and its clones share the cache
+        let first = connected(&target).await?;
+        assert!(target.ssl_context.current().is_some());
         let clone = target.clone();
-        connected(&clone).await?;
-        connected(&target).await?;
-        assert_eq!(first, context(&target));
-        assert_eq!(first, context(&clone));
+        assert!(Arc::ptr_eq(&target.ssl_context, &clone.ssl_context));
+        assert_eq!(first, connected(&clone).await?);
+        assert_eq!(first, connected(&target).await?);
 
         // Built again once the trusted certificate is renewed, for the clones too
         write_certificate(&cert_path, &key_path);
-        assert!(connect_until_rebuilt(&target, first, 100).await);
-        assert_eq!(context(&target), context(&clone));
-        connected(&target).await?;
+        let renewed = ::openssl::x509::X509::from_pem(&std::fs::read(&cert_path)?)?.to_pem()?;
+        assert!(connect_until_renewed(&target, &renewed, 100).await);
+        assert_eq!(renewed, connected(&clone).await?);
 
         // A store caught half written keeps the context it has
-        let renewed = context(&target);
         std::fs::write(&cert_path, "half written")?;
-        assert!(!connect_until_rebuilt(&target, renewed, 10).await);
+        for _ in 0..10 {
+            assert_eq!(renewed, connected(&target).await?);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
 
         // A new configuration is a context of its own, the clones keep theirs
         target.set_alpn(vec!["prosa/1".into()]);
-        assert!(context(&target).is_none());
-        assert_eq!(renewed, context(&clone));
+        assert!(target.ssl_context.current().is_none());
+        assert_eq!(renewed, connected(&clone).await?);
 
         std::fs::remove_dir_all(dir)
     }

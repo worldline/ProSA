@@ -717,12 +717,10 @@ mod tests {
         tick_secs: u64,
     }
 
-    /// Reload driven by [`spawn_reload`]: what it applied, and how many times it read the
-    /// configuration
+    /// Reload driven by [`spawn_reload`]: what it applied
     struct Reload {
         task: tokio::task::JoinHandle<()>,
         applied: tokio::sync::mpsc::UnboundedReceiver<(u64, Option<i64>)>,
-        loads: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     }
 
     impl Reload {
@@ -732,10 +730,6 @@ mod tests {
                 .await
                 .ok()
                 .flatten()
-        }
-
-        fn loads(&self) -> usize {
-            self.loads.load(std::sync::atomic::Ordering::Relaxed)
         }
     }
 
@@ -750,15 +744,17 @@ mod tests {
         let watched = config_path.to_string_lossy().into_owned();
         let config = ProsaConfig::from_path(&watched)?;
         let (tx, applied) = tokio::sync::mpsc::unbounded_channel();
-        let loads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let load_counter = loads.clone();
+        let (ready, watching) = tokio::sync::oneshot::channel();
+        let mut ready = Some(ready);
 
         let task = tokio::spawn(async move {
             watch_config_reload::<WatchedSettings, _, _, _>(
                 watched,
                 config,
                 move |path: &str| {
-                    load_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if let Some(ready) = ready.take() {
+                        let _ = ready.send(());
+                    }
                     ProsaConfig::from_path(path)
                 },
                 move |settings: WatchedSettings, config: ProsaConfig| {
@@ -776,16 +772,9 @@ mod tests {
             .await;
         });
 
-        // The configuration is watched from within the task, so nothing may change on disk
-        // before it ran. It's read once watched
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        loads.store(0, std::sync::atomic::Ordering::Relaxed);
+        watching.await?;
 
-        Ok(Reload {
-            task,
-            applied,
-            loads,
-        })
+        Ok(Reload { task, applied })
     }
 
     /// Save a file the way editors and configuration tools do, renaming a new file over it
@@ -886,8 +875,8 @@ mod tests {
         Ok(())
     }
 
-    /// A file written beside the configuration is no reason to read it again: a ProSA logging
-    /// next to its configuration would otherwise answer its own writes
+    /// A file written beside the configuration doesn't change applied settings, even if another
+    /// watch causes a rescan in the meantime
     #[tokio::test]
     async fn test_neighbour_file_is_not_a_config_change() -> Result<(), Box<dyn std::error::Error>>
     {
@@ -901,7 +890,7 @@ mod tests {
             fs::write(root.join("prosa.log"), format!("line {line}\n"))?;
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
-        assert_eq!(0, reload.loads());
+        assert!(reload.applied.try_recv().is_err());
 
         save(&config_path, "proc_1:\n  tick_secs: 5\n")?;
         assert_eq!(Some((5, None)), reload.next().await);

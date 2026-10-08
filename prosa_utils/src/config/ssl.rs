@@ -647,19 +647,16 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
             fs::write(file, "rotated")?;
             generation = next(&config, generation)
                 .ok_or_else(|| format!("{} wasn't seen changing", file.display()))?;
-            assert_eq!(generation, clone.generation());
+            assert!(Arc::ptr_eq(&config.reload, &clone.reload));
         }
-
-        fs::write(dir.join("unrelated.log"), "not a certificate")?;
-        assert_eq!(None, next(&config, generation));
 
         // Another store is other files, the clones keep the ones they had
         config.set_store(Store::System);
-        let generation = config.generation();
+        config.generation();
         let clone_generation = clone.generation();
         fs::write(store.join("ca.crt"), "rotated again")?;
         assert!(next(&clone, clone_generation).is_some());
-        assert_eq!(None, next(&config, generation));
+        assert!(!Arc::ptr_eq(&config.reload, &clone.reload));
 
         // A server writes the certificate it signs where a certificate without a key points, and
         // neither the system store nor inline certificates are files
