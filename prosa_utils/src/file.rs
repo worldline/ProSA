@@ -20,13 +20,14 @@
 use std::{
     collections::BTreeMap,
     fmt, fs,
+    panic::{AssertUnwindSafe, catch_unwind},
     path::{Component, Path, PathBuf},
     sync::{Arc, Mutex, MutexGuard, PoisonError, mpsc},
 };
 
 use notify::{
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as _,
-    event::{AccessKind, AccessMode},
+    event::{AccessKind, AccessMode, Flag},
 };
 
 /// Callback of a [`FileWatch`]
@@ -41,7 +42,8 @@ type OnChange = Arc<dyn Fn(&Event) + Send + Sync>;
 /// Secrets) are all changes, while the other files of that directory aren't.
 ///
 /// The callback runs on the watcher thread: keep it short. It may be called a few times for a
-/// single save, and once more while the watch is being dropped.
+/// single save, once more while the watch is being dropped, and on macOS whenever the watched
+/// directories of the process change.
 pub struct FileWatch(u64);
 
 impl FileWatch {
@@ -89,7 +91,7 @@ impl Drop for FileWatch {
     fn drop(&mut self) {
         let entry = lock_registry().as_mut().and_then(|registry| {
             let entry = registry.entries.remove(&self.0);
-            registry.sync(&[]);
+            registry.settle(&[], &[]);
             entry
         });
 
@@ -137,6 +139,8 @@ struct Entry {
 
 struct Registry {
     watcher: RecommendedWatcher,
+    /// Sender of the notify events, to send events of its own
+    tx: mpsc::Sender<notify::Result<Event>>,
     /// Paths watched by the notify watcher
     watched: BTreeMap<PathBuf, RecursiveMode>,
     entries: BTreeMap<u64, Entry>,
@@ -148,7 +152,7 @@ impl Registry {
         // The notify event loop can't be asked to watch from its own callback, so the events are
         // handled on a thread of their own
         let (tx, rx) = mpsc::channel();
-        let watcher = notify::recommended_watcher(tx)?;
+        let watcher = notify::recommended_watcher(tx.clone())?;
         std::thread::Builder::new()
             .name("prosa-file-watch".into())
             .spawn(move || {
@@ -160,6 +164,7 @@ impl Registry {
 
         Ok(Registry {
             watcher,
+            tx,
             watched: BTreeMap::new(),
             entries: BTreeMap::new(),
             next_id: 0,
@@ -170,7 +175,7 @@ impl Registry {
     /// nowhere new: a directory created before its parent was watched sends no event, while it may
     /// already hold what they look for
     fn settle(&mut self, ids: &[u64], replaced: &[PathBuf]) {
-        self.sync(replaced);
+        let mut changed = self.sync(replaced);
         for _ in 0..16 {
             let mut moved = false;
             for id in ids {
@@ -186,13 +191,22 @@ impl Registry {
             if !moved {
                 break;
             }
-            self.sync(&[]);
+            changed |= self.sync(&[]);
+        }
+
+        // FSEvents restarts its stream on every watched path change, dropping the events pending
+        // then: every entry is told to read its files again
+        if cfg!(target_os = "macos") && changed {
+            let _ = self
+                .tx
+                .send(Ok(Event::new(EventKind::Other).set_flag(Flag::Rescan)));
         }
     }
 
     /// Watch what the entries need, and watch again the paths under `replaced`: a watch follows
-    /// the directory it was put on, not its path
-    fn sync(&mut self, replaced: &[PathBuf]) {
+    /// the directory it was put on, not its path. Return whether the watched paths changed
+    fn sync(&mut self, replaced: &[PathBuf]) -> bool {
+        let mut changed = false;
         let mut desired = BTreeMap::new();
         for entry in self.entries.values() {
             for (path, mode) in &entry.targets.watches {
@@ -224,6 +238,7 @@ impl Registry {
             } else {
                 // Fails when the directory is gone, which removed its watch already
                 let _ = self.watcher.unwatch(&path);
+                changed = true;
                 if mode == RecursiveMode::Recursive {
                     removed_recursive.push(path);
                 }
@@ -242,6 +257,7 @@ impl Registry {
                 match self.watcher.watch(&path, mode) {
                     Ok(()) => {
                         self.watched.insert(path, mode);
+                        changed = true;
                     }
                     // Removed since it was resolved, its parent reports the change
                     Err(err) if matches!(err.kind, notify::ErrorKind::PathNotFound) => {}
@@ -249,6 +265,8 @@ impl Registry {
                 }
             }
         }
+
+        changed
     }
 }
 
@@ -299,9 +317,12 @@ fn dispatch(event: notify::Result<Event>) {
         callbacks
     };
 
-    // Outside the lock, so a callback can create or drop a watch
+    // Outside the lock, so a callback can create or drop a watch. A callback that panics must not
+    // end the thread every watch relies on
     for callback in callbacks {
-        callback(&event);
+        if catch_unwind(AssertUnwindSafe(|| callback(&event))).is_err() {
+            log::error!("A file watch callback panicked on {:?}", event.paths);
+        }
     }
 }
 
@@ -413,10 +434,9 @@ impl Targets {
         }
         self.watch(&real_dir, mode);
         self.triggers.push(Trigger::Path(real_dir));
+        // Each match is followed as a path, so a symlink swapped behind it is a change too
         for matched in glob::glob(&real_pattern).into_iter().flatten().flatten() {
-            if matched.is_dir() {
-                self.watch(&matched, RecursiveMode::Recursive);
-            }
+            self.add_path(&matched);
         }
         self.triggers.push(Trigger::Glob(glob_pattern));
     }
@@ -644,6 +664,74 @@ mod tests {
             publish(revision)?;
             assert!(changed(&rx), "revision {revision} wasn't reported");
         }
+
+        fs::remove_dir_all(dir)
+    }
+
+    /// A glob matching a file reached through swapped symlinks, as a Kubernetes ConfigMap mounted
+    /// as a directory of configuration files is
+    #[cfg(target_family = "unix")]
+    #[test]
+    fn file_watch_follows_swapped_symlinks_of_a_glob() -> std::io::Result<()> {
+        use std::os::unix::fs::symlink;
+
+        let dir = unique_test_dir("prosa-watch-glob-symlink");
+        let publish = |revision: u32| -> std::io::Result<()> {
+            let data = dir.join(format!("..{revision}"));
+            fs::create_dir_all(&data)?;
+            fs::write(data.join("config.yml"), format!("revision {revision}"))?;
+
+            let staged = dir.join("..data_tmp");
+            symlink(format!("..{revision}"), &staged)?;
+            fs::rename(staged, dir.join("..data"))
+        };
+        publish(1)?;
+        symlink("..data/config.yml", dir.join("config.yml"))?;
+
+        let (_watch, rx) = watch(&[&dir.join("*.yml")]);
+        for revision in 2..=3 {
+            publish(revision)?;
+            assert!(changed(&rx), "revision {revision} wasn't reported");
+        }
+
+        fs::write(dir.join("..3/config.yml"), "written in place")?;
+        assert!(changed(&rx), "a write to the file linked wasn't reported");
+
+        fs::remove_dir_all(dir)
+    }
+
+    #[test]
+    fn file_watch_reports_a_change_made_while_other_paths_are_watched() -> std::io::Result<()> {
+        let dir = unique_test_dir("prosa-watch-churn");
+        let file = dir.join("cert.pem");
+        fs::write(&file, "first")?;
+        let (_watch, rx) = watch(&[&file]);
+
+        fs::write(&file, "changed")?;
+        let others = (0..5)
+            .map(|index| {
+                let other = dir.join(format!("other{index}"));
+                fs::create_dir_all(&other).map(|()| watch(&[&other.join("file")]))
+            })
+            .collect::<std::io::Result<Vec<_>>>()?;
+        assert!(changed(&rx), "the change was lost");
+
+        drop(others);
+        fs::remove_dir_all(dir)
+    }
+
+    #[test]
+    fn file_watch_survives_a_callback_panic() -> std::io::Result<()> {
+        let dir = unique_test_dir("prosa-watch-panic");
+        let (panicking, file) = (dir.join("panic.pem"), dir.join("cert.pem"));
+        let _panicking = FileWatch::new(vec![panicking.clone()], |_| panic!("callback panic"))
+            .expect("The watcher should start");
+        let (_watch, rx) = watch(&[&file]);
+
+        fs::write(&panicking, "panic")?;
+        std::thread::sleep(Duration::from_millis(200));
+        fs::write(&file, "changed")?;
+        assert!(changed(&rx), "the watches stopped after a callback panic");
 
         fs::remove_dir_all(dir)
     }
