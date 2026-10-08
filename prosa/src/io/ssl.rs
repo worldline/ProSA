@@ -74,11 +74,9 @@ impl<C: SslContextBuild> SslContextCache<C> {
     ) -> std::io::Result<C> {
         if let Some((context, built)) = self.current() {
             if built != config.generation() && !self.rebuilding.swap(true, Ordering::AcqRel) {
-                let (rebuilding, config) = (Rebuilding(self.clone()), config.clone());
+                let (cache, config) = (self.clone(), config.clone());
                 let (host, name) = (host.map(String::from), name.to_string());
-                tokio::task::spawn_blocking(move || {
-                    rebuilding.0.rebuild(&config, host.as_deref(), &name)
-                });
+                tokio::task::spawn_blocking(move || cache.rebuild(&config, host.as_deref(), &name));
             }
 
             return Ok(context);
@@ -99,7 +97,7 @@ impl<C: SslContextBuild> SslContextCache<C> {
 
     /// Build the context again. Files that can't be read, caught half written, keep the previous
     /// context until they change again
-    fn rebuild(&self, config: &SslConfig, host: Option<&str>, name: &str) {
+    pub(crate) fn rebuild(&self, config: &SslConfig, host: Option<&str>, name: &str) {
         let generation = config.generation();
         match C::build(config, host) {
             Ok(context) => self.store(context, generation),
@@ -115,16 +113,8 @@ impl<C: SslContextBuild> SslContextCache<C> {
                 }
             }
         }
-    }
-}
 
-/// Rebuild of a [`SslContextCache`] in progress, over once dropped: even when it panics, or never
-/// runs because the runtime shuts down
-struct Rebuilding<C>(Arc<SslContextCache<C>>);
-
-impl<C> Drop for Rebuilding<C> {
-    fn drop(&mut self) {
-        self.0.rebuilding.store(false, Ordering::Release);
+        self.rebuilding.store(false, Ordering::Release);
     }
 }
 
