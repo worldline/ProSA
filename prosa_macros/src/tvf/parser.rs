@@ -427,7 +427,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             if modifier.is_numeric() {
                 return Err(syn::Error::new(
                     span,
-                    format!("Unsupported operator on string literal"),
+                    "Unsupported operator on string literal".to_string(),
                 ));
             }
             s.value()
@@ -436,7 +436,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             if modifier.is_numeric() {
                 return Err(syn::Error::new(
                     span,
-                    format!("Unsupported operator on byte string literal"),
+                    "Unsupported operator on byte string literal".to_string(),
                 ));
             }
             match String::from_utf8(s.value()) {
@@ -453,7 +453,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             if modifier.is_numeric() {
                 return Err(syn::Error::new(
                     span,
-                    format!("Unsupported operator on C-string literal"),
+                    "Unsupported operator on C-string literal".to_string(),
                 ));
             }
             s.value().to_string_lossy().to_string()
