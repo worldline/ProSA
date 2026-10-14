@@ -86,13 +86,24 @@ Use `as Type` to explicitly set the field type:
 | `as Signed`   | `i64`           | `-5 as Signed`                          |
 | `as Float`    | `f64`           | `3.14 as Float`                         |
 | `as Byte`     | `u8`            | `22 as Byte`                            |
-| `as String`   | `String`         | `b"UTF-8 bytes" as String`              |
+| `as String`   | `String`        | `b"UTF-8 bytes" as String`              |
 | `as Bytes`    | `Bytes`         | `0x01020304 as Bytes`                   |
 | `as Date`     | `NaiveDate`     | `"1995-01-10" as Date`                  |
 | `as DateTime` | `NaiveDateTime` | `"2023-06-05 15:02:00.000" as DateTime` |
 
 Converting a byte-string literal with `as String` happens at compile time and fails compilation if
 the bytes are not valid UTF-8.
+
+Type annotations are mandatory when the value is a variable identifier or a complex Rust expression using `( )`.
+
+```rust,ignore
+let my_value = "hello";
+
+let message = tvf!(SimpleStringTvf {
+    1 => my_value as String,
+    2 => (1 + 2 + 3) as Unsigned,
+});
+```
 
 ### Lists
 
@@ -132,6 +143,44 @@ let message = tvf!(SimpleStringTvf {
 ```
 
 Lists can contain nested maps (`{ }`), and maps can contain nested lists (`[ ]`), allowing arbitrary depth.
+
+### Advanced usage
+
+You can define field identifier using constants or Rust expressions:
+
+```rust,ignore
+const MY_FIELD: usize = 1;
+
+let message = tvf!(SimpleStringTvf {
+    MY_FIELD       =>   2, // id: 1
+    (MY_FIELD + 2) => 100, // id: 3
+});
+```
+
+Unary operators `!`, `+`, `-`, `&` and `*` are supported on literals, variables and expressions:
+
+```rust,ignore
+let my_int: i32 = 4;
+let my_ref = &my_int;
+
+let message = tvf!(SimpleStringTvf {
+    1 => !true,               // false
+    2 => +20,                 //  20
+    3 => -my_int   as Signed, //  -4
+    4 => *my_ref   as Signed, //   4
+    5 => -(20 * 3) as Signed, // -60
+});
+```
+
+The macro `format!` can be used directly.
+Since it necessarely output a string, type annotation is not necessary when using it:
+
+```rust,ignore
+let message = tvf!(SimpleStringTvf {
+    1 => format!("0x{:0>4x}", 33), // "0x0021"
+});
+```
+
 
 ## Implement your own TVF
 
