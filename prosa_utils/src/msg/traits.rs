@@ -1,9 +1,8 @@
 //! Define traits to convert a Rust type into a TVF representation and back
 
+use crate::msg::tvf::{Tvf, TvfError};
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
-
-use crate::msg::tvf::{Tvf, TvfError};
 
 /// Convert a Rust's type into a TVF message
 pub trait ToTvf<T: Tvf> {
@@ -77,35 +76,35 @@ impl_to_field![ NaiveDateTime ; put_datetime ];
 
 impl<T: Tvf> ToField<T> for str {
     #[inline]
-    fn to_field(&self, id: usize, msg: &mut T){
+    fn to_field(&self, id: usize, msg: &mut T) {
         msg.put_string(id, self);
     }
 }
 
 impl<T: Tvf> ToField<T> for String {
     #[inline]
-    fn to_field(&self, id: usize, msg: &mut T){
+    fn to_field(&self, id: usize, msg: &mut T) {
         msg.put_string(id, self);
     }
 }
 
 impl<T: Tvf, const S: usize> ToField<T> for [u8; S] {
     #[inline]
-    fn to_field(&self, id: usize, msg: &mut T){
+    fn to_field(&self, id: usize, msg: &mut T) {
         msg.put_bytes(id, Bytes::copy_from_slice(self));
     }
 }
 
 impl<T: Tvf> ToField<T> for [u8] {
     #[inline]
-    fn to_field(&self, id: usize, msg: &mut T){
+    fn to_field(&self, id: usize, msg: &mut T) {
         msg.put_bytes(id, Bytes::copy_from_slice(self));
     }
 }
 
 impl<T: Tvf> ToField<T> for Bytes {
     #[inline]
-    fn to_field(&self, id: usize, msg: &mut T){
+    fn to_field(&self, id: usize, msg: &mut T) {
         msg.put_bytes(id, self.clone());
     }
 }
@@ -121,12 +120,66 @@ impl<T: Tvf + Clone> ToField<T> for T {
 /// Insert the field into the buffer if its value is set
 impl<T: Tvf, F: ToField<T>> ToField<T> for Option<F> {
     #[inline]
-    fn to_field(&self, id: usize, msg: &mut T){
+    fn to_field(&self, id: usize, msg: &mut T) {
         if let Some(field) = self {
             field.to_field(id, msg);
         }
     }
 }
+
+/// Convert a vector of fields into a TVF message
+impl<T: Tvf, F: ToField<T>> ToTvf<T> for Vec<F> {
+    fn to_tvf(&self, msg: &mut T) {
+        for (i, f) in self.iter().enumerate() {
+            f.to_field(i + 1, msg);
+        }
+    }
+}
+
+/// Convert a list of fields into a TVF message
+impl<T: Tvf, F: ToField<T>, const S: usize> ToTvf<T> for [F; S] {
+    fn to_tvf(&self, msg: &mut T) {
+        for (i, f) in self.iter().enumerate() {
+            f.to_field(i + 1, msg);
+        }
+    }
+}
+
+/// Convert a list of fields into a TVF message
+impl<T: Tvf, F: ToField<T>> ToTvf<T> for [F] {
+    fn to_tvf(&self, msg: &mut T) {
+        for (i, f) in self.iter().enumerate() {
+            f.to_field(i + 1, msg);
+        }
+    }
+}
+
+/// Implement `ToTvf` trait for generic tuples
+macro_rules! impl_to_tvf_tuple {
+    ( $($index:tt => $F:ident),+ ) => {
+        impl<T: Tvf, $($F),+> ToTvf<T> for ($($F),+)
+            where $( $F: ToField<T> ),+
+        {
+            fn to_tvf(&self, msg: &mut T) {
+                $(
+                    self.$index.to_field($index + 1, msg);
+                )+
+            }
+        }
+    };
+}
+impl_to_tvf_tuple![ 0 => F0, 1 => F1 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11 ];
+impl_to_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11, 12 => F12 ];
 
 // MARK: IntoField
 
@@ -164,35 +217,35 @@ impl_into_field![ NaiveDateTime ; put_datetime ];
 
 impl<T: Tvf> IntoField<T> for &str {
     #[inline]
-    fn into_field(self, id: usize, msg: &mut T){
+    fn into_field(self, id: usize, msg: &mut T) {
         msg.put_string(id, self);
     }
 }
 
 impl<T: Tvf> IntoField<T> for String {
     #[inline]
-    fn into_field(self, id: usize, msg: &mut T){
+    fn into_field(self, id: usize, msg: &mut T) {
         msg.put_string(id, self);
     }
 }
 
 impl<T: Tvf, const S: usize> IntoField<T> for [u8; S] {
     #[inline]
-    fn into_field(self, id: usize, msg: &mut T){
+    fn into_field(self, id: usize, msg: &mut T) {
         msg.put_bytes(id, Bytes::from_owner(self));
     }
 }
 
 impl<T: Tvf> IntoField<T> for &[u8] {
     #[inline]
-    fn into_field(self, id: usize, msg: &mut T){
+    fn into_field(self, id: usize, msg: &mut T) {
         msg.put_bytes(id, Bytes::copy_from_slice(self));
     }
 }
 
 impl<T: Tvf> IntoField<T> for Bytes {
     #[inline]
-    fn into_field(self, id: usize, msg: &mut T){
+    fn into_field(self, id: usize, msg: &mut T) {
         msg.put_bytes(id, self);
     }
 }
@@ -208,13 +261,57 @@ impl<T: Tvf> IntoField<T> for T {
 /// Insert the field into the buffer if its value is set
 impl<T: Tvf, F: IntoField<T>> IntoField<T> for Option<F> {
     #[inline]
-    fn into_field(self, id: usize, msg: &mut T){
+    fn into_field(self, id: usize, msg: &mut T) {
         if let Some(field) = self {
             field.into_field(id, msg);
         }
     }
 }
 
+/// Convert a vector of fields into a TVF message
+impl<T: Tvf, F: IntoField<T>> IntoTvf<T> for Vec<F> {
+    fn into_tvf(self, msg: &mut T) {
+        for (i, f) in self.into_iter().enumerate() {
+            f.into_field(i + 1, msg);
+        }
+    }
+}
+
+/// Convert a list of fields into a TVF message
+impl<T: Tvf, F: IntoField<T>, const S: usize> IntoTvf<T> for [F; S] {
+    fn into_tvf(self, msg: &mut T) {
+        for (i, f) in self.into_iter().enumerate() {
+            f.into_field(i + 1, msg);
+        }
+    }
+}
+
+/// Implement `IntoTvf` trait for generic tuples
+macro_rules! impl_into_tvf_tuple {
+    ( $($index:tt => $F:ident),+ ) => {
+        impl<T: Tvf, $($F),+> IntoTvf<T> for ($($F),+)
+            where $( $F: IntoField<T> ),+
+        {
+            fn into_tvf(self, msg: &mut T) {
+                $(
+                    self.$index.into_field($index + 1, msg);
+                )+
+            }
+        }
+    };
+}
+impl_into_tvf_tuple![ 0 => F0, 1 => F1 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11 ];
+impl_into_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11, 12 => F12 ];
 
 // MARK: FromField
 
@@ -293,6 +390,71 @@ impl<T: Tvf, F: FromField<T>> FromField<T> for Option<F> {
     }
 }
 
+/// Extract a vector of fields from a TVF message
+impl<T: Tvf, F: FromField<T>> FromTvf<T> for Vec<F> {
+    fn from_tvf(msg: &T) -> Result<Self, TvfError> {
+        // Collect fields into a vector
+        let count = msg.len();
+        let mut vector = Vec::with_capacity(count);
+        for id in 1..=count {
+            vector.push(F::from_field(msg, id)?);
+        }
+        Ok(vector)
+    }
+}
+
+/// Extract a list of fields from a TVF message
+impl<T: Tvf, F: FromField<T>, const S: usize> FromTvf<T> for [F; S] {
+    fn from_tvf(msg: &T) -> Result<Self, TvfError> {
+        // If the message contains less fields than the array we want to generate,
+        // we can already tell that extracting the list of fields will fail.
+        if msg.len() < S {
+            Err(TvfError::ConvertionError(format!(
+                "TVF message of length {} does not contains enough fields to populate an array for {} elements",
+                msg.len(),
+                S
+            )))
+        } else {
+            // Collect fields into a vector
+            let mut array = Vec::with_capacity(S);
+            for id in 1..=S {
+                array.push(F::from_field(msg, id)?);
+            }
+            // Convert the vector into a fixed size array
+            array.try_into().map_err(|_| {
+                TvfError::ConvertionError("Failed to convert vector into array".to_string())
+            })
+        }
+    }
+}
+
+/// Implement `FromTvf` trait for generic tuples
+macro_rules! impl_from_tvf_tuple {
+    ( $($index:tt => $F:ident),+ ) => {
+        impl<T: Tvf, $($F),+> FromTvf<T> for ($($F),+)
+            where $( $F: FromField<T> ),+
+        {
+            fn from_tvf(msg: &T) -> Result<Self, TvfError> {
+                Ok(($(
+                    $F::from_field(msg, $index + 1)?
+                ),+))
+            }
+        }
+    };
+}
+impl_from_tvf_tuple![ 0 => F0, 1 => F1 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11 ];
+impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11, 12 => F12 ];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,7 +483,7 @@ mod tests {
             msg.put_string(3, self.c);
         }
     }
-    
+
     impl<T: Tvf> FromTvf<T> for A {
         fn from_tvf(msg: &T) -> Result<Self, TvfError> {
             let a = msg.get_unsigned(1)?;
