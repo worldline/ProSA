@@ -20,6 +20,7 @@ syn = { version = "3", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
 chrono.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 bytes.workspace = true

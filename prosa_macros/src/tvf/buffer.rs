@@ -114,7 +114,7 @@ pub(crate) fn generate_map(buffer_type: &Ident, content: &Group) -> Result<Token
     let token_stream = entries.iter().map(|(key, tokens, value_type)| {
         let put_method = TokenStream::from(value_type);
         quote! [
-            <#buffer_type as ::prosa_utils::msg::tvf::Tvf>::#put_method(&mut __map_buffer, (#key) as usize, #tokens);
+            <#buffer_type as prosa_utils::msg::tvf::Tvf>::#put_method(&mut __map_buffer, (#key) as usize, #tokens);
         ]
     });
 
