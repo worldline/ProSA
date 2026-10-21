@@ -37,19 +37,22 @@ impl From<TvfError> for syn::Error {
     }
 }
 
-pub(crate) fn impl_derive_to_tvf(input: &DeriveInput) -> Result<TokenStream, TvfError> {
+pub(crate) fn impl_derive_to_tvf(
+    input: &DeriveInput,
+    owned: bool,
+) -> Result<TokenStream, TvfError> {
     match &input.data {
         // Implement for struct
         Data::Struct(data) => {
-            let tokens =
-                TvfStruct::new(&input.ident, &input.attrs, &input.generics, data)?.impl_to_tvf();
+            let tokens = TvfStruct::new(&input.ident, &input.attrs, &input.generics, data)?
+                .impl_to_tvf(owned);
             Ok(encapsulate(&tokens))
         }
 
         // Implement for enum without payload
         Data::Enum(data) => {
             let tokens =
-                TvfEnum::new(&input.ident, &input.attrs, &input.generics, data)?.impl_to_tvf();
+                TvfEnum::new(&input.ident, &input.attrs, &input.generics, data)?.impl_to_tvf(owned);
             Ok(encapsulate(&tokens))
         }
         _ => Err(TvfError::Union),

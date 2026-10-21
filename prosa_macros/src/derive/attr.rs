@@ -190,6 +190,9 @@ pub(crate) struct AttrField {
     /// Override default `to_tvf` implementation
     pub custom_to_tvf: Option<Path>,
 
+    /// Override default `into_tvf` implementation
+    pub custom_into_tvf: Option<Path>,
+
     /// Override default `from_tvf` implementation
     pub custom_from_tvf: Option<Path>,
 }
@@ -198,6 +201,7 @@ impl AttrField {
     pub(crate) fn identify(attrs: &[Attribute]) -> Result<Self, AttrError> {
         let mut field_id = None;
         let mut custom_to_tvf = None;
+        let mut custom_into_tvf = None;
         let mut custom_from_tvf = None;
 
         // Iterate over all the attributes of the field and only
@@ -220,6 +224,9 @@ impl AttrField {
                             "to_tvf" => {
                                 custom_to_tvf = Some(path_from_expr(&name_value.value)?);
                             }
+                            "into_tvf" => {
+                                custom_into_tvf = Some(path_from_expr(&name_value.value)?);
+                            }
                             "from_tvf" => {
                                 custom_from_tvf = Some(path_from_expr(&name_value.value)?);
                             }
@@ -238,6 +245,7 @@ impl AttrField {
         Ok(Self {
             field_id,
             custom_to_tvf,
+            custom_into_tvf,
             custom_from_tvf,
         })
     }

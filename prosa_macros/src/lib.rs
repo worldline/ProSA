@@ -132,7 +132,17 @@ pub fn tvf(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ToTvf, attributes(tvf))]
 pub fn derive_to_tvf(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    match derive::impl_derive_to_tvf(&input) {
+    match derive::impl_derive_to_tvf(&input, false) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => syn::Error::from(err).to_compile_error().into(),
+    }
+}
+
+/// Implements `IntoTvf` derive macro
+#[proc_macro_derive(IntoTvf, attributes(tvf))]
+pub fn derive_into_tvf(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    match derive::impl_derive_to_tvf(&input, true) {
         Ok(tokens) => tokens.into(),
         Err(err) => syn::Error::from(err).to_compile_error().into(),
     }
