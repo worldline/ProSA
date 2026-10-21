@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod macro_tests {
-    use prosa_macros::{FromTvf, ToTvf, tvf};
+    use prosa_macros::{FromTvf, IntoTvf, ToTvf, tvf};
     use prosa_utils::msg::{
         simple_string_tvf::SimpleStringTvf,
-        tvf::{FromField, FromTvf, ToField, ToTvf, Tvf},
+        tvf::{FromTvf, IntoTvf, ToTvf},
     };
 
     /// Define fields' identifier as constants
     const MY_FIELD: usize = 100;
 
-    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf)]
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
     struct A {
         a: u32,
 
@@ -20,45 +20,11 @@ mod macro_tests {
         c: String,
     }
 
-    // TODO: to be implemented by derive macro
-    impl<__TVF: Tvf + Clone> FromField<__TVF> for A {
-        fn from_field(msg: &__TVF, id: usize) -> Result<Self, prosa_utils::msg::tvf::TvfError> {
-            let sub = msg.get_buffer(id)?;
-            A::from_tvf(sub.as_ref())
-        }
-    }
-
-    // TODO: to be implemented by derive macro
-    impl<__TVF: Tvf + Default> ToField<__TVF> for A {
-        fn to_field(&self, id: usize, msg: &mut __TVF) {
-            let mut sub = __TVF::default();
-            self.to_tvf(&mut sub);
-            msg.put_buffer(id, sub);
-        }
-    }
-
-    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf)]
+    #[derive(Debug, PartialEq, Clone, FromTvf, IntoTvf, ToTvf)]
     #[tvf(tag_id = MY_FIELD, tag_type = "string")]
     enum B {
         C,
         D { a: u32, b: f32 },
-    }
-
-    // TODO: to be implemented by derive macro
-    impl<__TVF: Tvf + Clone> FromField<__TVF> for B {
-        fn from_field(msg: &__TVF, id: usize) -> Result<Self, prosa_utils::msg::tvf::TvfError> {
-            let sub = msg.get_buffer(id)?;
-            B::from_tvf(sub.as_ref())
-        }
-    }
-
-    // TODO: to be implemented by derive macro
-    impl<__TVF: Tvf + Default> ToField<__TVF> for B {
-        fn to_field(&self, id: usize, msg: &mut __TVF) {
-            let mut sub = __TVF::default();
-            self.to_tvf(&mut sub);
-            msg.put_buffer(id, sub);
-        }
     }
 
     #[derive(Debug, PartialEq, FromTvf, ToTvf)]

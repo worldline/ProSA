@@ -1,19 +1,19 @@
 use crate::derive::{
-    ast::{TvfEnum, TvfField, TvfFields, TvfStruct, TvfVariant, extend_generics},
+    ast::{ImplTrait, TvfEnum, TvfField, TvfFields, TvfStruct, TvfVariant, extend_generics},
     attr::TagType,
 };
 use proc_macro2::TokenStream;
 use quote::{ToTokens as _, format_ident, quote};
-use syn::{Ident, Index};
+use syn::{Generics, Ident, Index};
 
-// MARK: ToTvf
+// MARK: ToTvf / IntoTvf
 
 impl<'f> TvfEnum<'f> {
-    pub(crate) fn impl_to_tvf(&self) -> TokenStream {
+    pub(crate) fn impl_to_tvf(&self, owned: bool) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
         let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), false);
+            extend_generics(self.generics.clone(), ImplTrait::To, false);
 
         // handle all cases of the enumeration
         let decl_discris = self.decl_discris(self.attr.tag_type, true);
@@ -27,7 +27,7 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_to_tvf();
+            let tokens = variant.fields.impl_to_tvf(owned);
 
             cases.push(quote! [
                 Self::#var_ident #fields => {
@@ -44,7 +44,7 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_to_tvf();
+            let tokens = variant.fields.impl_to_tvf(owned);
 
             // Add the variant as a regular entry in the store_on list
             cases.push(quote! [
@@ -55,44 +55,71 @@ impl<'f> TvfEnum<'f> {
             ]);
         }
 
-        quote![
-            impl #impl_generics __tvf::ToTvf<__TVF> for #type_name #ty_generics #where_clause {
-                fn to_tvf(&self, __msg: &mut __TVF) {
-                    #decl_discris
-                    match self { #(#cases),* }
+        let main_trait = if owned {
+            quote! {
+                impl #impl_generics __tvf::IntoTvf<__TVF> for #type_name #ty_generics #where_clause {
+                    fn into_tvf(self, __msg: &mut __TVF) {
+                        #decl_discris
+                        match self { #(#cases),* }
+                    }
                 }
             }
-        ]
+        } else {
+            quote! {
+                impl #impl_generics __tvf::ToTvf<__TVF> for #type_name #ty_generics #where_clause {
+                    fn to_tvf(&self, __msg: &mut __TVF) {
+                        #decl_discris
+                        match self { #(#cases),* }
+                    }
+                }
+            }
+        };
+
+        let field_trait = impl_to_field(type_name, self.generics.clone(), owned);
+        quote! { #main_trait #field_trait }
     }
 }
 
 impl<'f> TvfStruct<'f> {
-    pub(crate) fn impl_to_tvf(&self) -> TokenStream {
+    pub(crate) fn impl_to_tvf(&self, owned: bool) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
         let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), false);
+            extend_generics(self.generics.clone(), ImplTrait::To, false);
 
         // (de)structure the type
         let fields = self.fields.structuring();
-        let tokens = self.fields.impl_to_tvf();
+        let tokens = self.fields.impl_to_tvf(owned);
 
-        quote![
-            impl #impl_generics __tvf::ToTvf<__TVF> for #type_name #ty_generics #where_clause {
-                fn to_tvf(&self, __msg: &mut __TVF) {
-                    let Self #fields = self;
-                    #tokens
+        let main_trait = if owned {
+            quote! {
+                impl #impl_generics __tvf::IntoTvf<__TVF> for #type_name #ty_generics #where_clause {
+                    fn into_tvf(self, __msg: &mut __TVF) {
+                        let Self #fields = self;
+                        #tokens
+                    }
                 }
             }
-        ]
+        } else {
+            quote! {
+                impl #impl_generics __tvf::ToTvf<__TVF> for #type_name #ty_generics #where_clause {
+                    fn to_tvf(&self, __msg: &mut __TVF) {
+                        let Self #fields = self;
+                        #tokens
+                    }
+                }
+            }
+        };
+        let field_trait = impl_to_field(type_name, self.generics.clone(), owned);
+        quote! { #main_trait #field_trait }
     }
 }
 
 impl<'f> TvfFields<'f> {
     /// Generate tokens for ToTvf implementation
-    pub(crate) fn impl_to_tvf(&self) -> TokenStream {
+    pub(crate) fn impl_to_tvf(&self, owned: bool) -> TokenStream {
         // Collect tokens
         let len = self.fields.len();
         let decls = self.decl_field_ids();
@@ -103,18 +130,58 @@ impl<'f> TvfFields<'f> {
             let ty = &field.field.ty;
             let ident = field.tmp_ident();
 
-            // Select "to_tvf" function
-            let f = if let Some(func) = &field.attr.custom_to_tvf {
-                quote![ #func(&#ident, __msg); ]
+            let f = if owned {
+                // Select "into_tvf" function
+                if let Some(func) = &field.attr.custom_into_tvf {
+                    quote![ #func(#ident, __msg); ]
+                } else {
+                    let id = field.ident_field_id();
+                    quote![ <#ty as __tvf::IntoField<__TVF>>::into_field(#ident, #id, __msg); ]
+                }
             } else {
-                let id = field.ident_field_id();
-                quote![ <#ty as __tvf::ToField<__TVF>>::to_field(&#ident, #id, __msg); ]
+                // Select "to_tvf" function
+                if let Some(func) = &field.attr.custom_to_tvf {
+                    quote![ #func(&#ident, __msg); ]
+                } else {
+                    let id = field.ident_field_id();
+                    quote![ <#ty as __tvf::ToField<__TVF>>::to_field(&#ident, #id, __msg); ]
+                }
             };
             tokens.push(f);
         }
 
         // return tokens
         quote![ #decls #(#tokens)* ]
+    }
+}
+
+fn impl_to_field(type_name: &Ident, generics: Generics, owned: bool) -> TokenStream {
+    if owned {
+        let [impl_generics, ty_generics, where_clause] =
+            extend_generics(generics, ImplTrait::Into, true);
+
+        quote! {
+            impl #impl_generics __tvf::IntoField<__TVF> for #type_name #ty_generics #where_clause {
+                fn into_field(self, __id: usize, __msg: &mut __TVF) {
+                    let mut __buffer = __TVF::default();
+                    self.into_tvf(&mut __buffer);
+                    __msg.put_buffer(__id, __buffer);
+                }
+            }
+        }
+    } else {
+        let [impl_generics, ty_generics, where_clause] =
+            extend_generics(generics, ImplTrait::To, true);
+
+        quote! {
+            impl #impl_generics __tvf::ToField<__TVF> for #type_name #ty_generics #where_clause {
+                fn to_field(&self, __id: usize, __msg: &mut __TVF) {
+                    let mut __buffer = __TVF::default();
+                    self.to_tvf(&mut __buffer);
+                    __msg.put_buffer(__id, __buffer);
+                }
+            }
+        }
     }
 }
 
@@ -125,7 +192,7 @@ impl<'f> TvfEnum<'f> {
         // Prepare tokens
         let type_name = self.type_ident;
         let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), true);
+            extend_generics(self.generics.clone(), ImplTrait::From, false);
 
         // handle all cases of the enumeration
         let decl_discris = self.decl_discris(self.attr.tag_type, false);
@@ -184,7 +251,7 @@ impl<'f> TvfEnum<'f> {
             TokenStream::new()
         };
 
-        quote![
+        let main_trait = quote! {
             impl #impl_generics __tvf::FromTvf<__TVF> for #type_name #ty_generics #where_clause {
                 fn from_tvf(__msg: &__TVF) -> ::core::result::Result<Self, __tvf::TvfError>
                 where
@@ -199,7 +266,9 @@ impl<'f> TvfEnum<'f> {
                     }
                 }
             }
-        ]
+        };
+        let field_trait = impl_from_field(type_name, self.generics.clone());
+        quote! { #main_trait #field_trait }
     }
 }
 
@@ -210,13 +279,13 @@ impl<'f> TvfStruct<'f> {
 
         // add `T: Tvf` bounds on generics
         let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), true);
+            extend_generics(self.generics.clone(), ImplTrait::From, false);
 
         // (de)structure the type
         let fields = self.fields.structuring();
         let tokens = self.fields.impl_from_tvf();
 
-        quote![
+        let main_trait = quote! {
             impl #impl_generics __tvf::FromTvf<__TVF> for #type_name #ty_generics #where_clause {
                 fn from_tvf(__msg: &__TVF) -> ::core::result::Result<Self, __tvf::TvfError>
                 where
@@ -226,7 +295,9 @@ impl<'f> TvfStruct<'f> {
                     Ok(Self #fields)
                 }
             }
-        ]
+        };
+        let field_trait = impl_from_field(type_name, self.generics.clone());
+        quote! { #main_trait #field_trait }
     }
 }
 
@@ -255,6 +326,20 @@ impl<'f> TvfFields<'f> {
 
         // return tokens
         quote![ #decls #(#tokens)* ]
+    }
+}
+
+fn impl_from_field(type_name: &Ident, generics: Generics) -> TokenStream {
+    let [impl_generics, ty_generics, where_clause] =
+        extend_generics(generics, ImplTrait::From, true);
+
+    quote! {
+        impl #impl_generics __tvf::FromField<__TVF> for #type_name #ty_generics #where_clause {
+            fn from_field(__msg: &__TVF, __id: usize) -> Result<Self, __tvf::TvfError> {
+                let __buffer = __msg.get_buffer(__id)?;
+                <Self as __tvf::FromTvf<__TVF>>::from_tvf(__buffer.as_ref())
+            }
+        }
     }
 }
 

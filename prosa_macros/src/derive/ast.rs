@@ -176,10 +176,22 @@ impl<'f> TvfFields<'f> {
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImplTrait {
+    To,
+    Into,
+    From,
+}
+
 /// Add the generic bound `__TVF: __tvf::Tvf` to an impl-block.
 /// Indicate if we are implementing the `FromTvf` trait or the `ToTvf` trait.
 /// Output [ImplGenerics, TypeGenerics, WhereClause]
-pub(crate) fn extend_generics(mut generics: Generics, impl_from: bool) -> [TokenStream; 3] {
+pub(crate) fn extend_generics(
+    mut generics: Generics,
+    impl_trait: ImplTrait,
+    impl_field: bool,
+) -> [TokenStream; 3] {
     // Pick current type's generics and where clause as is
     let (_, type_g, _) = generics.split_for_impl();
     let type_g = quote![ #type_g ];
@@ -187,26 +199,48 @@ pub(crate) fn extend_generics(mut generics: Generics, impl_from: bool) -> [Token
     // For each generic type, introduce a `FromField` or `ToField` trait bound.
     let count = generics.params.len();
     let mut bounds = Vec::with_capacity(count);
-    if impl_from {
-        // Add `FromField` trait bound to each generic type
-        for param in generics.params.iter() {
-            if let GenericParam::Type(gtype) = param {
-                let gtype = &gtype.ident;
-                bounds.push(parse_quote![ #gtype: __tvf::FromField<__TVF> ]);
+    match impl_trait {
+        ImplTrait::To => {
+            // Add `ToField` trait bound to each generic type
+            for param in generics.params.iter() {
+                if let GenericParam::Type(gtype) = param {
+                    let gtype = &gtype.ident;
+                    bounds.push(parse_quote![ #gtype: __tvf::ToField<__TVF> ]);
+                }
             }
         }
-    } else {
-        // Add `ToField` trait bound to each generic type
-        for param in generics.params.iter() {
-            if let GenericParam::Type(gtype) = param {
-                let gtype = &gtype.ident;
-                bounds.push(parse_quote![ #gtype: __tvf::ToField<__TVF> ]);
+        ImplTrait::Into => {
+            // Add `ToField` trait bound to each generic type
+            for param in generics.params.iter() {
+                if let GenericParam::Type(gtype) = param {
+                    let gtype = &gtype.ident;
+                    bounds.push(parse_quote![ #gtype: __tvf::IntoField<__TVF> ]);
+                }
+            }
+        }
+        ImplTrait::From => {
+            // Add `FromField` trait bound to each generic type
+            for param in generics.params.iter() {
+                if let GenericParam::Type(gtype) = param {
+                    let gtype = &gtype.ident;
+                    bounds.push(parse_quote![ #gtype: __tvf::FromField<__TVF> ]);
+                }
             }
         }
     }
 
     // Add extra `__TVF` generics and force a `Tvf` trait bound
-    generics.params.push(parse_quote![ __TVF: __tvf::Tvf ]);
+    let extra_bound = if impl_field {
+        match impl_trait {
+            ImplTrait::To | ImplTrait::Into => quote! { + ::core::default::Default },
+            ImplTrait::From => quote! { + ::core::clone::Clone },
+        }
+    } else {
+        TokenStream::new()
+    };
+    generics
+        .params
+        .push(parse_quote![ __TVF: __tvf::Tvf #extra_bound ]);
     let (impl_g, _, _) = generics.split_for_impl();
     let impl_g = quote![ #impl_g ];
 
