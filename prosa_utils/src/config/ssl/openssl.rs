@@ -36,7 +36,7 @@ use openssl::{
 
 use crate::config::{
     ConfigError, os_country,
-    ssl::{SslConfig, SslConfigContext, SslStore, Store},
+    ssl::{SslConfig, SslConfigContext, SslContextBuild, SslStore, Store},
 };
 
 impl SslStore<X509, X509Store> for Store {
@@ -44,7 +44,11 @@ impl SslStore<X509, X509Store> for Store {
         if path.is_file() {
             match &path.extension().and_then(OsStr::to_str) {
                 Some("pem" | "crt") => match fs::read(path) {
-                    Ok(pem_file) => Ok(vec![X509::from_pem(&pem_file)?]),
+                    // Every certificate of a bundle, and none is an error as it was for a single one
+                    Ok(pem_file) => match X509::stack_from_pem(&pem_file)? {
+                        certs if certs.is_empty() => Ok(vec![X509::from_pem(&pem_file)?]),
+                        certs => Ok(certs),
+                    },
                     Err(io) => Err(ConfigError::IoFile(
                         path.to_str().unwrap_or_default().into(),
                         io,
@@ -339,6 +343,11 @@ where
         context_builder.set_certificate(&cert_x509)?;
     }
 
+    // A certificate renewed before its key is a mismatch, it must fail rather than be served
+    if is_server || config.pkcs12.is_some() || (config.cert.is_some() && config.key.is_some()) {
+        context_builder.check_private_key()?;
+    }
+
     if let Some(store) = &config.store {
         context_builder.set_cert_store(store.get_store()?);
         if is_server {
@@ -471,6 +480,22 @@ impl SslConfigContext<SslConnectorBuilder, SslAcceptorBuilder> for SslConfig {
     }
 }
 
+impl SslContextBuild for openssl::ssl::SslConnector {
+    fn build(config: &SslConfig, _host: Option<&str>) -> std::io::Result<Self> {
+        let builder: openssl::ssl::SslConnectorBuilder = config.init_tls_client_context()?;
+        Ok(builder.build())
+    }
+}
+
+impl SslContextBuild for openssl::ssl::SslAcceptor {
+    fn build(config: &SslConfig, host: Option<&str>) -> std::io::Result<Self> {
+        config
+            .init_tls_server_context(host)
+            .map(|builder: openssl::ssl::SslAcceptorBuilder| builder.build())
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,5 +583,80 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
         // Check for self signed certificate
         assert!(ssl_acceptor.context().private_key().is_some());
         assert!(ssl_acceptor.context().certificate().is_some());
+    }
+
+    #[test]
+    fn rejects_mismatched_certificate_and_key() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir().join(format!(
+            "prosa-mismatched-key-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir)?;
+        let first = SslConfig::default().init_tls_server_context(None)?.build();
+        let second = SslConfig::default().init_tls_server_context(None)?.build();
+        let cert = dir.join("cert.pem");
+        let key = dir.join("key.pem");
+        fs::write(
+            &cert,
+            first
+                .context()
+                .certificate()
+                .expect("certificate")
+                .to_pem()?,
+        )?;
+        fs::write(
+            &key,
+            second
+                .context()
+                .private_key()
+                .expect("key")
+                .private_key_to_pem_pkcs8()?,
+        )?;
+        let config = SslConfig::new_cert_key(
+            cert.to_string_lossy().into_owned(),
+            key.to_string_lossy().into_owned(),
+            None,
+        );
+        let result = config.init_tls_server_context(None);
+        fs::remove_dir_all(dir)?;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn store_loads_every_certificate_of_a_bundle() -> Result<(), Box<dyn std::error::Error>> {
+        let path = std::env::temp_dir().join(format!(
+            "prosa-store-bundle-{}-{}.pem",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        let first = SslConfig::default().init_tls_server_context(None)?.build();
+        let second = SslConfig::default().init_tls_server_context(None)?.build();
+        let mut pem = first
+            .context()
+            .certificate()
+            .expect("certificate")
+            .to_pem()?;
+        pem.extend(
+            second
+                .context()
+                .certificate()
+                .expect("certificate")
+                .to_pem()?,
+        );
+        fs::write(&path, pem)?;
+        let certs = Store::get_file_certificates(&path)?;
+        assert_eq!(2, certs.len());
+
+        // A file caught half written is no store
+        fs::write(&path, "half written")?;
+        assert!(Store::get_file_certificates(&path).is_err());
+        fs::remove_file(path)?;
+        Ok(())
     }
 }

@@ -10,7 +10,7 @@ use std::{
 };
 
 #[cfg(feature = "openssl")]
-use prosa_utils::config::ssl::SslConfigContext;
+use super::ssl::SslContextCache;
 use prosa_utils::config::{ssl::SslConfig, url_authentication};
 
 use serde::{Deserialize, Serialize};
@@ -155,77 +155,9 @@ impl Stream {
         Ok(Stream::Tcp(TcpStream::connect(addr).await?))
     }
 
-    #[cfg(feature = "openssl")]
-    /// Method to create an SSL stream from a TCP stream
-    async fn create_openssl<S>(
-        tcp_stream: S,
-        ssl_connector: &openssl::ssl::SslConnector,
-        domain: &str,
-    ) -> Result<tokio_openssl::SslStream<S>, io::Error>
-    where
-        S: AsyncRead + AsyncWrite + std::marker::Unpin,
-    {
-        let ssl = ssl_connector.configure()?.into_ssl(domain)?;
-        let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream)?;
-        if let Err(e) = Pin::new(&mut stream).connect().await {
-            return Err(io::Error::new(
-                io::ErrorKind::Interrupted,
-                format!("Can't connect the OpenSSL socket `{e}`"),
-            ));
-        }
-
-        Ok(stream)
-    }
-
-    #[cfg(feature = "openssl")]
-    /// Connect an OpenSSL socket to a distant
-    ///
-    #[doc = simple_mermaid::mermaid!("diagrams/stream_openssl.mmd")]
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use url::Url;
-    /// use prosa::io::{
-    ///     SslConfig,
-    ///     SslConfigContext,
-    ///     stream::Stream,
-    /// };
-    ///
-    /// async fn connecting() -> Result<(), io::Error> {
-    ///     let ssl_config = SslConfig::default();
-    ///     if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-    ///         let ssl_context = ssl_context_builder.build();
-    ///         let stream: Stream = Stream::connect_openssl(&Url::parse("worldline.com:443").unwrap(), &ssl_context).await?;
-    ///
-    ///         // Handle the stream like any tokio stream
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn connect_openssl(
-        url: &Url,
-        ssl_context: &openssl::ssl::SslConnector,
-    ) -> Result<Stream, io::Error> {
-        let addrs = super::lookup_url(url).await?;
-        Ok(Stream::OpenSsl(
-            Self::create_openssl(
-                TcpStream::connect(&*addrs).await?,
-                ssl_context,
-                url.host_str().ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("Can't retrieve host from url `{url}` for ssl"),
-                    )
-                })?,
-            )
-            .await?,
-        ))
-    }
-
     #[cfg(feature = "http-proxy")]
     /// Method to connect a TCP stream through an HTTP proxy
-    async fn connect_http_proxy(
+    pub(super) async fn connect_http_proxy(
         host: &str,
         port: u16,
         proxy: &Url,
@@ -285,49 +217,6 @@ impl Stream {
     ) -> Result<Stream, io::Error> {
         Ok(Stream::TcpHttpProxy(
             Self::connect_http_proxy(host, port, proxy).await?,
-        ))
-    }
-
-    #[cfg(all(feature = "openssl", feature = "http-proxy"))]
-    /// Connect an OpenSSL socket to a distant through an HTTP proxy
-    ///
-    #[doc = simple_mermaid::mermaid!("diagrams/stream_openssl_proxy.mmd")]
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use url::Url;
-    /// use prosa::io::{
-    ///     SslConfig,
-    ///     SslConfigContext,
-    ///     stream::Stream,
-    /// };
-    ///
-    /// async fn connecting() -> Result<(), io::Error> {
-    ///     let proxy_url = Url::parse("http://user:pwd@proxy:3128").unwrap();
-    ///     let ssl_config = SslConfig::default();
-    ///     if let Ok(ssl_context_builder) = ssl_config.init_tls_client_context() {
-    ///         let ssl_context = ssl_context_builder.build();
-    ///         let stream: Stream = Stream::connect_openssl_with_http_proxy("worldline.com", 443, &ssl_context, &proxy_url).await?;
-    ///
-    ///         // Handle the stream like any tokio stream
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub async fn connect_openssl_with_http_proxy(
-        host: &str,
-        port: u16,
-        ssl_connector: &openssl::ssl::SslConnector,
-        proxy: &Url,
-    ) -> Result<Stream, io::Error> {
-        Ok(Stream::OpenSslHttpProxy(
-            Self::create_openssl(
-                Self::connect_http_proxy(host, port, proxy).await?,
-                ssl_connector,
-                host,
-            )
-            .await?,
         ))
     }
 
@@ -704,7 +593,7 @@ impl From<tokio_openssl::SslStream<TcpStream>> for Stream {
 ///     Ok(())
 /// }
 /// ```
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct TargetSetting {
     /// Url of the target destination
     pub url: Url,
@@ -716,6 +605,19 @@ pub struct TargetSetting {
     #[serde(default = "TargetSetting::get_default_connect_timeout")]
     /// Timeout for socket connection in milliseconds
     pub connect_timeout: u64,
+    /// SSL context kept across connections, shared by the clones
+    #[cfg(feature = "openssl")]
+    #[serde(skip)]
+    pub(super) ssl_context: std::sync::Arc<SslContextCache<openssl::ssl::SslConnector>>,
+}
+
+impl PartialEq for TargetSetting {
+    fn eq(&self, other: &Self) -> bool {
+        self.url == other.url
+            && self.ssl == other.ssl
+            && self.proxy == other.proxy
+            && self.connect_timeout == other.connect_timeout
+    }
 }
 
 impl TargetSetting {
@@ -730,6 +632,8 @@ impl TargetSetting {
             ssl,
             proxy,
             connect_timeout: Self::get_default_connect_timeout(),
+            #[cfg(feature = "openssl")]
+            ssl_context: Default::default(),
         }
     }
 
@@ -745,7 +649,15 @@ impl TargetSetting {
 
     /// Setter of the SSL configuration of the target
     pub fn set_ssl(&mut self, ssl: Option<SslConfig>) {
-        self.ssl = ssl;
+        if self.ssl != ssl {
+            self.ssl = ssl;
+
+            // A context of its own, the clones keep the one built from their configuration
+            #[cfg(feature = "openssl")]
+            {
+                self.ssl_context = Default::default();
+            }
+        }
     }
 
     /// Method to set the ALPN protocols to negotiate.
@@ -767,7 +679,9 @@ impl TargetSetting {
     /// ```
     pub fn set_alpn(&mut self, alpn: Vec<String>) {
         if self.is_ssl() {
-            self.ssl.get_or_insert_default().set_alpn(alpn);
+            let mut ssl = self.ssl.clone().unwrap_or_default();
+            ssl.set_alpn(alpn);
+            self.set_ssl(Some(ssl));
         }
     }
 
@@ -799,6 +713,12 @@ impl TargetSetting {
     }
 
     /// Method to connect a ProSA stream to the remote target using the configuration
+    ///
+    /// The SSL context is built on the first connection, and kept for the next ones and shared
+    /// with the clones of the target. Its certificate files are watched: once one of them changes,
+    /// the connection is made right away with the current context while a new one is built in the
+    /// background for the connections that follow. Files that can't be read, caught half written,
+    /// are logged and the current context stays until they change again.
     pub async fn connect(&self) -> Result<Stream, io::Error> {
         #[cfg(target_family = "unix")]
         if self.url.scheme() == "unix" || self.url.scheme() == "file" {
@@ -815,23 +735,8 @@ impl TargetSetting {
             })?;
         }
 
-        // Built for every connection so a certificate rotated on disk applies to the next one.
-        // Reading the certificates blocks, so it's done on the blocking pool.
         #[cfg(feature = "openssl")]
-        let openssl_context = if self.is_ssl() {
-            let ssl_config = self.ssl.clone().unwrap_or_default();
-            Some(
-                tokio::task::spawn_blocking(move || {
-                    let ssl_context_builder: openssl::ssl::SslConnectorBuilder =
-                        SslConfigContext::init_tls_client_context(&ssl_config)?;
-                    Ok::<_, io::Error>(ssl_context_builder.build())
-                })
-                .await
-                .map_err(io::Error::other)??,
-            )
-        } else {
-            None
-        };
+        let openssl_context = self.ssl_connector().await?;
 
         #[cfg(not(feature = "openssl"))]
         if self.is_ssl() {
@@ -847,26 +752,7 @@ impl TargetSetting {
                 {
                     #[cfg(feature = "openssl")]
                     if let Some(ssl_cx) = openssl_context {
-                        return timeout(
-                            Duration::from_millis(self.connect_timeout),
-                            Stream::connect_openssl_with_http_proxy(
-                                self.url.host_str().unwrap_or_default(),
-                                self.url.port_or_known_default().unwrap_or_default(),
-                                &ssl_cx,
-                                proxy_url,
-                            ),
-                        )
-                        .await
-                        .map_err(|e| {
-                            io::Error::new(
-                                io::ErrorKind::TimedOut,
-                                format!(
-                                    "openssl with proxy timeout after {e} for {} -proxy {}",
-                                    self.get_safe_url(),
-                                    get_safe_url(proxy_url)
-                                ),
-                            )
-                        })?;
+                        return self.connect_ssl_with_http_proxy(&ssl_cx, proxy_url).await;
                     }
 
                     return timeout(
@@ -905,17 +791,7 @@ impl TargetSetting {
 
         #[cfg(feature = "openssl")]
         if let Some(ssl_cx) = openssl_context {
-            return timeout(
-                Duration::from_millis(self.connect_timeout),
-                Stream::connect_openssl(&self.url, &ssl_cx),
-            )
-            .await
-            .map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    format!("openssl timeout after {e} for {}", self.get_safe_url()),
-                )
-            })?;
+            return self.connect_ssl(&ssl_cx).await;
         }
 
         timeout(Duration::from_millis(self.connect_timeout), async {
@@ -939,6 +815,8 @@ impl From<Url> for TargetSetting {
             ssl: None,
             proxy: None,
             connect_timeout: Self::get_default_connect_timeout(),
+            #[cfg(feature = "openssl")]
+            ssl_context: Default::default(),
         }
     }
 }

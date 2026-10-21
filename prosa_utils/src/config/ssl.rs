@@ -1,9 +1,19 @@
 //! Definition of SSL configuration
 
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, io, path::Path, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt, io,
+    path::{Path, PathBuf},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 
 use super::ConfigError;
+use crate::file::FileWatch;
 
 #[cfg(feature = "config-openssl")]
 pub mod openssl;
@@ -207,7 +217,7 @@ pub trait SslConfigContext<C, S> {
 ///     Ok(())
 /// }
 /// ```
-#[derive(Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct SslConfig {
     /// SSL store certificate to verify the remote certificate
     store: Option<Store>,
@@ -230,6 +240,18 @@ pub struct SslConfig {
     #[serde(default = "SslConfig::default_ssl_timeout")]
     /// SSL operation timeout in milliseconds
     pub ssl_timeout: u64,
+    /// Changes of the certificate files, shared by the clones
+    #[serde(skip)]
+    reload: Arc<SslReload>,
+}
+
+/// Count of the changes of the files an [`SslConfig`] is read from
+#[derive(Default)]
+struct SslReload {
+    /// Bumped by the watch, which holds it rather than the whole state so nothing is cyclic
+    generation: Arc<AtomicU64>,
+    /// Armed by the first [`SslConfig::generation`], [`None`] when there is nothing to watch
+    watch: OnceLock<Option<FileWatch>>,
 }
 
 impl SslConfig {
@@ -253,6 +275,7 @@ impl SslConfig {
             alpn: Vec::default(),
             modern_security: Self::default_modern_security(),
             ssl_timeout: Self::default_ssl_timeout(),
+            reload: Arc::default(),
         }
     }
 
@@ -272,6 +295,7 @@ impl SslConfig {
             alpn: Vec::default(),
             modern_security: Self::default_modern_security(),
             ssl_timeout: Self::default_ssl_timeout(),
+            reload: Arc::default(),
         }
     }
 
@@ -287,6 +311,7 @@ impl SslConfig {
             alpn: Vec::default(),
             modern_security: Self::default_modern_security(),
             ssl_timeout: Self::default_ssl_timeout(),
+            reload: Arc::default(),
         }
     }
 
@@ -298,11 +323,96 @@ impl SslConfig {
     /// Setter of the store certificate
     pub fn set_store(&mut self, store: Store) {
         self.store = Some(store);
+
+        // Other files to watch, the clones keep watching the previous ones
+        self.reload = Arc::default();
     }
 
     /// Setter of the ALPN list send by the client, or order of ALPN accepted by the server
     pub fn set_alpn(&mut self, alpn: Vec<String>) {
         self.alpn = alpn;
+    }
+
+    /// Method to get the files an SSL context is read from: the PKCS12, or the certificate and its
+    /// key, and the store path, which can be a file, a directory or a glob pattern.
+    ///
+    /// A certificate without its key is left out: a server writes the certificate it signs there,
+    /// it doesn't read it. So are the system store and inline certificates, which no file holds.
+    ///
+    /// ```
+    /// use std::path::PathBuf;
+    /// use prosa_utils::config::ssl::{SslConfig, Store};
+    ///
+    /// let mut config = SslConfig::new_cert_key("cert.pem".into(), "cert.key".into(), None);
+    /// config.set_store(Store::File { path: "/etc/ssl/certs".into() });
+    /// assert_eq!(
+    ///     vec![PathBuf::from("cert.pem"), PathBuf::from("cert.key"), PathBuf::from("/etc/ssl/certs")],
+    ///     config.watch_paths()
+    /// );
+    /// assert!(SslConfig::new_self_cert("cert.pem".into()).watch_paths().is_empty());
+    /// ```
+    pub fn watch_paths(&self) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        if let Some(pkcs12) = &self.pkcs12 {
+            paths.push(PathBuf::from(pkcs12));
+        } else if let (Some(cert), Some(key)) = (&self.cert, &self.key) {
+            paths.push(PathBuf::from(cert));
+            paths.push(PathBuf::from(key));
+        }
+
+        if let Some(Store::File { path }) = &self.store {
+            paths.push(PathBuf::from(path));
+        }
+
+        paths
+    }
+
+    /// Method to get the generation of the files of [`SslConfig::watch_paths`], which grows every
+    /// time one of them changes. An SSL context built from the configuration is outdated once the
+    /// generation differs from the one read before building it.
+    ///
+    /// The first call starts watching the files, for this configuration and its clones, until the
+    /// last of them is dropped. The next calls only read an atomic, so it's cheap enough to call on
+    /// every connection.
+    ///
+    /// ```
+    /// use prosa_utils::config::ssl::SslConfig;
+    ///
+    /// let config = SslConfig::new_cert_key("cert.pem".into(), "cert.key".into(), None);
+    /// let generation = config.generation();
+    ///
+    /// // Shared by the clones
+    /// assert_eq!(generation, config.clone().generation());
+    /// ```
+    pub fn generation(&self) -> u64 {
+        self.reload.watch.get_or_init(|| {
+            let paths = self.watch_paths();
+            if paths.is_empty() {
+                return None;
+            }
+
+            let generation = self.reload.generation.clone();
+            FileWatch::new(paths, move |_| {
+                generation.fetch_add(1, Ordering::AcqRel);
+            })
+            .inspect_err(|err| log::warn!("Can't watch the certificates of {self:?}: {err}"))
+            .ok()
+        });
+
+        self.reload.generation.load(Ordering::Acquire)
+    }
+}
+
+impl PartialEq for SslConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.store == other.store
+            && self.pkcs12 == other.pkcs12
+            && self.cert == other.cert
+            && self.key == other.key
+            && self.passphrase == other.passphrase
+            && self.alpn == other.alpn
+            && self.modern_security == other.modern_security
+            && self.ssl_timeout == other.ssl_timeout
     }
 }
 
@@ -317,6 +427,7 @@ impl Default for SslConfig {
             alpn: Vec::default(),
             modern_security: Self::default_modern_security(),
             ssl_timeout: Self::default_ssl_timeout(),
+            reload: Arc::default(),
         }
     }
 }
@@ -333,6 +444,13 @@ impl fmt::Debug for SslConfig {
             .field("ssl_timeout", &self.ssl_timeout)
             .finish()
     }
+}
+
+/// SSL context that can be built from an [`SslConfig`], to be kept across connections
+pub trait SslContextBuild: Clone + Send + Sync + 'static {
+    /// Method to build the context from the files of the configuration. `host` is the name a
+    /// server context is signed for when it has no certificate to serve
+    fn build(config: &SslConfig, host: Option<&str>) -> io::Result<Self>;
 }
 
 #[cfg(feature = "config-openssl")]
@@ -488,5 +606,70 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
         assert!(debug.contains("key.pem"));
         assert!(!debug.contains("sensitive-passphrase"));
         assert!(!debug.contains("passphrase"));
+    }
+
+    #[test]
+    fn ssl_config_generation_follows_its_files() -> Result<(), Box<dyn std::error::Error>> {
+        use std::{fs, time::Instant};
+
+        let dir = std::env::temp_dir().join(format!(
+            "prosa-ssl-generation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        let store = dir.join("store");
+        fs::create_dir_all(&store)?;
+        let path = |path: &Path| path.to_string_lossy().into_owned();
+        let (cert, key) = (dir.join("cert.pem"), dir.join("cert.key"));
+        fs::write(&cert, "cert")?;
+        fs::write(&key, "key")?;
+        let mut config = SslConfig::new_cert_key(path(&cert), path(&key), None);
+        config.set_store(Store::File { path: path(&store) });
+
+        // Waits for the generation to move from `generation`, `None` if it doesn't
+        let next = |config: &SslConfig, generation: u64| {
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_secs(5) {
+                if config.generation() != generation {
+                    std::thread::sleep(Duration::from_millis(100));
+                    return Some(config.generation());
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            None
+        };
+
+        let mut generation = config.generation();
+        let clone = config.clone();
+        for file in [&cert, &key, &store.join("ca.crt")] {
+            fs::write(file, "rotated")?;
+            generation = next(&config, generation)
+                .ok_or_else(|| format!("{} wasn't seen changing", file.display()))?;
+            assert!(Arc::ptr_eq(&config.reload, &clone.reload));
+        }
+
+        // Another store is other files, the clones keep the ones they had
+        config.set_store(Store::System);
+        config.generation();
+        let clone_generation = clone.generation();
+        fs::write(store.join("ca.crt"), "rotated again")?;
+        assert!(next(&clone, clone_generation).is_some());
+        assert!(!Arc::ptr_eq(&config.reload, &clone.reload));
+
+        // A server writes the certificate it signs where a certificate without a key points, and
+        // neither the system store nor inline certificates are files
+        assert!(
+            SslConfig::new_self_cert(path(&cert))
+                .watch_paths()
+                .is_empty()
+        );
+        let mut inline = SslConfig::default();
+        inline.set_store(Store::Cert { certs: Vec::new() });
+        assert!(inline.watch_paths().is_empty());
+
+        fs::remove_dir_all(dir)?;
+        Ok(())
     }
 }

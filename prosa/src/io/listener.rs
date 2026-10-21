@@ -7,8 +7,9 @@ use std::{
 };
 
 use prosa_utils::config::ssl::SslConfig;
+
 #[cfg(feature = "openssl")]
-use prosa_utils::config::ssl::SslConfigContext as _;
+use super::ssl::SslContextCache;
 
 use serde::{Deserialize, Serialize};
 
@@ -20,9 +21,12 @@ use super::{SafeUrl, SocketAddr, get_safe_url, stream::Stream, url_is_ssl};
 
 /// SSL parameters a listener serves to the clients it accepts.
 ///
-/// Cheap to clone, because an OpenSSL context is reference counted, so an accept loop can hand one
-/// to the task that handshakes a client and go straight back to accepting. A client is served the
-/// parameters the listener held when it was accepted.
+/// Cheap to clone, so an accept loop can hand one to the task that handshakes a client and go
+/// straight back to accepting.
+///
+/// Parameters built from a [`ListenerSetting`] watch their certificate files, and the clones share
+/// what they read. Once one of the files changes, a handshake serves the current certificate right
+/// away while a new context is built in the background for the handshakes that follow.
 ///
 /// ```
 /// use tokio::io;
@@ -50,24 +54,17 @@ use super::{SafeUrl, SocketAddr, get_safe_url, stream::Stream, url_is_ssl};
 /// ```
 #[derive(Clone)]
 pub struct SslHandshaker {
+    /// Acceptor holding the certificate served to the clients, shared by the clones
     #[cfg(feature = "openssl")]
-    /// Acceptor holding the certificate served to the clients
-    acceptor: ::openssl::ssl::SslAcceptor,
+    pub(super) acceptor: std::sync::Arc<SslContextCache<::openssl::ssl::SslAcceptor>>,
+    /// Configuration and host the acceptor is built from, [`None`] when it was handed over built
+    #[cfg(feature = "openssl")]
+    pub(super) source: Option<std::sync::Arc<(SslConfig, Option<String>)>>,
     /// Timeout of the SSL handshake with a client
-    timeout: Duration,
+    pub(super) timeout: Duration,
 }
 
 impl SslHandshaker {
-    #[cfg(feature = "openssl")]
-    /// Method to create the SSL parameters served by a listener.
-    /// By default, the SSL handshake timeout is 3 seconds
-    pub fn new(acceptor: ::openssl::ssl::SslAcceptor, timeout: Option<Duration>) -> SslHandshaker {
-        SslHandshaker {
-            acceptor,
-            timeout: timeout.unwrap_or(StreamListener::DEFAULT_SSL_TIMEOUT),
-        }
-    }
-
     /// Getter of the timeout of the SSL handshake with a client
     pub fn ssl_timeout(&self) -> Duration {
         self.timeout
@@ -78,31 +75,7 @@ impl SslHandshaker {
     pub async fn handshake(&self, stream: Stream) -> Result<Stream, io::Error> {
         #[cfg(feature = "openssl")]
         {
-            let Stream::Tcp(tcp_stream) = stream else {
-                return Ok(stream);
-            };
-
-            let ssl = openssl::ssl::Ssl::new(self.acceptor.context())
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-            let mut stream = tokio_openssl::SslStream::new(ssl, tcp_stream)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-            if let Err(e) =
-                tokio::time::timeout(self.timeout, std::pin::Pin::new(&mut stream).accept())
-                    .await
-                    .map_err(|_| {
-                        io::Error::new(
-                            io::ErrorKind::TimedOut,
-                            format!(
-                                "SSL timeout[{} ms] for {stream:?}",
-                                self.timeout.as_millis()
-                            ),
-                        )
-                    })?
-            {
-                return Err(io::Error::other(format!("Can't accept the client: {e}")));
-            }
-
-            Ok(Stream::OpenSsl(stream))
+            self.handshake_openssl(stream).await
         }
 
         #[cfg(not(feature = "openssl"))]
@@ -121,10 +94,7 @@ impl fmt::Debug for SslHandshaker {
         let mut debug = f.debug_struct("SslHandshaker");
         debug.field("ssl_timeout", &self.timeout);
         #[cfg(feature = "openssl")]
-        debug.field(
-            "certificate",
-            &self.acceptor.context().certificate().map(|c| c.to_text()),
-        );
+        debug.field("certificate", &self.certificate_text());
         debug.finish()
     }
 }
@@ -213,42 +183,6 @@ impl StreamListener {
     /// ```
     pub async fn bind<A: ToSocketAddrs>(addr: A) -> Result<StreamListener, io::Error> {
         Ok(StreamListener::Tcp(TcpListener::bind(addr).await?))
-    }
-
-    #[cfg(feature = "openssl")]
-    /// Set an OpenSSL acceptor to accept SSL connections from clients
-    /// By default, the SSL connect timeout is 3 seconds
-    ///
-    #[doc = simple_mermaid::mermaid!("diagrams/listener_tls.mmd")]
-    ///
-    /// ```
-    /// use tokio::io;
-    /// use prosa::io::{
-    ///     listener::StreamListener,
-    ///     SslConfig,
-    ///     SslConfigContext,
-    /// };
-    ///
-    /// async fn accepting() -> Result<(), io::Error> {
-    ///     let ssl_acceptor = SslConfig::default().init_tls_server_context(None).unwrap().build();
-    ///     let stream_listener: StreamListener = StreamListener::bind("0.0.0.0:10000").await?.ssl_acceptor(ssl_acceptor, None);
-    ///
-    ///     loop {
-    ///         // The client SSL handshake will happen here
-    ///         let (stream, addr) = stream_listener.accept().await?;
-    ///
-    ///         // Handle the stream like any tokio stream
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub fn ssl_acceptor(
-        self,
-        ssl_acceptor: ::openssl::ssl::SslAcceptor,
-        ssl_timeout: Option<Duration>,
-    ) -> StreamListener {
-        self.set_handshaker(Some(SslHandshaker::new(ssl_acceptor, ssl_timeout)))
     }
 
     /// Getter of the SSL parameters served to a client accepted now, [`None`] on a plain listener.
@@ -347,8 +281,8 @@ impl StreamListener {
             StreamListener::Ssl(l, handshaker) => {
                 let (stream, addr) = l.accept().await?;
 
-                // Read after the accept, so a client that connects once the certificate has been
-                // rotated is served the new one
+                // Read after the accept, so a client that connects once the context rebuilt after
+                // a certificate rotation is served the new one
                 handshaker
                     .handshake(Stream::Tcp(stream))
                     .await
@@ -610,11 +544,9 @@ impl ListenerSetting {
     /// Method to build the SSL parameters this configuration serves, [`None`] when it listens
     /// without SSL.
     ///
-    /// The certificates are read again on every call, on the blocking pool, because [`SslConfig`]
-    /// holds their *paths*. Calling this is explicit: rebuild when the configuration changes or
-    /// when the certificate source reports a new version. The ProSA configuration watcher does not
-    /// watch certificate files, and a file rewritten at the same path does not change the parsed
-    /// configuration.
+    /// The certificates are read on every call, on the blocking pool. Build again when the
+    /// configuration changes; certificate files that change on disk are read again by the
+    /// handshaker on its own.
     ///
     /// Hand the result to [`StreamListener::set_handshaker`] to serve it without rebinding. It is
     /// built before the listener is touched, so a broken certificate leaves the listener serving
@@ -637,20 +569,12 @@ impl ListenerSetting {
 
         #[cfg(feature = "openssl")]
         {
-            let ssl_config = self.ssl.clone().unwrap_or_default();
-            let timeout = ssl_config.get_ssl_timeout();
-            let host = self.url.host_str().map(String::from);
-
-            let acceptor = tokio::task::spawn_blocking(move || {
-                ssl_config
-                    .init_tls_server_context(host.as_deref())
-                    .map(|ssl_context_builder| ssl_context_builder.build())
-            })
+            SslHandshaker::build(
+                self.ssl.clone().unwrap_or_default(),
+                self.url.host_str().map(String::from),
+            )
             .await
-            .map_err(io::Error::other)?
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-
-            Ok(Some(SslHandshaker::new(acceptor, Some(timeout))))
+            .map(Some)
         }
 
         #[cfg(not(feature = "openssl"))]
@@ -675,10 +599,11 @@ impl ListenerSetting {
     /// Method to bind the socket of the configuration and build the SSL parameters to serve on it,
     /// without attaching them to the listener.
     ///
-    /// Use this when the listener has to be shared, held in an [`Arc`](std::sync::Arc) by an accept
+    /// Use this when the listener has to be shared, held in an [`std::sync::Arc`] by an accept
     /// loop and by the tasks that handshake its clients, so [`StreamListener::set_handshaker`]
-    /// can't replace it. Rotating then means replacing the [`SslHandshaker`] returned here, and
-    /// because the listener never holds one there is no second copy of it to go stale.
+    /// can't replace it. A changed configuration then means replacing the [`SslHandshaker`]
+    /// returned here, and because the listener never holds one there is no second copy of it to go
+    /// stale. A certificate renewed on disk needs nothing: the handshaker reads it again on its own.
     ///
     /// The listener describes the socket, so it formats as `tcp://` and its
     /// [`StreamListener::handshaker`] is [`None`] even though the clients accepted on it are handed
@@ -768,12 +693,14 @@ impl fmt::Display for ListenerSetting {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    #[cfg(feature = "openssl")]
+    use prosa_utils::config::ssl::SslConfigContext as _;
 
     #[cfg(feature = "openssl")]
     /// Path of a test file no other test, and no other test run, writes to
-    fn unique_test_path(name: &str) -> std::path::PathBuf {
+    pub(crate) fn unique_test_path(name: &str) -> std::path::PathBuf {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -863,11 +790,14 @@ mod tests {
     }
 
     #[cfg(feature = "openssl")]
-    fn served_certificate(listener: &StreamListener) -> Vec<u8> {
+    pub(crate) fn served_certificate(listener: &StreamListener) -> Vec<u8> {
         listener
             .handshaker()
             .expect("The listener should accept SSL connections")
             .acceptor
+            .current()
+            .expect("The listener should hold an acceptor")
+            .0
             .context()
             .certificate()
             .expect("The acceptor should serve a certificate")
@@ -983,7 +913,7 @@ mod tests {
     }
 
     #[cfg(feature = "openssl")]
-    fn peer_certificate(stream: &Stream) -> Vec<u8> {
+    pub(crate) fn peer_certificate(stream: &Stream) -> Vec<u8> {
         let Stream::OpenSsl(ssl_stream) = stream else {
             panic!("The client should be connected over SSL");
         };
@@ -1054,6 +984,27 @@ mod tests {
         assert_ne!(certificate, peer_certificate(&connected?));
 
         Ok(())
+    }
+
+    /// Write a new self signed certificate and its key, each renamed over the previous file
+    #[cfg(feature = "openssl")]
+    pub(crate) fn write_certificate(cert_path: &std::path::Path, key_path: &std::path::Path) {
+        let signed_path = cert_path.with_extension("signed.pem");
+        let acceptor = SslConfig::new_self_cert(signed_path.to_string_lossy().into_owned())
+            .init_tls_server_context(Some("localhost"))
+            .expect("The certificate should be signed")
+            .build();
+        let key = acceptor
+            .context()
+            .private_key()
+            .expect("The certificate should have a key")
+            .private_key_to_pem_pkcs8()
+            .expect("The key should be written");
+
+        let staging = key_path.with_extension("staging");
+        std::fs::write(&staging, key).expect("The key should be written");
+        std::fs::rename(&staging, key_path).expect("The key should be replaced");
+        std::fs::rename(signed_path, cert_path).expect("The certificate should be replaced");
     }
 
     #[cfg(feature = "openssl")]
