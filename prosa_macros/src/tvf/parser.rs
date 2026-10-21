@@ -4,6 +4,7 @@ use num_traits::FromPrimitive;
 use proc_macro2::{
     Delimiter, Literal, Punct, Spacing, Span, TokenStream, TokenTree, token_stream::IntoIter,
 };
+use quote::TokenStreamExt;
 use std::{fmt::Display, iter::Peekable, str::FromStr};
 use syn::{Ident, parse_quote, spanned::Spanned};
 
@@ -15,10 +16,10 @@ pub(crate) struct TvfParser {
     /// Whole span of the block of tokens
     pub whole_span: Span,
 
-    /// Span of the last successfull token parsing
+    /// Span of the last successful token parsing
     pub last_span: Span,
 
-    /// Are we iterating over a list of a map?
+    /// Are we iterating over a list or a map?
     pub is_map: bool,
 
     /// Number of fields that have been parsed until now
@@ -39,7 +40,7 @@ impl TvfParser {
         }
     }
 
-    /// Grap the next token from the stream, if none found,
+    /// Grab the next token from the stream, if none found,
     /// return an error using the last successful span.
     pub(crate) fn next<Err, Msg>(&mut self, on_error: Err) -> Result<TokenTree, syn::Error>
     where
@@ -102,6 +103,28 @@ impl TvfParser {
         Ok(expressions)
     }
 
+    /// Check for fat-arrow '=>'
+    fn check_for_fat_arrow(&mut self) -> Option<TokenTree> {
+        // Extract the first token to peek at the next one
+        if let Some(tt1) = self.tokens.next() {
+            // We expect a fat-arrow "=>" separator between identifiers and values
+            // Fat-arrow is composed of two punctuation tokens: '=' and '>'
+            if let TokenTree::Punct(p1) = &tt1
+                && p1.as_char() == '='
+                && p1.spacing() == Spacing::Joint
+                && let Some(TokenTree::Punct(p2)) = self.peek()
+                && p2.as_char() == '>'
+            {
+                self.consume();
+                None
+            } else {
+                Some(tt1)
+            }
+        } else {
+            None
+        }
+    }
+
     /// Check if the next token is a comma ','
     /// If so, move on to the next token to read the next expression
     fn check_for_comma(&mut self) -> Result<(), syn::Error> {
@@ -136,25 +159,7 @@ impl TvfExpr {
     /// Parse an expression from a map buffer
     /// `<id> => <value>`
     fn parse_from_map(parser: &mut TvfParser) -> Result<Self, syn::Error> {
-        let id = parser.next(|| "Expected field identifier, none found.")?;
-        let id = TvfId::from_tokens(&id)?;
-
-        // We expect a fat-arrow "=>" separator between identifiers and values
-        // Fat-arrow is composed of two punctuation tokens: '=' and '>'
-        let sep1 = parser.next(|| "Expected fat-arrow, none found.")?;
-        let sep2 = parser.next(|| "Expected fat-arrow, none found.")?;
-        let span = sep1.span();
-        if let TokenTree::Punct(sep1) = sep1
-            && sep1.as_char() == '='
-            && sep1.spacing() == Spacing::Joint
-            && let TokenTree::Punct(sep2) = sep2
-            && sep2.as_char() == '>'
-        {
-            // successfully identified "=>"
-            /* do nothing */
-        } else {
-            return Err(syn::Error::new(span, "Expected fat-arrow"));
-        }
+        let id = TvfId::parse_id(parser)?;
 
         // Parse the remaining tokens as the value
         Self::parse_value(parser, id)
@@ -168,7 +173,7 @@ impl TvfExpr {
     /// - `MY_CONST as String`
     /// - `(10 - 2) as Unsigned`
     /// - `"2026-09-10" as Date`
-    /// - `0x1A2B3C` as Bytes`
+    /// - `0x1A2B3C as Bytes`
     /// - `{ 1 => 10 }` sub-buffer expressed as map
     /// - `[ 1, 2, 3 ]` sub-buffer expressed as list
     fn parse_value(parser: &mut TvfParser, id: TvfId) -> Result<Self, syn::Error> {
@@ -181,7 +186,7 @@ impl TvfExpr {
             Modifier::None
         };
 
-        // Next we necessarely expect the value
+        // Next we necessarily expect the value
         let value = parser.next(|| "Expected a value, none found.")?;
 
         // Check if the next token is `format`
@@ -227,7 +232,7 @@ impl TvfExpr {
                 return Err(syn::Error::new_spanned(cast_to, "Expected type."));
             }
         } else {
-            // No explicity type is specified,
+            // No explicitly type is specified,
             None
         };
 
@@ -243,26 +248,14 @@ impl TvfExpr {
 
 impl TvfId {
     /// Identify the field identifier from a token-tree
-    fn from_tokens(tt: &TokenTree) -> Result<Self, syn::Error> {
-        match tt {
-            TokenTree::Ident(ident) => Ok(Self::Ident(ident.clone())),
-            TokenTree::Literal(literal) => {
-                let lit = convert_lit(literal)?;
-                let int = parse_int(&lit)?;
-                Ok(Self::Int(int))
-            }
-            TokenTree::Group(group) => {
-                if group.delimiter() == Delimiter::Parenthesis {
-                    Ok(Self::Expr(group.stream()))
-                } else {
-                    Err(syn::Error::new_spanned(tt, "Non-supported delimiters"))
-                }
-            }
-            TokenTree::Punct(punct) => Err(syn::Error::new_spanned(
-                tt,
-                format!("Punctuation '{}' cannot be used as value", punct),
-            )),
+    fn parse_id(parser: &mut TvfParser) -> Result<Self, syn::Error> {
+        let mut tokens = TokenStream::new();
+
+        // Pull tokens out of the parser until we find a fat-arrow '=>'
+        while let Some(tt) = parser.check_for_fat_arrow() {
+            tokens.append(tt);
         }
+        Ok(Self::Expr(tokens))
     }
 }
 
@@ -274,7 +267,7 @@ impl TvfValue {
             TokenTree::Ident(ident) => Ok(Self::Ident(ident.clone())),
             TokenTree::Literal(literal) => Ok(Self::Lit(convert_lit(literal)?)),
             TokenTree::Group(group) => match group.delimiter() {
-                Delimiter::Parenthesis => Ok(Self::Expr(group.stream())),
+                Delimiter::Parenthesis | Delimiter::None => Ok(Self::Expr(group.stream())),
                 Delimiter::Bracket => {
                     let mut parser = TvfParser::new(group.stream(), false);
                     let exprs = parser.collect_expr()?;
@@ -285,7 +278,6 @@ impl TvfValue {
                     let exprs = parser.collect_expr()?;
                     Ok(Self::Buffer(exprs, parser.whole_span))
                 }
-                Delimiter::None => Err(syn::Error::new(span, "Missing expression delimiters")),
             },
             TokenTree::Punct(punct) => Err(syn::Error::new(
                 span,
@@ -328,13 +320,16 @@ impl Modifier {
     }
 }
 
-impl<'e> Value<'e> {
+impl Value {
     /// Given a literal, identify the corresponding TVF value and type
-    pub(crate) fn from_literal(literal: &syn::Lit) -> Result<Self, syn::Error> {
+    pub(crate) fn from_literal(literal: &syn::Lit, modifier: Modifier) -> Result<Self, syn::Error> {
         match literal {
             syn::Lit::Bool(lit) => Ok(Self::Bool(lit.value)),
             syn::Lit::Byte(lit) => Ok(Self::Byte(lit.value())),
-            syn::Lit::Char(lit) => Ok(Self::Byte(lit.value() as u8)),
+            syn::Lit::Char(lit) => match u8::try_from(lit.value()) {
+                Ok(byte) => Ok(Self::Byte(byte)),
+                Err(err) => Err(syn::Error::new_spanned(lit, err.to_string())),
+            },
             syn::Lit::Int(int) => {
                 let suffix = int.suffix();
                 if suffix == "u8" {
@@ -345,17 +340,49 @@ impl<'e> Value<'e> {
                     Ok(Self::Signed(int.base10_parse()?))
                 }
             }
-            syn::Lit::Float(float) => Ok(Self::Float(float.base10_parse()?)),
-            syn::Lit::Str(string) => Ok(Self::String(string.value())),
-            syn::Lit::CStr(string) => {
-                Ok(Self::String(string.value().to_string_lossy().to_string()))
+            syn::Lit::Float(float) => {
+                let f: f64 = float.base10_parse()?;
+                if f.is_infinite() || f.is_nan() || f.is_subnormal() {
+                    Err(syn::Error::new_spanned(float, "Float literal is abnormal"))
+                } else {
+                    Ok(Self::Float(f))
+                }
             }
-            syn::Lit::ByteStr(bytes) => Ok(Self::Bytes(Bytes(bytes.value()))),
+            syn::Lit::Str(string) => {
+                if modifier.is_numeric() {
+                    Err(syn::Error::new_spanned(
+                        string,
+                        "Unsupported operator on string literal".to_string(),
+                    ))
+                } else {
+                    Ok(Self::String(string.value()))
+                }
+            }
+            syn::Lit::CStr(string) => {
+                if modifier.is_numeric() {
+                    Err(syn::Error::new_spanned(
+                        string,
+                        "Unsupported operator on C-string literal".to_string(),
+                    ))
+                } else {
+                    Ok(Self::String(string.value().to_string_lossy().to_string()))
+                }
+            }
+            syn::Lit::ByteStr(bytes) => {
+                if modifier.is_numeric() {
+                    Err(syn::Error::new_spanned(
+                        bytes,
+                        "Unsupported operator on bytes string literal".to_string(),
+                    ))
+                } else {
+                    Ok(Self::Bytes(Bytes(bytes.value())))
+                }
+            }
             _ => Err(syn::Error::new_spanned(literal, "Invalid literal")),
         }
     }
 
-    /// Given a literal and an explicity type, identify the corresponding TVF value
+    /// Given a literal and an explicitly type, identify the corresponding TVF value
     pub(crate) fn from_literal_with_type(
         literal: &syn::Lit,
         explicit: TvfType,
@@ -411,7 +438,14 @@ pub(crate) fn parse_float(literal: &syn::Lit) -> Result<f64, syn::Error> {
         syn::Lit::Byte(byte) => Ok(byte.value() as f64),
         syn::Lit::Char(chr) => Ok(chr.value() as u32 as f64),
         syn::Lit::Int(int) => Ok(int.base10_parse()?),
-        syn::Lit::Float(float) => Ok(float.base10_parse()?),
+        syn::Lit::Float(float) => {
+            let float: f64 = float.base10_parse()?;
+            if float.is_infinite() || float.is_nan() || float.is_subnormal() {
+                Err(syn::Error::new(span, "Float literal is abnormal"))
+            } else {
+                Ok(float)
+            }
+        }
         _ => Err(syn::Error::new(span, "Invalid literal")),
     }
 }
@@ -473,7 +507,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
                 Modifier::LogicalNot => !value,
                 Modifier::Negative => -(value as i8) as u8,
                 _ => {
-                    return Err(syn::Error::new(span, "Unsupported operatory for byte"));
+                    return Err(syn::Error::new(span, "Unsupported operator for byte"));
                 }
             }
             .to_string()
@@ -483,7 +517,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             match modifier {
                 Modifier::None | Modifier::Positive | Modifier::Dereference => value,
                 _ => {
-                    return Err(syn::Error::new(span, "Unsupported operatory for character"));
+                    return Err(syn::Error::new(span, "Unsupported operator for character"));
                 }
             }
             .to_string()
@@ -495,7 +529,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             Modifier::LogicalNot => (!s.base10_parse::<u64>()?).to_string(),
             Modifier::Negative => (-s.base10_parse::<i64>()?).to_string(),
             _ => {
-                return Err(syn::Error::new(span, "Unsupported operatory for integer"));
+                return Err(syn::Error::new(span, "Unsupported operator for integer"));
             }
         },
         syn::Lit::Float(s) => match modifier {
@@ -504,7 +538,7 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
             }
             Modifier::Negative => (-s.base10_parse::<f64>()?).to_string(),
             _ => {
-                return Err(syn::Error::new(span, "Unsupported operatory for integer"));
+                return Err(syn::Error::new(span, "Unsupported operator for float"));
             }
         },
         _ => {

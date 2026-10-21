@@ -37,7 +37,7 @@ impl TvfExpr {
                     let value = Value::from_literal_with_type(lit, explicit, modifier)?;
                     (explicit, value.to_tokens())
                 } else {
-                    let value = Value::from_literal(lit)?;
+                    let value = Value::from_literal(lit, modifier)?;
                     (value.identify(), value.to_tokens())
                 }
             }
@@ -94,9 +94,8 @@ impl TvfId {
     #[rustfmt::skip]
     fn to_tokens(&self) -> TokenStream {
         match self {
-            Self::Int  (int  ) => quote![   #int     as usize ],
-            Self::Ident(ident) => quote![   #ident   as usize ],
-            Self::Expr (expr ) => quote![ ( #expr  ) as usize ],
+            Self::Int (int ) => quote![   #int    as usize ],
+            Self::Expr(expr) => quote![ ( #expr ) as usize ],
         }
     }
 }
@@ -148,10 +147,10 @@ impl Modifier {
     }
 }
 
-impl<'e> Value<'e> {
+impl Value {
     /// Generate token for a value
     #[rustfmt::skip]
-    fn to_tokens(&'e self) -> TokenStream {
+    fn to_tokens(&self) -> TokenStream {
         match self {
             Value::Bool     (val) => quote![ #val ],
             Value::Byte     (val) => quote![ #val ],
@@ -162,7 +161,6 @@ impl<'e> Value<'e> {
             Value::Bytes    (val) => val.to_token(),
             Value::Date     (val) => date_to_tokens    (*val),
             Value::DateTime (val) => datetime_to_tokens(*val),
-            Value::Buffer   ( _ ) => panic!("Should not be called here"),
         }
     }
 }

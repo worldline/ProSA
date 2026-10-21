@@ -173,7 +173,7 @@ let message = tvf!(SimpleStringTvf {
 ```
 
 The macro `format!` can be used directly.
-Since it necessarely output a string, type annotation is not necessary when using it:
+Since it necessarily output a string, type annotation is not necessary when using it:
 
 ```rust,ignore
 let message = tvf!(SimpleStringTvf {

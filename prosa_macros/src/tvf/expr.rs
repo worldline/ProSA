@@ -26,16 +26,13 @@ pub(crate) enum TvfId {
     /// We directly have an integer value
     Int(usize),
 
-    /// Identifier of a variable
-    Ident(syn::Ident),
-
     /// Rust expression (surrounded by parenthesis)
     Expr(TokenStream),
 }
 
 /// Define a value to insert into the buffer
 pub(crate) enum TvfValue {
-    /// Simple literal which can be used to implicitely identify the type of the value
+    /// Simple literal which can be used to implicitly identify the type of the value
     Lit(syn::Lit),
 
     /// Identifier of a variable
@@ -126,7 +123,7 @@ impl Modifier {
 pub(crate) struct Bytes(pub Vec<u8>);
 
 /// Values that have been identified
-pub(crate) enum Value<'e> {
+pub(crate) enum Value {
     Bool(bool),
     Byte(u8),
     Signed(i64),
@@ -136,12 +133,9 @@ pub(crate) enum Value<'e> {
     Bytes(Bytes),
     Date(NaiveDate),
     DateTime(NaiveDateTime),
-
-    #[allow(dead_code)]
-    Buffer(&'e [TvfExpr]),
 }
 
-impl<'e> Value<'e> {
+impl Value {
     /// Process the TvfValue to identify its type
     #[rustfmt::skip]
     pub(crate) fn identify(&self) -> TvfType {
@@ -155,7 +149,6 @@ impl<'e> Value<'e> {
             Self::Bytes    (_) => TvfType::Bytes,
             Self::Date     (_) => TvfType::Date,
             Self::DateTime (_) => TvfType::DateTime,
-            Self::Buffer   (_) => TvfType::Buffer,
         }
     }
 }

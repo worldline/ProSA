@@ -35,7 +35,7 @@ mod macro_tests {
             9 => b"string from bytes" as String,
             SOME_FIELD => -10,
             (SOME_FIELD + 1) => -10.25,
-            12 => -2 as Signed,
+            SOME_FIELD + 2 => -2 as Signed,
             13 => +2.125 as Float,
             14 => 100 as String,
             15 => -1000 as String,
@@ -47,12 +47,14 @@ mod macro_tests {
             200 => "2023-06-05 15:02:00.000" as DateTime,
             800 => -(10 - 8) as Signed, // fix: (-left - right) as i64
             801 => 1_000u64 as String, // fix: "1_000u64"
+            802 => "abc", // fix: -"abc"
+            803 => b"\x80", // fix: -b"\x80"
         });
 
         // Modify the string after being inserted into the buffer
         some_string.push_str("-PUSHED!");
 
-        assert_eq!(21, buffer.len());
+        assert_eq!(23, buffer.len());
         assert_eq!(Ok(2), buffer.get_unsigned(1));
         assert_eq!(Ok(4), buffer.get_signed(3));
         assert_eq!(Ok(0), buffer.get_byte(7));
@@ -128,6 +130,14 @@ mod macro_tests {
         assert_eq!(
             Ok("1000"),
             buffer.get_string(801).map(|s| s.to_string()).as_deref()
+        );
+        assert_eq!(
+            Ok("abc"),
+            buffer.get_string(802).map(|s| s.to_string()).as_deref()
+        );
+        assert_eq!(
+            Ok(Bytes::from_static(b"\x80")),
+            buffer.get_bytes(803).map(|b| b.into_owned())
         );
     }
 }
