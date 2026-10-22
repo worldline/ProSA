@@ -133,6 +133,86 @@ let message = tvf!(SimpleStringTvf {
 
 Lists can contain nested maps (`{ }`), and maps can contain nested lists (`[ ]`), allowing arbitrary depth.
 
+
+## Constructing TVF Messages with the derive macros
+
+You can also define TVF messages by applying derive macros on Rust's data types.
+The derives in question are:
+- `ToTvf` to convert a data type into a TVF message
+- `IntoTvf` to consume and convert a data type into a TVF message
+- `FromTvf` to reconstruct the data type from a TVF message
+
+Each of the TVF derives has its corresponding field trait that are also implemented allowing to construct hierarchical TVF messages through Rust's data composition:
+- `ToField` 
+- `IntoField` 
+- `FromField` 
+
+
+### Basic usage
+
+You can apply the derive macros to either structures or enumerations (unions are not supported).
+By default, fields are assigned identifier in the order they are defined (1, 2, 3, ...).
+Those identifiers can be overridden using the `id` attribute.
+
+```rust,ignore
+const MY_FIELD: usize = 100;
+
+#[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+struct A {
+    a: u32,
+    
+    #[tvf(id = 10)]
+    b: bool,
+    
+    #[tvf(id = MY_FIELD)]
+    c: String,
+}
+```
+
+When applied to an enumeration, ones have to specify the field used to encode the variant discriminant using the `tag_id` attribute.
+The `tag_type` attribute on the other hand is optional with the following possible values:
+- `string` (the default)
+- `byte`
+- `signed`
+- `unsigned`
+
+```rust,ignore
+#[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+#[tvf(tag_id = 123, tag_type = "byte")]
+enum B {
+    C,
+    D { a: u32, b: f32 },
+}
+```
+
+It is also possible to override the conversion method for a specific field using the following attributes with the path to the function to use:
+- `to_tvf`
+- `into_tvf`
+- `from_tvf`
+
+```rust,ignore
+#[derive(Debug, PartialEq, FromTvf, ToTvf, IntoTvf)]
+struct E {
+    #[tvf(to_tvf = "custom_to", into_tvf = "custom_into", from_tvf = "custom_from")]
+    a: u32,
+    b: f32,
+}
+
+fn custom_to<TVF: Tvf>(value: &u32, id: usize, msg: &mut TVF) {
+    msg.put_unsigned(id, (*value << 4) as u64);
+}
+
+fn custom_into<TVF: Tvf>(value: u32, id: usize, msg: &mut TVF) {
+    msg.put_unsigned(id, (value << 4) as u64);
+}
+
+fn custom_from<TVF: Tvf>(msg: &TVF, id: usize) -> Result<u32, TvfError> {
+    msg.get_unsigned(id).map(|value| (value as u32) >> 4)
+}
+```
+
+
+
 ## Implement your own TVF
 
 If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:
