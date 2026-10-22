@@ -12,8 +12,15 @@ impl<'f> TvfEnum<'f> {
     pub(crate) fn impl_to_tvf(&self, owned: bool) -> TokenStream {
         // Prepare tokens
         let type_name = self.type_ident;
-        let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), ImplTrait::To, false);
+        let [impl_generics, ty_generics, where_clause] = extend_generics(
+            self.generics.clone(),
+            if owned {
+                ImplTrait::Into
+            } else {
+                ImplTrait::To
+            },
+            false,
+        );
 
         // handle all cases of the enumeration
         let decl_discris = self.decl_discris(self.attr.tag_type, true);
@@ -86,8 +93,15 @@ impl<'f> TvfStruct<'f> {
         let type_name = self.type_ident;
 
         // add `T: Tvf` bounds on generics
-        let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), ImplTrait::To, false);
+        let [impl_generics, ty_generics, where_clause] = extend_generics(
+            self.generics.clone(),
+            if owned {
+                ImplTrait::Into
+            } else {
+                ImplTrait::To
+            },
+            false,
+        );
 
         // (de)structure the type
         let fields = self.fields.structuring();
@@ -129,21 +143,20 @@ impl<'f> TvfFields<'f> {
         for field in self.fields.iter() {
             let ty = &field.field.ty;
             let ident = field.tmp_ident();
+            let id = field.ident_field_id();
 
             let f = if owned {
                 // Select "into_tvf" function
                 if let Some(func) = &field.attr.custom_into_tvf {
-                    quote![ #func(#ident, __msg); ]
+                    quote![ #func(#ident, #id, __msg); ]
                 } else {
-                    let id = field.ident_field_id();
                     quote![ <#ty as __tvf::IntoField<__TVF>>::into_field(#ident, #id, __msg); ]
                 }
             } else {
                 // Select "to_tvf" function
                 if let Some(func) = &field.attr.custom_to_tvf {
-                    quote![ #func(&#ident, __msg); ]
+                    quote![ #func(&#ident, #id, __msg); ]
                 } else {
-                    let id = field.ident_field_id();
                     quote![ <#ty as __tvf::ToField<__TVF>>::to_field(&#ident, #id, __msg); ]
                 }
             };
@@ -313,12 +326,12 @@ impl<'f> TvfFields<'f> {
         for field in self.fields.iter() {
             let ty = &field.field.ty;
             let ident = field.tmp_ident();
+            let id = field.ident_field_id();
 
             // Select "tvf_from" function
             let f = if let Some(func) = &field.attr.custom_from_tvf {
-                quote![ let #ident = #func(__msg)?; ]
+                quote![ let #ident = #func(__msg, #id)?; ]
             } else {
-                let id = field.ident_field_id();
                 quote![ let #ident = <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id)?; ]
             };
             tokens.push(f);

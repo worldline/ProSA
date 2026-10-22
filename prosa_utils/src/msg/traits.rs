@@ -88,20 +88,6 @@ impl<T: Tvf> ToField<T> for String {
     }
 }
 
-impl<T: Tvf, const S: usize> ToField<T> for [u8; S] {
-    #[inline]
-    fn to_field(&self, id: usize, msg: &mut T) {
-        msg.put_bytes(id, Bytes::copy_from_slice(self));
-    }
-}
-
-impl<T: Tvf> ToField<T> for [u8] {
-    #[inline]
-    fn to_field(&self, id: usize, msg: &mut T) {
-        msg.put_bytes(id, Bytes::copy_from_slice(self));
-    }
-}
-
 impl<T: Tvf> ToField<T> for Bytes {
     #[inline]
     fn to_field(&self, id: usize, msg: &mut T) {
@@ -135,6 +121,14 @@ impl<T: Tvf, F: ToField<T>> ToTvf<T> for Vec<F> {
         }
     }
 }
+impl<T: Tvf + Default, F: ToField<T>> ToField<T> for Vec<F> {
+    #[inline]
+    fn to_field(&self, id: usize, msg: &mut T) {
+        let mut buffer = T::default();
+        self.to_tvf(&mut buffer);
+        msg.put_buffer(id, buffer);
+    }
+}
 
 /// Convert a list of fields into a TVF message
 impl<T: Tvf, F: ToField<T>, const S: usize> ToTvf<T> for [F; S] {
@@ -144,6 +138,14 @@ impl<T: Tvf, F: ToField<T>, const S: usize> ToTvf<T> for [F; S] {
         }
     }
 }
+impl<T: Tvf + Default, const S: usize, F: ToField<T>> ToField<T> for [F; S] {
+    #[inline]
+    fn to_field(&self, id: usize, msg: &mut T) {
+        let mut buffer = T::default();
+        self.to_tvf(&mut buffer);
+        msg.put_buffer(id, buffer);
+    }
+}
 
 /// Convert a list of fields into a TVF message
 impl<T: Tvf, F: ToField<T>> ToTvf<T> for [F] {
@@ -151,6 +153,14 @@ impl<T: Tvf, F: ToField<T>> ToTvf<T> for [F] {
         for (i, f) in self.iter().enumerate() {
             f.to_field(i + 1, msg);
         }
+    }
+}
+impl<T: Tvf + Default, F: ToField<T>> ToField<T> for [F] {
+    #[inline]
+    fn to_field(&self, id: usize, msg: &mut T) {
+        let mut buffer = T::default();
+        self.to_tvf(&mut buffer);
+        msg.put_buffer(id, buffer);
     }
 }
 
@@ -229,20 +239,6 @@ impl<T: Tvf> IntoField<T> for String {
     }
 }
 
-impl<T: Tvf, const S: usize> IntoField<T> for [u8; S] {
-    #[inline]
-    fn into_field(self, id: usize, msg: &mut T) {
-        msg.put_bytes(id, Bytes::from_owner(self));
-    }
-}
-
-impl<T: Tvf> IntoField<T> for &[u8] {
-    #[inline]
-    fn into_field(self, id: usize, msg: &mut T) {
-        msg.put_bytes(id, Bytes::copy_from_slice(self));
-    }
-}
-
 impl<T: Tvf> IntoField<T> for Bytes {
     #[inline]
     fn into_field(self, id: usize, msg: &mut T) {
@@ -276,6 +272,14 @@ impl<T: Tvf, F: IntoField<T>> IntoTvf<T> for Vec<F> {
         }
     }
 }
+impl<T: Tvf + Default, F: IntoField<T>> IntoField<T> for Vec<F> {
+    #[inline]
+    fn into_field(self, id: usize, msg: &mut T) {
+        let mut buffer = T::default();
+        self.into_tvf(&mut buffer);
+        msg.put_buffer(id, buffer);
+    }
+}
 
 /// Convert a list of fields into a TVF message
 impl<T: Tvf, F: IntoField<T>, const S: usize> IntoTvf<T> for [F; S] {
@@ -283,6 +287,14 @@ impl<T: Tvf, F: IntoField<T>, const S: usize> IntoTvf<T> for [F; S] {
         for (i, f) in self.into_iter().enumerate() {
             f.into_field(i + 1, msg);
         }
+    }
+}
+impl<T: Tvf + Default, const S: usize, F: IntoField<T>> IntoField<T> for [F; S] {
+    #[inline]
+    fn into_field(self, id: usize, msg: &mut T) {
+        let mut buffer = T::default();
+        self.into_tvf(&mut buffer);
+        msg.put_buffer(id, buffer);
     }
 }
 
@@ -402,6 +414,13 @@ impl<T: Tvf, F: FromField<T>> FromTvf<T> for Vec<F> {
         Ok(vector)
     }
 }
+impl<T: Tvf + Clone, F: FromField<T>> FromField<T> for Vec<F> {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        let buffer = msg.get_buffer(id)?;
+        Self::from_tvf(&buffer)
+    }
+}
 
 /// Extract a list of fields from a TVF message
 impl<T: Tvf, F: FromField<T>, const S: usize> FromTvf<T> for [F; S] {
@@ -425,6 +444,13 @@ impl<T: Tvf, F: FromField<T>, const S: usize> FromTvf<T> for [F; S] {
                 TvfError::ConvertionError("Failed to convert vector into array".to_string())
             })
         }
+    }
+}
+impl<T: Tvf + Clone, const S: usize, F: FromField<T>> FromField<T> for [F; S] {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        let buffer = msg.get_buffer(id)?;
+        Self::from_tvf(&buffer)
     }
 }
 
