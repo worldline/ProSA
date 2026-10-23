@@ -62,7 +62,8 @@ impl TvfValue {
 
 /// The types that can be added to a TVF buffer
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "lowercase")]
 pub(crate) enum TvfType {
     Byte,
     Signed,
@@ -78,25 +79,31 @@ pub(crate) enum TvfType {
 /// Modifier for a value
 /// Usually a not for boolean or a minus sign for numbers, etc..
 #[repr(u8)]
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
 pub(crate) enum Modifier {
     /// No operator
     #[default]
+    #[strum(serialize = "")]
     None,
 
     /// + sign, results in no operator being added
+    #[strum(serialize = "+")]
     Positive,
 
     /// - sign, negate the following value
+    #[strum(serialize = "-")]
     Negative,
 
     /// logical not for boolean values
+    #[strum(serialize = "!")]
     LogicalNot,
 
     /// * dereference
+    #[strum(serialize = "*")]
     Dereference,
 
     /// & borrow
+    #[strum(serialize = "&")]
     Borrow,
 }
 

@@ -104,7 +104,7 @@ impl TvfParser {
     }
 
     /// Check for fat-arrow '=>'
-    fn check_for_fat_arrow(&mut self) -> Option<TokenTree> {
+    fn check_for_fat_arrow(&mut self) -> Result<Option<TokenTree>, syn::Error> {
         // Extract the first token to peek at the next one
         if let Some(tt1) = self.tokens.next() {
             // We expect a fat-arrow "=>" separator between identifiers and values
@@ -116,12 +116,15 @@ impl TvfParser {
                 && p2.as_char() == '>'
             {
                 self.consume();
-                None
+                Ok(None)
             } else {
-                Some(tt1)
+                Ok(Some(tt1))
             }
         } else {
-            None
+            Err(syn::Error::new(
+                Span::call_site(),
+                "Missing fat-arrow '=>' between field identifier and field value.",
+            ))
         }
     }
 
@@ -224,13 +227,35 @@ impl TvfExpr {
             // move past the "as" and look at the next token
             parser.consume();
             let cast_to = parser.next(|| "Expected type, none found.")?;
+            let cast_span = cast_to.span();
 
             // Following keyword must be a type name
-            if let TokenTree::Ident(type_name) = cast_to {
-                Some(TvfType::from_as_cast(type_name)?)
+            let explicit_type = if let TokenTree::Ident(type_name) = cast_to {
+                TvfType::from_as_cast(type_name)?
             } else {
-                return Err(syn::Error::new_spanned(cast_to, "Expected type."));
+                return Err(syn::Error::new(cast_span, "Expected type."));
+            };
+
+            /*
+            if modifier.is_numeric()
+                && matches!(
+                    explicit_type,
+                    TvfType::Bytes | TvfType::Date | TvfType::DateTime | TvfType::Buffer
+                )
+            {
+                let modifier: &'static str = modifier.into();
+                let explicit_type: &'static str = explicit_type.into();
+                return Err(syn::Error::new(
+                    cast_span,
+                    format!(
+                        "Operator '{}' incompatible with type {}",
+                        modifier, explicit_type
+                    ),
+                ));
             }
+            */
+
+            Some(explicit_type)
         } else {
             // No explicitly type is specified,
             None
@@ -252,7 +277,7 @@ impl TvfId {
         let mut tokens = TokenStream::new();
 
         // Pull tokens out of the parser until we find a fat-arrow '=>'
-        while let Some(tt) = parser.check_for_fat_arrow() {
+        while let Some(tt) = parser.check_for_fat_arrow()? {
             tokens.append(tt);
         }
         Ok(Self::Expr(tokens))
@@ -342,8 +367,11 @@ impl Value {
             }
             syn::Lit::Float(float) => {
                 let f: f64 = float.base10_parse()?;
-                if f.is_infinite() || f.is_nan() || f.is_subnormal() {
-                    Err(syn::Error::new_spanned(float, "Float literal is abnormal"))
+                if f.is_infinite() || f.is_nan() {
+                    Err(syn::Error::new_spanned(
+                        float,
+                        "Float literal is infinite or NaN",
+                    ))
                 } else {
                     Ok(Self::Float(f))
                 }
@@ -440,8 +468,8 @@ pub(crate) fn parse_float(literal: &syn::Lit) -> Result<f64, syn::Error> {
         syn::Lit::Int(int) => Ok(int.base10_parse()?),
         syn::Lit::Float(float) => {
             let float: f64 = float.base10_parse()?;
-            if float.is_infinite() || float.is_nan() || float.is_subnormal() {
-                Err(syn::Error::new(span, "Float literal is abnormal"))
+            if float.is_infinite() || float.is_nan() {
+                Err(syn::Error::new(span, "Float literal is infinite or NaN"))
             } else {
                 Ok(float)
             }
@@ -503,14 +531,13 @@ pub(crate) fn parse_string(literal: &syn::Lit, modifier: Modifier) -> Result<Str
         syn::Lit::Byte(s) => {
             let value = s.value();
             match modifier {
-                Modifier::None | Modifier::Positive | Modifier::Dereference => value,
-                Modifier::LogicalNot => !value,
-                Modifier::Negative => -(value as i8) as u8,
+                Modifier::None | Modifier::Positive | Modifier::Dereference => value.to_string(),
+                Modifier::LogicalNot => (!value).to_string(),
+                Modifier::Negative => (-(value as i32)).to_string(),
                 _ => {
                     return Err(syn::Error::new(span, "Unsupported operator for byte"));
                 }
             }
-            .to_string()
         }
         syn::Lit::Char(s) => {
             let value = s.value();

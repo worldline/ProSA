@@ -68,3 +68,113 @@ pub(crate) fn gen_tvf_impl(input: TokenStream) -> Result<TokenStream, syn::Error
         }
     ])
 }
+
+/// Negating a variable cast to an unsigned type must be rejected, like `-7 as Unsigned` is
+///
+/// ```compile_fail
+/// use prosa_macros::tvf;
+/// use prosa_utils::msg::simple_string_tvf::SimpleStringTvf;
+///
+/// let amount: i64 = 7;
+/// let _ = tvf!(SimpleStringTvf { 1 => -amount as Unsigned });
+/// ```
+#[cfg(doctest)]
+struct NegatedVariableAsUnsigned;
+
+#[cfg(test)]
+mod tests {
+    use super::gen_tvf_impl;
+    use proc_macro2::{Delimiter, Group, TokenStream, TokenTree};
+    use quote::quote;
+
+    /// Expand `tvf!(SimpleStringTvf { 1 => <value> })` for each value
+    /// and return the ones whose expansion success differs from `expect_ok`
+    fn mismatches(expect_ok: bool, values: impl IntoIterator<Item = TokenStream>) -> Vec<String> {
+        values
+            .into_iter()
+            .filter(|value| {
+                gen_tvf_impl(quote!(SimpleStringTvf { 1 => #value })).is_ok() != expect_ok
+            })
+            .map(|value| value.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn negated_byte_overflow_as_string() {
+        // Panics with overflow checks, wraps to "128" without
+        let tokens = gen_tvf_impl(quote!(SimpleStringTvf { 1 => -b'\x80' as String }))
+            .expect("should expand");
+        assert!(
+            tokens.to_string().contains("\"-128\""),
+            "should store \"-128\" like `-b'\\x80' as String`, got: {tokens}"
+        );
+    }
+
+    #[test]
+    fn numeric_modifier_on_non_numeric_type() {
+        let accepted = mismatches(
+            false,
+            [
+                quote!(-"1995-01-10" as Date),
+                quote!(-0x0102 as Bytes),
+                quote!(-format!("{}", 1)),
+                quote!(-[1, 2]),
+                quote!(![1, 2]),
+                quote!(-{ 1 => 2 }),
+            ],
+        );
+        assert!(accepted.is_empty(), "should be rejected: {accepted:?}");
+    }
+
+    #[test]
+    fn explicit_type_on_sub_buffer() {
+        let accepted = mismatches(
+            false,
+            [quote!({ 1 => 2 } as String), quote!([1, 2] as Unsigned)],
+        );
+        assert!(accepted.is_empty(), "should be rejected: {accepted:?}");
+    }
+
+    #[test]
+    fn signed_min_literal() {
+        let rejected = mismatches(
+            true,
+            [
+                quote!(-9223372036854775808),
+                quote!(-9223372036854775808 as Signed),
+                quote!(-9223372036854775808 as String),
+            ],
+        );
+        assert!(rejected.is_empty(), "should be accepted: {rejected:?}");
+    }
+
+    #[test]
+    fn literal_in_none_delimited_group() {
+        // `macro_rules!` wraps `$v:literal` fragments in a `Delimiter::None` group
+        let none_group = |value: TokenStream| TokenTree::Group(Group::new(Delimiter::None, value));
+
+        let expr1 = none_group(quote!(-7));
+        let expr2 = none_group(quote!("s"));
+        let rejected = mismatches(
+            true,
+            [quote!( #expr1 as Signed ), quote!( #expr2 as String )],
+        );
+        assert!(rejected.is_empty(), "should be accepted: {rejected:?}");
+    }
+
+    #[test]
+    fn subnormal_float_literal() {
+        let rejected = mismatches(true, [quote!(1e-310), quote!(1e-310 as Float)]);
+        assert!(rejected.is_empty(), "should be accepted: {rejected:?}");
+    }
+
+    #[test]
+    fn missing_fat_arrow_error() {
+        let err = gen_tvf_impl(quote!(SimpleStringTvf { 1 2 }))
+            .expect_err("a map entry without `=>` should be rejected");
+        assert!(
+            err.to_string().contains("=>"),
+            "error should mention the missing `=>`, got: {err}"
+        );
+    }
+}

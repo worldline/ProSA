@@ -140,4 +140,43 @@ mod macro_tests {
             buffer.get_bytes(803).map(|b| b.into_owned())
         );
     }
+
+    #[test]
+    fn test_tvf_negated_byte_as_string() {
+        let buffer = tvf!(SimpleStringTvf {
+            1 => -b'\x05' as String,
+        });
+
+        // Same value as `-b'\x05' as Signed`
+        assert_eq!(
+            Ok("-5"),
+            buffer.get_string(1).map(|s| s.to_string()).as_deref()
+        );
+    }
+
+    #[test]
+    fn test_tvf_non_ascii_char_as_bytes() {
+        let buffer = tvf!(SimpleStringTvf {
+            1 => '€' as Bytes,
+        });
+
+        // Same bytes as `"€" as Bytes`
+        assert_eq!(
+            Ok(Bytes::from_static("€".as_bytes())),
+            buffer.get_bytes(1).map(|b| b.into_owned())
+        );
+    }
+
+    #[test]
+    fn test_tvf_logical_not_int_as_string() {
+        let buffer = tvf!(SimpleStringTvf {
+            1 => !5 as String,
+        });
+
+        // Same value as `!5` (signed by default)
+        assert_eq!(
+            Ok("-6"),
+            buffer.get_string(1).map(|s| s.to_string()).as_deref()
+        );
+    }
 }
