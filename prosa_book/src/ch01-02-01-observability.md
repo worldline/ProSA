@@ -255,3 +255,21 @@ readinessProbe:
 
 See the [Kubernetes probe documentation](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
 for deployment-specific timing and failure thresholds.
+
+### SSL certificates
+
+With the `openssl` feature, the `prosa_ssl_certificates` gauge exposes every certificate loaded by the SSL listeners and targets. Its value is the certificate expiration date (`notAfter`) in Unix seconds.
+A series is exported per certificate, with these attributes:
+
+- `type`: `certificate` for the certificate presented to the peer, `self_signed` for the one a listener signs when it has none configured, `chain` for the intermediate certificates of a PKCS12, and `store` for the trusted certificates of a `store` path or inline `certs` (the system store is not exported).
+- `name`: the URL of the listener or the target, with its credentials masked.
+- `subject_<name>` and `issuer_<name>`: an attribute per entry of the certificate subject and issuer, named by its lowercase short name (`subject_c`, `subject_o`, `subject_ou`, `subject_cn`, `issuer_cn`, ...). The values of a repeated entry are joined with `, `. The `issuer_<name>` attributes are left out of self signed certificates (root CAs included), whose issuer is their subject.
+- `serial`: the certificate serial number in hexadecimal.
+- `encryption`: the public key algorithm, as `RSA-4096` or `ECDSA-prime256v1`.
+
+Certificates read again from their files replace the previous ones in the gauge, so the series follow certificate rotations.
+To alert 30 days before a certificate expires:
+
+```promql
+prosa_ssl_certificates{type!="self_signed"} - time() < 30 * 24 * 3600
+```
