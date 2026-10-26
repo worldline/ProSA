@@ -451,6 +451,81 @@ pub trait SslContextBuild: Clone + Send + Sync + 'static {
     /// Method to build the context from the files of the configuration. `host` is the name a
     /// server context is signed for when it has no certificate to serve
     fn build(config: &SslConfig, host: Option<&str>) -> io::Result<Self>;
+
+    /// Method to describe the certificates loaded in the context built from `config`
+    fn certificates(&self, _config: &SslConfig) -> Vec<CertificateInfo> {
+        Vec::new()
+    }
+}
+
+/// Role of a certificate loaded in an SSL context
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CertificateKind {
+    /// Certificate presented to the peer
+    Certificate,
+    /// Certificate signed by a server that has none to present
+    SelfSigned,
+    /// Intermediate certificate sent along with the presented one
+    Chain,
+    /// Trusted certificate of a configured store
+    Store,
+}
+
+impl CertificateKind {
+    /// Getter of the kind name
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CertificateKind::Certificate => "certificate",
+            CertificateKind::SelfSigned => "self_signed",
+            CertificateKind::Chain => "chain",
+            CertificateKind::Store => "store",
+        }
+    }
+}
+
+/// Description of a certificate loaded in an SSL context
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertificateInfo {
+    /// Role of the certificate
+    pub kind: CertificateKind,
+    /// Subject name entries, as `("CN", "prosa.example.com")`
+    pub subject: Vec<(String, String)>,
+    /// Issuer name entries, as `("CN", "Worldline CA")`
+    pub issuer: Vec<(String, String)>,
+    /// Serial number in hexadecimal
+    pub serial: String,
+    /// Public key algorithm, as `RSA-2048` or `ECDSA-prime256v1`
+    pub encryption: String,
+    /// Expiration date in Unix seconds
+    pub not_after: i64,
+}
+
+#[cfg(feature = "config-observability")]
+impl CertificateInfo {
+    /// Metric attributes of the certificate, loaded by the context `name`
+    pub fn attributes(&self, name: &str) -> Vec<opentelemetry::KeyValue> {
+        let mut attributes = vec![
+            opentelemetry::KeyValue::new("type", self.kind.as_str()),
+            opentelemetry::KeyValue::new("name", name.to_string()),
+            opentelemetry::KeyValue::new("serial", self.serial.clone()),
+            opentelemetry::KeyValue::new("encryption", self.encryption.clone()),
+        ];
+        // The issuer of a self signed certificate is its subject
+        let issuer: &[_] = if self.issuer == self.subject {
+            &[]
+        } else {
+            &self.issuer
+        };
+        for (prefix, entries) in [("subject", self.subject.as_slice()), ("issuer", issuer)] {
+            attributes.extend(entries.iter().map(|(key, value)| {
+                opentelemetry::KeyValue::new(
+                    format!("{prefix}_{}", key.to_lowercase()),
+                    value.clone(),
+                )
+            }));
+        }
+        attributes
+    }
 }
 
 #[cfg(feature = "config-openssl")]

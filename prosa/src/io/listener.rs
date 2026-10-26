@@ -57,9 +57,10 @@ pub struct SslHandshaker {
     /// Acceptor holding the certificate served to the clients, shared by the clones
     #[cfg(feature = "openssl")]
     pub(super) acceptor: std::sync::Arc<SslContextCache<::openssl::ssl::SslAcceptor>>,
-    /// Configuration and host the acceptor is built from, [`None`] when it was handed over built
+    /// Configuration, host and name of the listener the acceptor is built from, [`None`] when it
+    /// was handed over built
     #[cfg(feature = "openssl")]
-    pub(super) source: Option<std::sync::Arc<(SslConfig, Option<String>)>>,
+    pub(super) source: Option<std::sync::Arc<(SslConfig, Option<String>, String)>>,
     /// Timeout of the SSL handshake with a client
     pub(super) timeout: Duration,
 }
@@ -572,6 +573,7 @@ impl ListenerSetting {
             SslHandshaker::build(
                 self.ssl.clone().unwrap_or_default(),
                 self.url.host_str().map(String::from),
+                self.get_safe_url().to_string(),
             )
             .await
             .map(Some)

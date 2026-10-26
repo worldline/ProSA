@@ -6,6 +6,7 @@ use prosa::core::proc::{Proc, ProcBusParam, ProcConfig, proc};
 use prosa::core::settings::tracing::TelemetryFilter;
 use prosa::core::settings::{ProsaConfig, Settings, settings};
 use prosa::event::pending::PendingMsgs;
+use prosa::io::listener::ListenerSetting;
 use prosa::stub::adaptor::StubAsyncParotAdaptor;
 use prosa::stub::proc::{StubProc, StubSettings};
 use prosa::tracing::{debug, info, warn};
@@ -16,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time;
 use tracing::metadata::LevelFilter;
+use url::Url;
 
 #[derive(Default, Adaptor)]
 struct MyAdaptor {}
@@ -234,6 +236,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         my_settings.proc_2.clone(),
     );
     Proc::<MyAdaptor>::run(proc2)?;
+
+    // SSL listener serving a self signed certificate, exported in the `prosa_ssl_certificates` metric
+    let listener = ListenerSetting::new(Url::parse("https://localhost:4443")?, None)
+        .bind()
+        .await?;
+    tokio::spawn(async move {
+        loop {
+            if let Err(err) = listener.accept().await {
+                warn!("SSL listener can't accept a client: {err}");
+            }
+        }
+    });
 
     // Wait on main task
     main.run().await;
