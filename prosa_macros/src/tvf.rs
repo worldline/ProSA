@@ -4,11 +4,16 @@ pub(crate) mod expr;
 /// Consume tvf! macro tokens and generate corresponding tree structure of expressions
 pub(crate) mod parser;
 
+/// When generating the tokens we may need to parse literals to generate the appropriate tokens
+pub(crate) mod parse_value;
+
 /// Convert the expressions into tokens to be passed to the compiler
 pub(crate) mod tokens;
 
+use core::fmt;
+
 use crate::tvf::{parser::TvfParser, tokens::buffer_to_tokens};
-use proc_macro2::{Delimiter, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use quote::quote;
 use syn::spanned::Spanned;
 
@@ -67,6 +72,12 @@ pub(crate) fn gen_tvf_impl(input: TokenStream) -> Result<TokenStream, syn::Error
             #output
         }
     ])
+}
+
+/// Construct a custom error message
+#[inline]
+fn error<S: fmt::Display>(span: Span, message: S) -> syn::Error {
+    syn::Error::new(span, message)
 }
 
 /// Negating a variable cast to an unsigned type must be rejected, like `-7 as Unsigned` is

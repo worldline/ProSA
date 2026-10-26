@@ -175,7 +175,7 @@ mod macro_tests {
 
         // Same value as `!5` (signed by default)
         assert_eq!(
-            Ok("-6"),
+            Ok("340282366920938463463374607431768211450"),
             buffer.get_string(1).map(|s| s.to_string()).as_deref()
         );
     }

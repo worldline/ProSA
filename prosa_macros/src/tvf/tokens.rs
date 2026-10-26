@@ -1,4 +1,8 @@
-use crate::tvf::expr::*;
+use crate::tvf::{
+    error,
+    expr::*,
+    parse_value::{convert_value_to_string, parse_date, parse_datetime, parse_float, parse_int},
+};
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use proc_macro2::TokenStream;
 use quote::{ToTokens, quote};
@@ -27,59 +31,66 @@ impl TvfExpr {
     /// Convert the expression into tokens
     fn to_tokens(&self, buffer_type: &syn::Ident) -> Result<TokenStream, syn::Error> {
         let id = self.id.to_tokens();
-        let modifier = self.modifier;
+        let mut modifier = self.modifier;
 
         // Process the value
-        let value_span = self.value.span();
-        let (out_type, value) = match &self.value {
-            TvfValue::Lit(lit) => {
-                if let Some(explicit) = self.explicit_type {
-                    let value = Value::from_literal_with_type(lit, explicit, modifier)?;
-                    (explicit, value.to_tokens())
-                } else {
-                    let value = Value::from_literal(lit, modifier)?;
-                    (value.identify(), value.to_tokens())
-                }
+        let out_type = self.get_type()?;
+        let value = match (&self.value, out_type) {
+            (TvfValue::Lit(lit), TvfType::Byte) => {
+                let int = parse_int::<u8>(lit)?;
+                quote! { #int }
             }
-            TvfValue::Ident(ident) => {
-                if ident == "true" || ident == "false" {
-                    (
-                        self.explicit_type.unwrap_or(TvfType::Byte),
-                        ident.to_token_stream(),
-                    )
-                } else if let Some(explicit) = self.explicit_type {
-                    (explicit, ident.to_token_stream())
-                } else {
-                    return Err(syn::Error::new(
-                        value_span,
-                        "Missing explicit type for variable",
-                    ));
-                }
+            (TvfValue::Lit(lit), TvfType::Signed) => {
+                let int = parse_int::<i128>(lit)?;
+                quote! { #int }
             }
-            TvfValue::Format(stream) => {
-                if let Some(explicit) = self.explicit_type
-                    && !matches!(explicit, TvfType::String)
-                {
-                    return Err(syn::Error::new(
-                        value_span,
-                        "Incompatible explicit type with format expression",
-                    ));
-                } else {
-                    (TvfType::String, quote![format!(#stream)])
-                }
+            (TvfValue::Lit(lit), TvfType::Unsigned) => {
+                let int = parse_int::<u128>(lit)?;
+                quote! { #int }
             }
-            TvfValue::Expr(stream) => {
-                if let Some(explicit) = self.explicit_type {
-                    (explicit, stream.clone())
-                } else {
-                    return Err(syn::Error::new(
-                        value_span,
-                        "Missing explicit type for expression",
-                    ));
-                }
+            (TvfValue::Lit(lit), TvfType::Float) => {
+                let float = parse_float(lit)?;
+                quote! { #float }
             }
-            TvfValue::Buffer(sub, _) => (TvfType::Buffer, buffer_to_tokens(buffer_type, sub)?),
+            (_, TvfType::String) => {
+                modifier = self.modifier.filter_out_numeric();
+                convert_value_to_string(&self.value, self.modifier)?
+            }
+            (TvfValue::Lit(lit), TvfType::Bytes) => Bytes::from_literal(lit)?.to_token(),
+            (TvfValue::Lit(lit), TvfType::Date) => date_to_tokens(parse_date(lit)?),
+            (TvfValue::Lit(lit), TvfType::DateTime) => datetime_to_tokens(parse_datetime(lit)?),
+            (TvfValue::Buffer(_, span), _) if out_type != TvfType::Buffer => {
+                return Err(error(
+                    *span,
+                    format!("Cannot apply type {} to sub-buffer declaration", out_type),
+                ));
+            }
+            _ => self.value.to_tokens(buffer_type)?,
         };
+
+        // Check that we do not use a modifier that is not suitable for the expected output type
+        if modifier.is_numeric()
+            && matches!(
+                out_type,
+                TvfType::String
+                    | TvfType::Bytes
+                    | TvfType::Date
+                    | TvfType::DateTime
+                    | TvfType::Buffer
+            )
+        {
+            return Err(error(
+                self.value.span(),
+                format!("Cannot apply {} to field of type {}", modifier, out_type),
+            ));
+        } else if modifier == Modifier::Negative
+            && matches!(out_type, TvfType::Byte | TvfType::Unsigned)
+        {
+            return Err(error(
+                self.value.span(),
+                "Cannot apply negative operator to an unsigned integer type".to_string(),
+            ));
+        }
 
         let put_method = out_type.put_method();
         let value_cast = out_type.cast_type(modifier, value);
@@ -96,6 +107,20 @@ impl TvfId {
         match self {
             Self::Int (int ) => quote![   #int    as usize ],
             Self::Expr(expr) => quote![ ( #expr ) as usize ],
+        }
+    }
+}
+
+impl TvfValue {
+    /// Convert the value into tokens
+    #[rustfmt::skip]
+    fn to_tokens(&self, buffer_type: &syn::Ident) -> Result<TokenStream, syn::Error> {
+        match self {
+            TvfValue::Lit   (lit)    => Ok(lit  .to_token_stream()),
+            TvfValue::Ident (ident)  => Ok(ident.to_token_stream()),
+            TvfValue::Format(tokens) => Ok(tokens.clone()),
+            TvfValue::Expr  (tokens) => Ok(tokens.clone()),
+            TvfValue::Buffer(exprs, _) => buffer_to_tokens(buffer_type, exprs),
         }
     }
 }
@@ -135,7 +160,7 @@ impl TvfType {
 impl Modifier {
     /// Generate token for current unary operator
     #[rustfmt::skip]
-    fn to_token(self) -> TokenStream {
+    pub(crate) fn to_token(self) -> TokenStream {
         match self {
             Self::None        => TokenStream::new(),
             Self::Positive    => TokenStream::new(),
@@ -143,24 +168,6 @@ impl Modifier {
             Self::LogicalNot  => quote![ ! ],
             Self::Dereference => quote![ * ],
             Self::Borrow      => quote![ & ],
-        }
-    }
-}
-
-impl Value {
-    /// Generate token for a value
-    #[rustfmt::skip]
-    fn to_tokens(&self) -> TokenStream {
-        match self {
-            Value::Bool     (val) => quote![ #val ],
-            Value::Byte     (val) => quote![ #val ],
-            Value::Signed   (val) => quote![ #val ],
-            Value::Unsigned (val) => quote![ #val ],
-            Value::Float    (val) => quote![ #val ],
-            Value::String   (val) => quote![ #val ],
-            Value::Bytes    (val) => val.to_token(),
-            Value::Date     (val) => date_to_tokens    (*val),
-            Value::DateTime (val) => datetime_to_tokens(*val),
         }
     }
 }

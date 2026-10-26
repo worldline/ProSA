@@ -1,4 +1,5 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use crate::tvf::error;
+use core::fmt;
 use proc_macro2::{Span, TokenStream};
 use syn::spanned::Spanned;
 
@@ -19,6 +20,23 @@ pub(crate) struct TvfExpr {
 
     /// Output type to insert the field in the buffer
     pub explicit_type: Option<TvfType>,
+}
+
+impl TvfExpr {
+    /// Analyze the expression to deduce the type of the field.
+    /// If the type could not be deduced, then fail with an error.
+    pub(crate) fn get_type(&self) -> Result<TvfType, syn::Error> {
+        if let Some(explicit) = self.explicit_type {
+            Ok(explicit)
+        } else if let Some(deduced) = self.value.deduce_type() {
+            Ok(deduced)
+        } else {
+            Err(error(
+                self.value.span(),
+                "Could not deduce field type for field",
+            ))
+        }
+    }
 }
 
 /// Identifier of a field
@@ -49,13 +67,47 @@ pub(crate) enum TvfValue {
 }
 
 impl TvfValue {
+    #[rustfmt::skip]
     pub(crate) fn span(&self) -> Span {
         match self {
-            TvfValue::Lit(lit) => lit.span(),
-            TvfValue::Ident(ident) => ident.span(),
-            TvfValue::Format(stream) => stream.span(),
-            TvfValue::Expr(stream) => stream.span(),
-            TvfValue::Buffer(_, span) => *span,
+            Self::Lit    (lit    ) => lit   .span(),
+            Self::Ident  (ident  ) => ident .span(),
+            Self::Format (stream ) => stream.span(),
+            Self::Expr   (stream ) => stream.span(),
+            Self::Buffer (_, span) => *span,
+        }
+    }
+
+    /// Deduce the type of a TVF value is possible
+    pub(crate) fn deduce_type(&self) -> Option<TvfType> {
+        match self {
+            Self::Lit(lit) => match lit {
+                syn::Lit::Bool(_) | syn::Lit::Byte(_) | syn::Lit::Char(_) => Some(TvfType::Byte),
+                syn::Lit::Int(int) => {
+                    let suffix = int.suffix();
+                    if suffix == "u8" {
+                        Some(TvfType::Byte)
+                    } else if suffix.starts_with('u') {
+                        Some(TvfType::Unsigned)
+                    } else {
+                        Some(TvfType::Signed)
+                    }
+                }
+                syn::Lit::Float(_) => Some(TvfType::Float),
+                syn::Lit::Str(_) | syn::Lit::CStr(_) => Some(TvfType::String),
+                syn::Lit::ByteStr(_) => Some(TvfType::Bytes),
+                _ => None,
+            },
+            Self::Ident(ident) => {
+                if ident == "false" || ident == "true" {
+                    Some(TvfType::Byte)
+                } else {
+                    None
+                }
+            }
+            Self::Format(_) => Some(TvfType::String),
+            Self::Expr(_) => None,
+            Self::Buffer(_, _) => Some(TvfType::Buffer),
         }
     }
 }
@@ -74,6 +126,14 @@ pub(crate) enum TvfType {
     Date,
     DateTime,
     Buffer,
+}
+
+impl fmt::Display for TvfType {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s: &'static str = self.into();
+        f.write_str(s)
+    }
 }
 
 /// Modifier for a value
@@ -107,6 +167,14 @@ pub(crate) enum Modifier {
     Borrow,
 }
 
+impl fmt::Display for Modifier {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s: &'static str = self.into();
+        f.write_str(s)
+    }
+}
+
 impl Modifier {
     /// Check if the modifier is intended for numerical/logical types (+, -, !)
     #[inline]
@@ -128,34 +196,3 @@ impl Modifier {
 /// Simple sequence of bytes to serialize
 #[derive(Debug, Default, Clone)]
 pub(crate) struct Bytes(pub Vec<u8>);
-
-/// Values that have been identified
-pub(crate) enum Value {
-    Bool(bool),
-    Byte(u8),
-    Signed(i64),
-    Unsigned(u64),
-    Float(f64),
-    String(String),
-    Bytes(Bytes),
-    Date(NaiveDate),
-    DateTime(NaiveDateTime),
-}
-
-impl Value {
-    /// Process the TvfValue to identify its type
-    #[rustfmt::skip]
-    pub(crate) fn identify(&self) -> TvfType {
-        match self {
-            Self::Bool     (_) => TvfType::Byte,
-            Self::Byte     (_) => TvfType::Byte,
-            Self::Signed   (_) => TvfType::Signed,
-            Self::Unsigned (_) => TvfType::Unsigned,
-            Self::Float    (_) => TvfType::Float,
-            Self::String   (_) => TvfType::String,
-            Self::Bytes    (_) => TvfType::Bytes,
-            Self::Date     (_) => TvfType::Date,
-            Self::DateTime (_) => TvfType::DateTime,
-        }
-    }
-}
