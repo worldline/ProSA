@@ -42,10 +42,27 @@ impl TvfExpr {
             }
             (TvfValue::Lit(lit), TvfType::Signed) => {
                 let int = parse_int::<i128>(lit)?;
+
+                // For signed integer literals, perform checks to
+                // see if the generated value is out of bounds.
+                if modifier == Modifier::Negative {
+                    if -int < (i64::MIN as i128) {
+                        return Err(error(
+                            lit.span(),
+                            "Integer literal is lesser than the minimal 64-bits signed value possible",
+                        ));
+                    }
+                } else if int > (i64::MAX as i128) {
+                    return Err(error(
+                        lit.span(),
+                        "Integer literal is greater than the maximal 64-bits signed value possible",
+                    ));
+                }
+
                 quote! { #int }
             }
             (TvfValue::Lit(lit), TvfType::Unsigned) => {
-                let int = parse_int::<u128>(lit)?;
+                let int = parse_int::<u64>(lit)?;
                 quote! { #int }
             }
             (TvfValue::Lit(lit), TvfType::Float) => {
@@ -53,7 +70,7 @@ impl TvfExpr {
                 quote! { #float }
             }
             (_, TvfType::String) => {
-                modifier = self.modifier.filter_out_numeric();
+                modifier = Modifier::None;
                 convert_value_to_string(&self.value, self.modifier)?
             }
             (TvfValue::Lit(lit), TvfType::Bytes) => Bytes::from_literal(lit)?.to_token(),

@@ -168,15 +168,17 @@ mod macro_tests {
     }
 
     #[test]
-    fn test_tvf_logical_not_int_as_string() {
+    fn test_tvf_deref_int_as_str() {
+        let amount = 64i64;
+        let integer_ref = &amount;
+
         let buffer = tvf!(SimpleStringTvf {
-            1 => !5 as String,
+            1 => *integer_ref as String,
         });
 
-        // Same value as `!5` (signed by default)
         assert_eq!(
-            Ok("340282366920938463463374607431768211450"),
-            buffer.get_string(1).map(|s| s.to_string()).as_deref()
+            Ok("64"),
+            buffer.get_string(1).map(|s| s.into_owned()).as_deref()
         );
     }
 }

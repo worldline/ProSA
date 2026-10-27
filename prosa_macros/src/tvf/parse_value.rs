@@ -164,7 +164,12 @@ pub(crate) fn convert_literal_to_string(
             let value = match modifier {
                 Modifier::None | Modifier::Positive | Modifier::Dereference => s.value,
                 Modifier::LogicalNot | Modifier::Negative => !s.value,
-                _ => return Err(syn::Error::new(span, "Unsupported operator for boolean")),
+                _ => {
+                    return Err(syn::Error::new(
+                        span,
+                        "Unsupported operator when converting a boolean into a string",
+                    ));
+                }
             };
             Ok(if value { "true" } else { "false" }.to_string())
         }
@@ -176,7 +181,10 @@ pub(crate) fn convert_literal_to_string(
                 }
                 Modifier::LogicalNot => Ok((!value).to_string()),
                 Modifier::Negative => Ok((-(value as i32)).to_string()),
-                _ => Err(syn::Error::new(span, "Unsupported operator for byte")),
+                _ => Err(syn::Error::new(
+                    span,
+                    "Unsupported operator when converting a byte into a string",
+                )),
             }
         }
         syn::Lit::Char(s) => {
@@ -185,7 +193,10 @@ pub(crate) fn convert_literal_to_string(
                 Modifier::None | Modifier::Positive | Modifier::Dereference => {
                     Ok(value.to_string())
                 }
-                _ => Err(syn::Error::new(span, "Unsupported operator for character")),
+                _ => Err(syn::Error::new(
+                    span,
+                    "Unsupported operator when converting a character into a string",
+                )),
             }
         }
         syn::Lit::Int(s) => {
@@ -194,9 +205,11 @@ pub(crate) fn convert_literal_to_string(
                 Modifier::None | Modifier::Positive | Modifier::Dereference => {
                     Ok(value.to_string())
                 }
-                Modifier::LogicalNot => Ok((!value).to_string()),
-                Modifier::Negative => Ok((-(value as i128)).to_string()),
-                _ => Err(syn::Error::new(span, "Unsupported operator for integer")),
+                Modifier::Negative => Ok(format!("-{}", value)),
+                _ => Err(syn::Error::new(
+                    span,
+                    "Unsupported operator when converting an integer into a string",
+                )),
             }
         }
         syn::Lit::Float(s) => {
@@ -206,10 +219,16 @@ pub(crate) fn convert_literal_to_string(
                     Ok(value.to_string())
                 }
                 Modifier::Negative => Ok((-value).to_string()),
-                _ => Err(syn::Error::new(span, "Unsupported operator for float")),
+                _ => Err(syn::Error::new(
+                    span,
+                    "Unsupported operator when converting a floating point number into a string",
+                )),
             }
         }
-        _ => Err(syn::Error::new(span, "Unsupported literal")),
+        _ => Err(syn::Error::new(
+            span,
+            "Unsupported literal for string declaration",
+        )),
     }
 }
 

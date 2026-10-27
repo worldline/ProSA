@@ -70,7 +70,7 @@ types:
 ```rust,ignore
 let message = tvf!(SimpleStringTvf {
     1 => 2,              // signed (i64)
-    2 => 4usize,         // also signed
+    2 => 4usize,         // unsigned (u64)
     3 => 1 as Unsigned,  // unsigned (u64)
     4 => 2.5 as Float,   // float (f64)
 });

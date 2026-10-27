@@ -188,4 +188,18 @@ mod tests {
             "error should mention the missing `=>`, got: {err}"
         );
     }
+
+    #[test]
+    fn large_integer_literal() {
+        let accepted = mismatches(
+            false,
+            [
+                quote!(340282366920938463463374607431768211450),
+                quote!(340282366920938463463374607431768211450 as Unsigned),
+                quote!(0xFFFFFFFFFFFFFFFF as Signed),
+                quote!(-0xFFFFFFFFFFFFFFFF as Signed),
+            ],
+        );
+        assert!(accepted.is_empty(), "should be rejected: {accepted:?}");
+    }
 }
