@@ -5,6 +5,10 @@ mod macro_tests {
         simple_string_tvf::SimpleStringTvf,
         tvf::{FromTvf, IntoTvf, ToTvf, Tvf, TvfError},
     };
+    use std::{
+        borrow::Cow,
+        collections::{BTreeMap, HashMap},
+    };
 
     /// Define fields' identifier as constants
     const MY_FIELD: usize = 100;
@@ -47,6 +51,15 @@ mod macro_tests {
     enum F {
         G = 10,
         H = 12,
+    }
+
+    #[derive(Debug, FromTvf, ToTvf, IntoTvf)]
+    struct H<'c> {
+        vector: Vec<u32>,
+        boxed: Box<u32>,
+        copy_on_write: Cow<'c, u32>,
+        hash_map: HashMap<u16, u32>,
+        btree_map: BTreeMap<u32, u64>,
     }
 
     fn custom_to_tvf<TVF: Tvf>(value: &u32, id: usize, msg: &mut TVF) {

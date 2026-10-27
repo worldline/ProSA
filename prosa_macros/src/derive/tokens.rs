@@ -19,7 +19,6 @@ impl<'f> TvfEnum<'f> {
             } else {
                 ImplTrait::To
             },
-            false,
         );
 
         // handle all cases of the enumeration
@@ -100,7 +99,6 @@ impl<'f> TvfStruct<'f> {
             } else {
                 ImplTrait::To
             },
-            false,
         );
 
         // (de)structure the type
@@ -170,8 +168,7 @@ impl<'f> TvfFields<'f> {
 
 fn impl_to_field(type_name: &Ident, generics: Generics, owned: bool) -> TokenStream {
     if owned {
-        let [impl_generics, ty_generics, where_clause] =
-            extend_generics(generics, ImplTrait::Into, true);
+        let [impl_generics, ty_generics, where_clause] = extend_generics(generics, ImplTrait::Into);
 
         quote! {
             impl #impl_generics __tvf::IntoField<__TVF> for #type_name #ty_generics #where_clause {
@@ -183,8 +180,7 @@ fn impl_to_field(type_name: &Ident, generics: Generics, owned: bool) -> TokenStr
             }
         }
     } else {
-        let [impl_generics, ty_generics, where_clause] =
-            extend_generics(generics, ImplTrait::To, true);
+        let [impl_generics, ty_generics, where_clause] = extend_generics(generics, ImplTrait::To);
 
         quote! {
             impl #impl_generics __tvf::ToField<__TVF> for #type_name #ty_generics #where_clause {
@@ -205,7 +201,7 @@ impl<'f> TvfEnum<'f> {
         // Prepare tokens
         let type_name = self.type_ident;
         let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), ImplTrait::From, false);
+            extend_generics(self.generics.clone(), ImplTrait::From);
 
         // handle all cases of the enumeration
         let decl_discris = self.decl_discris(self.attr.tag_type, false);
@@ -292,7 +288,7 @@ impl<'f> TvfStruct<'f> {
 
         // add `T: Tvf` bounds on generics
         let [impl_generics, ty_generics, where_clause] =
-            extend_generics(self.generics.clone(), ImplTrait::From, false);
+            extend_generics(self.generics.clone(), ImplTrait::From);
 
         // (de)structure the type
         let fields = self.fields.structuring();
@@ -343,8 +339,7 @@ impl<'f> TvfFields<'f> {
 }
 
 fn impl_from_field(type_name: &Ident, generics: Generics) -> TokenStream {
-    let [impl_generics, ty_generics, where_clause] =
-        extend_generics(generics, ImplTrait::From, true);
+    let [impl_generics, ty_generics, where_clause] = extend_generics(generics, ImplTrait::From);
 
     quote! {
         impl #impl_generics __tvf::FromField<__TVF> for #type_name #ty_generics #where_clause {

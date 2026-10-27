@@ -187,11 +187,7 @@ pub(crate) enum ImplTrait {
 /// Add the generic bound `__TVF: __tvf::Tvf` to an impl-block.
 /// Indicate if we are implementing the `FromTvf` trait or the `ToTvf` trait.
 /// Output [ImplGenerics, TypeGenerics, WhereClause]
-pub(crate) fn extend_generics(
-    mut generics: Generics,
-    impl_trait: ImplTrait,
-    impl_field: bool,
-) -> [TokenStream; 3] {
+pub(crate) fn extend_generics(mut generics: Generics, impl_trait: ImplTrait) -> [TokenStream; 3] {
     // Pick current type's generics and where clause as is
     let (_, type_g, _) = generics.split_for_impl();
     let type_g = quote![ #type_g ];
@@ -230,13 +226,9 @@ pub(crate) fn extend_generics(
     }
 
     // Add extra `__TVF` generics and force a `Tvf` trait bound
-    let extra_bound = if impl_field {
-        match impl_trait {
-            ImplTrait::To | ImplTrait::Into => quote! { + ::core::default::Default },
-            ImplTrait::From => quote! { + ::core::clone::Clone },
-        }
-    } else {
-        TokenStream::new()
+    let extra_bound = match impl_trait {
+        ImplTrait::To | ImplTrait::Into => quote! { + ::core::default::Default },
+        ImplTrait::From => quote! { + ::core::clone::Clone },
     };
     generics
         .params
