@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
+            window.path_to_searchindex_js = "searchindex-82a934a1.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -330,16 +330,68 @@ and a literal <code>%</code> as <code>%25</code>.</p>
 
 <p>As such, you can’t directly send metric to it.
 It’s the role of Prometheus to gather metrics from your application.</p>
-<p>To do this, you need to declare a server that exposes your ProSA metrics:</p>
+<p>The observability HTTP server is shared by Prometheus and the ProSA health probes. Configure its
+listening address at the top level and enable the Prometheus exporter to expose <code>/metrics</code>:</p>
 <pre><code class="language-yaml">observability:
+  endpoint: "0.0.0.0:9090"
   level: debug
-  metrics:
-    prometheus:
-      endpoint: "0.0.0.0:9090"
 </code></pre>
 <blockquote>
-<p>You also need to enable the feature <code>prometheus</code> for ProSA.</p>
+<p>You also need to enable the <code>prometheus</code> feature for ProSA. No additional Prometheus
+configuration is required.</p>
 </blockquote>
+<p>Only the <code>/metrics</code> path returns metrics. Other paths do not expose the Prometheus registry.</p>
+<h3 id="health-and-readiness"><a class="header" href="#health-and-readiness">Health and readiness</a></h3>
+<p>ProSA tracks readiness as part of its base observability support. The <code>prosa_ready</code> gauge is
+exported through every configured metrics exporter, including OTLP, stdout, and Prometheus. Its
+value is <code>1</code> when ready and <code>0</code> otherwise. Neither readiness requirements nor this metric require
+the HTTP feature.</p>
+<p>When the <code>prometheus</code> feature is enabled, the observability server also exposes three health
+endpoints:</p>
+<ul>
+<li><code>/startup</code> succeeds permanently after ProSA first becomes ready.</li>
+<li><code>/live</code> always succeeds; answering proves the process is alive.</li>
+<li><code>/ready</code> succeeds while ProSA is not shutting down and all configured health requirements are
+available.</li>
+</ul>
+<p>Processor and service requirements are optional. When both are present, every named processor and
+service is required. Empty entries are ignored:</p>
+<pre><code class="language-yaml">observability:
+  endpoint: "0.0.0.0:9090"
+  health:
+    required_processors:
+      - api_processor
+      - database_processor
+    required_services:
+      - CUSTOMER_LOOKUP
+      - PAYMENT
+</code></pre>
+<p>A required processor is available when it has at least one queue registered with the main task. A
+required service is available when it has at least one registered provider. Losing either makes
+<code>/ready</code> return <code>503 Service Unavailable</code>, but does not reset <code>/startup</code>.
+Without requirements, ProSA becomes ready when the main task starts. Requirement changes are
+applied during configuration reload and immediately update readiness.</p>
+<p>For Kubernetes, configure startup separately so liveness and readiness checks do not interfere
+with initialization:</p>
+<pre><code class="language-yaml">startupProbe:
+  httpGet:
+    path: /startup
+    port: 9090
+  periodSeconds: 2
+  failureThreshold: 30
+livenessProbe:
+  httpGet:
+    path: /live
+    port: 9090
+  periodSeconds: 10
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 9090
+  periodSeconds: 5
+</code></pre>
+<p>See the <a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/">Kubernetes probe documentation</a>
+for deployment-specific timing and failure thresholds.</p>
 
                     </main>
 

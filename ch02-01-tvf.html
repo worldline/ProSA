@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
+            window.path_to_searchindex_js = "searchindex-82a934a1.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -236,7 +236,7 @@ let message = tvf!(SimpleStringTvf {
 types:</p>
 <pre><code class="language-rust ignore">let message = tvf!(SimpleStringTvf {
     1 =&gt; 2,              // signed (i64)
-    2 =&gt; 4usize,         // also signed
+    2 =&gt; 4usize,         // unsigned (u64)
     3 =&gt; 1 as Unsigned,  // unsigned (u64)
     4 =&gt; 2.5 as Float,   // float (f64)
 });</code></pre>
@@ -261,6 +261,13 @@ types:</p>
 </div>
 <p>Converting a byte-string literal with <code>as String</code> happens at compile time and fails compilation if
 the bytes are not valid UTF-8.</p>
+<p>Type annotations are mandatory when the value is a variable identifier or a complex Rust expression using <code>( )</code>.</p>
+<pre><code class="language-rust ignore">let my_value = "hello";
+
+let message = tvf!(SimpleStringTvf {
+    1 =&gt; my_value as String,
+    2 =&gt; (1 + 2 + 3) as Unsigned,
+});</code></pre>
 <h3 id="lists"><a class="header" href="#lists">Lists</a></h3>
 <p>Use <code>[ ]</code> to create sequential fields indexed starting from 1:</p>
 <pre><code class="language-rust ignore">let list = tvf!(SimpleStringTvf [
@@ -289,6 +296,30 @@ the bytes are not valid UTF-8.</p>
     200 =&gt; "2023-06-05 15:02:00.000" as DateTime,
 });</code></pre>
 <p>Lists can contain nested maps (<code>{ }</code>), and maps can contain nested lists (<code>[ ]</code>), allowing arbitrary depth.</p>
+<h3 id="advanced-usage"><a class="header" href="#advanced-usage">Advanced usage</a></h3>
+<p>You can define field identifier using constants or Rust expressions:</p>
+<pre><code class="language-rust ignore">const MY_FIELD: usize = 1;
+
+let message = tvf!(SimpleStringTvf {
+    MY_FIELD       =&gt;   2, // id: 1
+    (MY_FIELD + 2) =&gt; 100, // id: 3
+});</code></pre>
+<p>Unary operators <code>!</code>, <code>+</code>, <code>-</code>, <code>&amp;</code> and <code>*</code> are supported on literals, variables and expressions:</p>
+<pre><code class="language-rust ignore">let my_int: i32 = 4;
+let my_ref = &amp;my_int;
+
+let message = tvf!(SimpleStringTvf {
+    1 =&gt; !true,               // false
+    2 =&gt; +20,                 //  20
+    3 =&gt; -my_int   as Signed, //  -4
+    4 =&gt; *my_ref   as Signed, //   4
+    5 =&gt; -(20 * 3) as Signed, // -60
+});</code></pre>
+<p>The macro <code>format!</code> can be used directly.
+Since it necessarily output a string, type annotation is not necessary when using it:</p>
+<pre><code class="language-rust ignore">let message = tvf!(SimpleStringTvf {
+    1 =&gt; format!("0x{:0&gt;4x}", 33), // "0x0021"
+});</code></pre>
 <h2 id="implement-your-own-tvf"><a class="header" href="#implement-your-own-tvf">Implement your own TVF</a></h2>
 <p>If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:</p>
 <pre><code class="language-rust ignore">impl Tvf for MyOwnTvf {

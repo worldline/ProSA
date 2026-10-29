@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-9fb69b47.js";
+            window.path_to_searchindex_js = "searchindex-82a934a1.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-fd5e9555.js"></script>
@@ -198,7 +198,7 @@ the loop from accepting anyone else. An SSL server should instead accept with <c
 owned snapshot of the SSL parameters with <code>handshaker()</code>, and handshake in a spawned task:</p>
 <pre><code class="language-rust ignore">let (stream, addr) = listener.accept_raw().await?;
 
-// An OpenSSL context is reference counted, so the snapshot costs an atomic increment
+// The snapshot shares the SSL context, so it costs an atomic increment
 let handshaker = listener.handshaker().cloned();
 tokio::spawn(async move {
     let stream = match handshaker {
@@ -208,13 +208,15 @@ tokio::spawn(async move {
 
     // ... serve the client
 });</code></pre>
-<p>The snapshot is taken when the client is accepted, so a certificate rotated meanwhile applies to
-the clients accepted afterwards and leaves the handshakes in flight alone.</p>
+<p>The snapshot is taken when the client is accepted, so a configuration reloaded meanwhile applies to
+the clients accepted afterwards and leaves the handshakes in flight alone. A certificate renewed on
+disk needs no reload: every snapshot shares the context, which is built again once its files
+change, as described in <a href="ch01-02-03-stream.html#certificate-files-changed-on-disk">the stream settings</a>.</p>
 <h3 id="sharing-the-listener"><a class="header" href="#sharing-the-listener">Sharing the listener</a></h3>
 <p><code>set_handshaker</code> takes the listener by value, so a listener that is shared — held in an <code>Arc</code> by the
-accept loop and by whatever else drives it — cannot be replaced to rotate its certificate. Bind it
-with <code>bind_raw</code> instead: it binds the socket and hands the SSL parameters back beside it rather than
-inside it, so the handshaker you hold is the only copy and rotating it is an assignment.</p>
+accept loop and by whatever else drives it — cannot be replaced when its configuration changes. Bind
+it with <code>bind_raw</code> instead: it binds the socket and hands the SSL parameters back beside it rather
+than inside it, so the handshaker you hold is the only copy and replacing it is an assignment.</p>
 <pre><code class="language-rust ignore">let (listener, mut handshaker) = listener_setting.bind_raw().await?;
 let listener = Arc::new(listener);
 
@@ -226,7 +228,7 @@ tokio::spawn(async move { /* ... */ });
 // Configuration reload or certificate-source change notification
 handshaker = listener_setting.build_handshaker().await?;</code></pre>
 <p>A listener bound this way carries no SSL parameters of its own: it formats as <code>tcp://</code>, its
-<code>handshaker()</code> is <code>None</code>, and <code>accept</code> returns a plain TCP stream. That is what keeps a rotation
+<code>handshaker()</code> is <code>None</code>, and <code>accept</code> returns a plain TCP stream. That is what keeps a replacement
 honest — there is no copy left inside the listener for <code>accept</code>, <code>handshake</code> or <code>Debug</code> to serve
 after you have replaced yours.</p>
 <h2 id="stream"><a class="header" href="#stream">Stream</a></h2>
@@ -247,7 +249,60 @@ It can be instantiated from a <a href="ch01-02-03-stream.html#client"><code>Targ
 <li><code>ttl</code></li>
 </ul>
 <h2 id="io-macro"><a class="header" href="#io-macro">IO macro</a></h2>
-<p>This section will be documented when the macro becomes stable, or removed if it is not relevant.</p>
+<p><code>#[io]</code> writes the plumbing every socket object needs. On a struct it injects a <code>stream</code> of a new
+generic <code>IO</code> type, the remote <code>addr</code>, a read <code>buffer</code>, and a <code>socket_id</code>, and it generates
+<code>From&lt;IO&gt;</code> and <code>From&lt;(IO, SocketAddr)&gt;</code> so a socket is built straight from a connected <code>Stream</code>. On
+an <code>impl</code> block it adds the same <code>IO</code> generic, so your methods see the injected fields as if you had
+declared them. It does <em>not</em> implement the <code>IO</code> trait — <code>parse_frame</code>, <code>read_frame</code> and
+<code>write_frame</code> describe your protocol and stay yours to write.</p>
+<pre><code class="language-rust ignore">#[io]
+struct MyIo {
+    // Your own fields, which must all implement `Default`
+    state: MyState,
+}
+
+let (stream, addr) = listener.accept_raw().await?;
+let mut socket = MyIo::from((stream, addr));</code></pre>
+<p>A socket is built with the file descriptor it happens to hold as its <code>socket_id</code>, which is the queue
+id it declares itself to the bus with. That value is reused by the system once the socket closes, and
+is a different one every time the socket reconnects. A processor that keeps a socket across its
+reconnections should give it an id of its own with <code>set_socket_id</code>, so the bus keeps addressing the
+same queue:</p>
+<pre><code class="language-rust ignore">socket.set_socket_id(slot_id);
+proc.add_proc_queue(tx_queue, socket.socket_id()).await?;</code></pre>
+<h2 id="keeping-sockets-in-line-with-the-configuration"><a class="header" href="#keeping-sockets-in-line-with-the-configuration">Keeping sockets in line with the configuration</a></h2>
+<p>A processor that owns sockets has to answer three questions every time its configuration is
+reloaded: which sockets should still exist, what changed for the ones that stay, and what to do with
+the requests still addressed to the ones that go.</p>
+<p>Deciding <em>which</em> sockets should exist stays with the processor, because only it knows what makes two
+of its connections the same — a target URL, a pool index, a protocol-level name. The rest is the
+same work in every protocol, and <a href="https://docs.rs/prosa/latest/prosa/io/pool/"><code>prosa::io::pool</code></a>
+provides it.</p>
+<p>A <strong>control channel</strong> reaches a socket out of band from the requests it serves. A bus queue only
+reaches a socket that is connected and reading it, so it cannot carry a decision meant for one that
+is busy serving or waiting to reconnect. Put in it whatever applies to the next attempt or the next
+message; what defines the connection itself does not belong there, since a socket that has to reach
+somewhere else is a different socket.</p>
+<pre><code class="language-rust ignore">let (control_tx, control_rx) = control_channel(MySocketControl { timeout });
+
+// Configuration reload: the socket picks this up without reconnecting
+control_tx.update(|control| control.timeout = new_timeout);
+
+// The slot is gone from the configuration: the socket answers what it has and does not come back
+control_tx.stop();</code></pre>
+<p>In the socket, <code>stopped()</code> resolves only once the processor retired it, and treats a dropped sender
+as a retirement — so it is safe as a <code>select!</code> arm, where a plain <code>changed()</code> would spin:</p>
+<pre><code class="language-rust ignore">tokio::select! {
+    _ = control.stopped() =&gt; break,
+    Some(msg) = rx_queue.recv() =&gt; { /* ... */ }
+}</code></pre>
+<p><code>Backoff</code> spaces out reconnection attempts to a peer that is down, doubling from a base delay up to
+a maximum. A connection that served nothing but lasted at least the base delay counts as a working
+one and resets the count, so a peer that accepts and closes straight away is not dialled in a loop.</p>
+<p><code>retire_queue</code> drains the queue of a socket that will not come back, answering
+<code>UnableToReachService</code>. The bus is told to remove the queue, but a processor holding an older
+service table still sends to it; closing it there would turn a request that should have come back as
+an error into a send failure for its sender.</p>
 
                     </main>
 
