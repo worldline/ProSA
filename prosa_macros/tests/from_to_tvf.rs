@@ -53,10 +53,11 @@ mod macro_tests {
         H = 12,
     }
 
-    #[derive(Debug, FromTvf, ToTvf, IntoTvf)]
-    struct H<'c> {
+    #[derive(Debug, PartialEq, FromTvf, ToTvf, IntoTvf)]
+    struct I<'c> {
         vector: Vec<u32>,
         boxed: Box<u32>,
+        option: Option<u32>,
         copy_on_write: Cow<'c, u32>,
         hash_map: HashMap<u16, u32>,
         btree_map: BTreeMap<u32, u64>,
@@ -172,5 +173,74 @@ mod macro_tests {
         assert_eq!(fh0, fh2);
         let fh3 = F::from_tvf(&fh0).expect("Deserialization from TVF should work");
         assert_eq!(fh1, fh3);
+    }
+
+    #[test]
+    fn test_derive_std_types() {
+        let i0 = tvf![SimpleStringTvf {
+            0 => [ 10, 20, 30, 40 ],
+            1 => 64,
+            // field 2 is skipped
+            3 => 128,
+            4 => { 2 => 40, 4 => 80 },
+            5 => { 3 => 50, 5 => 90 },
+        }];
+        let i1 = I {
+            vector: vec![10, 20, 30, 40],
+            boxed: Box::new(64),
+            option: None,
+            copy_on_write: Cow::Owned(128),
+            hash_map: {
+                let mut map = HashMap::new();
+                map.insert(2, 40);
+                map.insert(4, 80);
+                map
+            },
+            btree_map: {
+                let mut map = BTreeMap::new();
+                map.insert(3, 50);
+                map.insert(5, 90);
+                map
+            },
+        };
+
+        // serialize to TVF
+        let mut i2 = SimpleStringTvf::default();
+        i1.to_tvf(&mut i2);
+        assert_eq!(i0, i2);
+
+        // deserialize from TVF
+        let i3 = I::from_tvf(&i0).expect("Deserialization from TVF should work");
+        assert_eq!(i1, i3);
+
+        // second test
+
+        let i0 = tvf![SimpleStringTvf {
+            0 => [],
+            1 => 32,
+            2 => 33,
+            3 => 34,
+            4 => {},
+            5 => {},
+        }];
+
+        let int = 34;
+        let i1 = I {
+            vector: Vec::new(),
+            boxed: Box::new(32),
+            option: Some(33),
+            copy_on_write: Cow::Borrowed(&int),
+            hash_map: HashMap::new(),
+            btree_map: BTreeMap::new(),
+        };
+
+        // serialize to TVF
+        let mut i2 = SimpleStringTvf::default();
+        i1.to_tvf(&mut i2);
+        assert_eq!(i0, i2);
+
+        // deserialize from TVF
+        let i3 = I::from_tvf(&i0).expect("Deserialization from TVF should work");
+        assert_eq!(i1, i3);
     }
 }
