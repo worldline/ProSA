@@ -45,10 +45,10 @@ mod macro_tests {
             19 => &some_string as String,
             21 => *integer_ref as u64,
             200 => "2023-06-05 15:02:00.000" as DateTime,
-            800 => -(10 - 8) as Signed, // fix: (-left - right) as i64
-            801 => 1_000u64 as String, // fix: "1_000u64"
-            802 => "abc", // fix: -"abc"
-            803 => b"\x80", // fix: -b"\x80"
+            800 => -(10 - 8) as Signed,
+            801 => 1_000u64 as String,
+            802 => "abc",
+            803 => b"\x80",
         });
 
         // Modify the string after being inserted into the buffer
