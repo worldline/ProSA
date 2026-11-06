@@ -3,7 +3,7 @@ mod macro_tests {
     use prosa_macros::{FromTvf, IntoTvf, ToTvf, tvf};
     use prosa_utils::msg::{
         simple_string_tvf::SimpleStringTvf,
-        tvf::{FromTvf, IntoTvf, ToTvf, Tvf, TvfError},
+        tvf::{FromTvf, IntoTvf, ToTvf},
     };
     use std::{
         borrow::Cow,
@@ -44,6 +44,7 @@ mod macro_tests {
             from_tvf = "custom::from_tvf"
         )]
         a: u32,
+
         b: T,
         c: S,
 
@@ -61,6 +62,9 @@ mod macro_tests {
 
         #[tvf(skip_from_tvf, default = "default_bool_true")]
         h: bool,
+
+        #[tvf(with = "custom")]
+        i: u32,
     }
 
     pub mod custom {
@@ -170,6 +174,7 @@ mod macro_tests {
             4 => 64,
             5 => 36.5,
             7 => true,
+            8 => 1600,
         }];
         let e1 = E::<A, B> {
             a: 12,
@@ -184,6 +189,7 @@ mod macro_tests {
             f: 36.5,
             g: true,
             h: true,
+            i: 100,
         };
 
         // serialize to TVF
