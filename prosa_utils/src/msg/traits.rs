@@ -978,6 +978,4 @@ mod tests {
         assert!(matches!(decoded.2, Cow::Owned(_)));
         assert_eq!(None, decoded.4);
     }
-
-    
 }

@@ -1,6 +1,6 @@
 use crate::derive::{
     ast::{ImplTrait, TvfEnum, TvfField, TvfFields, TvfStruct, TvfVariant, extend_generics},
-    attr::TagType,
+    attr::{AttrDefault, TagType},
 };
 use proc_macro2::TokenStream;
 use quote::{ToTokens as _, format_ident, quote};
@@ -143,7 +143,9 @@ impl<'f> TvfFields<'f> {
             let ident = field.tmp_ident();
             let id = field.ident_field_id();
 
-            let f = if owned {
+            let f = if field.attr.skip_to_tvf {
+                TokenStream::new()
+            } else if owned {
                 // Select "into_tvf" function
                 if let Some(func) = &field.attr.custom_into_tvf {
                     quote![ #func(#ident, #id, __msg); ]
@@ -325,10 +327,34 @@ impl<'f> TvfFields<'f> {
             let id = field.ident_field_id();
 
             // Select "tvf_from" function
-            let f = if let Some(func) = &field.attr.custom_from_tvf {
-                quote![ let #ident = #func(__msg, #id)?; ]
+            let f = if field.attr.skip_from_tvf {
+                let default_impl = field
+                    .get_default(true)
+                    .expect("Forced generating a default call");
+                quote![
+                    let #ident = #default_impl;
+                ]
+            } else if let Some(default_impl) = field.get_default(false) {
+                if let Some(func) = &field.attr.custom_from_tvf {
+                    quote![
+                        let #ident = #func(__msg, #id).unwrap_or_else(|_| #default_impl);
+                    ]
+                } else {
+                    quote![
+                        let #ident = <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id)
+                            .unwrap_or_else(|_| #default_impl);
+                    ]
+                }
             } else {
-                quote![ let #ident = <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id)?; ]
+                if let Some(func) = &field.attr.custom_from_tvf {
+                    quote![
+                        let #ident = #func(__msg, #id)?;
+                    ]
+                } else {
+                    quote![
+                        let #ident = <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id)?;
+                    ]
+                }
             };
             tokens.push(f);
         }
@@ -472,6 +498,26 @@ impl<'f> TvfField<'f> {
     #[inline]
     pub(crate) fn ident_field_id(&self) -> Ident {
         format_ident!("__ID_{}", self.index)
+    }
+
+    /// Get the default for the field
+    pub(crate) fn get_default(&self, force: bool) -> Option<TokenStream> {
+        #[inline]
+        fn default_impl() -> Option<TokenStream> {
+            Some(quote![core::default::Default::default()])
+        }
+
+        match &self.attr.default {
+            AttrDefault::None => {
+                if force {
+                    default_impl()
+                } else {
+                    None
+                }
+            }
+            AttrDefault::Default => default_impl(),
+            AttrDefault::Custom(c) => Some(quote![ #c() ]),
+        }
     }
 
     /// Declare the field ID

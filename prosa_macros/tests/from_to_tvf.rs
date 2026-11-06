@@ -8,6 +8,8 @@ mod macro_tests {
     use std::{
         borrow::Cow,
         collections::{BTreeMap, HashMap},
+        rc::Rc,
+        sync::Arc,
     };
 
     /// Define fields' identifier as constants
@@ -44,23 +46,15 @@ mod macro_tests {
         a: u32,
         b: T,
         c: S,
-    }
 
-    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
-    #[tvf(tag_id = MY_FIELD + 1, tag_type = "unsigned")]
-    enum F {
-        G = 10,
-        H = 12,
-    }
+        #[tvf(skip)]
+        d: u32,
 
-    #[derive(Debug, PartialEq, FromTvf, ToTvf, IntoTvf)]
-    struct I<'c> {
-        vector: Vec<u32>,
-        boxed: Box<u32>,
-        option: Option<u32>,
-        copy_on_write: Cow<'c, u32>,
-        hash_map: HashMap<u16, u32>,
-        btree_map: BTreeMap<u32, u64>,
+        #[tvf(default)]
+        e: i32,
+
+        #[tvf(default = "default_float")]
+        f: f32,
     }
 
     fn custom_to_tvf<TVF: Tvf>(value: &u32, id: usize, msg: &mut TVF) {
@@ -73,6 +67,32 @@ mod macro_tests {
 
     fn custom_from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<u32, TvfError> {
         msg.get_unsigned(id).map(|value| (value as u32) >> 4)
+    }
+
+    const fn default_float() -> f32 {
+        42.0
+    }
+
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+    #[tvf(tag_id = MY_FIELD + 1, tag_type = "unsigned")]
+    enum F {
+        #[tvf(default, tag = 100)]
+        G = 10,
+
+        #[tvf(tag = 120)]
+        H = 12,
+    }
+
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+    struct I<'c> {
+        vector: Vec<u32>,
+        boxed: Box<u32>,
+        option: Option<u32>,
+        copy_on_write: Cow<'c, u32>,
+        hash_map: HashMap<u16, u32>,
+        btree_map: BTreeMap<u32, u64>,
+        rc: Rc<u32>,
+        arc: Arc<String>,
     }
 
     #[test]
@@ -132,7 +152,9 @@ mod macro_tests {
                 10  => 0u8,
                 100 => "BYE",
             },
-            2 => { MY_FIELD => "C" }
+            2 => { MY_FIELD => "C" },
+            4 => 64,
+            5 => 36.5,
         }];
         let e1 = E::<A, B> {
             a: 12,
@@ -142,6 +164,9 @@ mod macro_tests {
                 c: "BYE".to_string(),
             },
             c: B::C,
+            d: 0,
+            e: 64,
+            f: 36.5,
         };
 
         // serialize to TVF
@@ -157,7 +182,7 @@ mod macro_tests {
     #[test]
     fn test_derive_enum2() {
         // G variant
-        let fg0 = tvf![SimpleStringTvf { (MY_FIELD + 1) => 10 as Unsigned }];
+        let fg0 = tvf![SimpleStringTvf { (MY_FIELD + 1) => 100u64 }];
         let fg1 = F::G;
         let mut fg2 = SimpleStringTvf::default();
         fg1.to_tvf(&mut fg2);
@@ -166,7 +191,7 @@ mod macro_tests {
         assert_eq!(fg1, fg3);
 
         // H variant
-        let fh0 = tvf![SimpleStringTvf { (MY_FIELD + 1) => 12 as Unsigned }];
+        let fh0 = tvf![SimpleStringTvf { (MY_FIELD + 1) => 120u64 }];
         let fh1 = F::H;
         let mut fh2 = SimpleStringTvf::default();
         fh1.to_tvf(&mut fh2);
@@ -184,6 +209,8 @@ mod macro_tests {
             3 => 128,
             4 => { 2 => 40, 4 => 80 },
             5 => { 3 => 50, 5 => 90 },
+            6 => 250,
+            7 => "shared",
         }];
         let i1 = I {
             vector: vec![10, 20, 30, 40],
@@ -202,11 +229,17 @@ mod macro_tests {
                 map.insert(5, 90);
                 map
             },
+            rc: Rc::new(250),
+            arc: Arc::new(String::from("shared")),
         };
 
         // serialize to TVF
         let mut i2 = SimpleStringTvf::default();
         i1.to_tvf(&mut i2);
+        assert_eq!(i0, i2);
+
+        let mut i2 = SimpleStringTvf::default();
+        i1.clone().into_tvf(&mut i2);
         assert_eq!(i0, i2);
 
         // deserialize from TVF
@@ -222,6 +255,8 @@ mod macro_tests {
             3 => 34,
             4 => {},
             5 => {},
+            6 => 35,
+            7 => "arc",
         }];
 
         let int = 34;
@@ -232,11 +267,17 @@ mod macro_tests {
             copy_on_write: Cow::Borrowed(&int),
             hash_map: HashMap::new(),
             btree_map: BTreeMap::new(),
+            rc: Rc::new(35),
+            arc: Arc::new(String::from("arc")),
         };
 
         // serialize to TVF
         let mut i2 = SimpleStringTvf::default();
         i1.to_tvf(&mut i2);
+        assert_eq!(i0, i2);
+
+        let mut i2 = SimpleStringTvf::default();
+        i1.clone().into_tvf(&mut i2);
         assert_eq!(i0, i2);
 
         // deserialize from TVF
