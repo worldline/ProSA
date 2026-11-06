@@ -115,11 +115,14 @@ mod macro_tests {
 
     #[derive(Debug, PartialEq, FromTvf, ToTvf)]
     struct J {
-        #[tvf(to_tvf = "custom2::to_tvf", from_tvf = "custom2::from_tvf")]
+        #[tvf(id = 6, to_tvf = "custom2::to_tvf", from_tvf = "custom2::from_tvf")]
         a: f32,
 
-        #[tvf(with = "custom2")]
+        #[tvf(id = 7, with = "custom2")]
         b: f32,
+
+        #[tvf(flatten)]
+        c: A,
     }
 
     /// Module without `into_tvf`
@@ -333,10 +336,21 @@ mod macro_tests {
     #[test]
     fn test_derive_custom_field_paths() {
         let expected = tvf![SimpleStringTvf {
-            0 => 1.5,
-            1 => 2.0,
+            0 => 12u64,
+            10 => 1u8,
+            MY_FIELD => "HELLO",
+            6 => 1.5,
+            7 => 2.0,
         }];
-        let value = J { a: 3.0, b: 4.0 };
+        let value = J {
+            a: 3.0,
+            b: 4.0,
+            c: A {
+                a: 12,
+                b: true,
+                c: String::from("HELLO"),
+            },
+        };
 
         let mut encoded = SimpleStringTvf::default();
         value.to_tvf(&mut encoded);

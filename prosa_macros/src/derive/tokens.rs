@@ -145,6 +145,13 @@ impl<'f> TvfFields<'f> {
 
             let f = if field.attr.skip_to_tvf {
                 TokenStream::new()
+            } else if field.attr.flatten {
+                // When flatten attribute is set, write in the parent message directly
+                if owned {
+                    quote![ <#ty as __tvf::IntoTvf<__TVF>>::into_tvf(#ident, __msg); ]
+                } else {
+                    quote![ <#ty as __tvf::ToTvf<__TVF>>::to_tvf(&#ident, __msg); ]
+                }
             } else if owned {
                 // Select "into_tvf" function
                 if let Some(func) = &field.attr.custom_into_tvf {
@@ -334,6 +341,18 @@ impl<'f> TvfFields<'f> {
                 quote![
                     let #ident = #default_impl;
                 ]
+            } else if field.attr.flatten {
+                // When flatten attribute is set, read from the parent message directly
+                if let Some(default_impl) = field.get_default(false) {
+                    quote![
+                        let #ident = <#ty as __tvf::FromTvf<__TVF>>::from_tvf(__msg)
+                            .unwrap_or_else(|_| #default_impl);
+                    ]
+                } else {
+                    quote![
+                        let #ident = <#ty as __tvf::FromTvf<__TVF>>::from_tvf(__msg)?;
+                    ]
+                }
             } else if let Some(default_impl) = field.get_default(false) {
                 if let Some(func) = &field.attr.custom_from_tvf {
                     quote![
