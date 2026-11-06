@@ -204,6 +204,10 @@ pub(crate) struct AttrField {
 
     /// Flag the field as skipped when reading from TVF
     pub skip_from_tvf: bool,
+
+    /// Specify the fields of the field should be written
+    /// in the parent TVF buffer insteand into a sub-buffer.
+    pub flatten: bool,
 }
 
 #[derive(Default, Clone, PartialEq, Eq)]
@@ -228,6 +232,7 @@ impl AttrField {
         let mut default = AttrDefault::None;
         let mut skip_to_tvf = false;
         let mut skip_from_tvf = false;
+        let mut flatten = false;
 
         // Iterate over all the attributes of the field and only
         // pick the attributes of the form `#[tvf(...)]`.
@@ -257,6 +262,9 @@ impl AttrField {
                                     }
                                     "skip_from_tvf" => {
                                         skip_from_tvf = true;
+                                    }
+                                    "flatten" => {
+                                        flatten = true;
                                     }
                                     _ => {
                                         return Err(AttrError::new(
@@ -324,6 +332,7 @@ impl AttrField {
             default,
             skip_to_tvf,
             skip_from_tvf,
+            flatten,
         })
     }
 }
