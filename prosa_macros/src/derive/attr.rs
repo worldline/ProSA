@@ -2,8 +2,8 @@ use crate::derive::ATTRIBUTE;
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
-    Attribute, Expr, Lit, Meta, MetaNameValue, Path, Token, parse_str, punctuated::Punctuated,
-    spanned::Spanned,
+    Attribute, Expr, Lit, Meta, MetaNameValue, Path, Token, parse_quote, parse_str,
+    punctuated::Punctuated, spanned::Spanned,
 };
 
 /// Error encountered when parsing attributes
@@ -290,6 +290,14 @@ impl AttrField {
                                     "from_tvf" => {
                                         custom_from_tvf =
                                             Some(Box::new(path_from_expr(&name_value.value)?));
+                                    }
+                                    "with" => {
+                                        let path = path_from_expr(&name_value.value)?;
+                                        custom_to_tvf = Some(Box::new(parse_quote![#path::to_tvf]));
+                                        custom_into_tvf =
+                                            Some(Box::new(parse_quote![#path::into_tvf]));
+                                        custom_from_tvf =
+                                            Some(Box::new(parse_quote![#path::from_tvf]));
                                     }
                                     _ => {
                                         return Err(AttrError::new(
