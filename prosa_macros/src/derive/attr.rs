@@ -109,7 +109,12 @@ impl AttrEnum {
                 ("tag_id", Some(value)) => {
                     tag_id = Some(value.clone());
                 }
-                _ => {}
+                _ => {
+                    return Err(AttrError::new(
+                        attr.span,
+                        ErrorKind::Invalid(attr.to_string()),
+                    ));
+                }
             }
         }
 
@@ -200,7 +205,12 @@ impl AttrVariant {
                 ("default", None) => {
                     default = true;
                 }
-                _ => {}
+                _ => {
+                    return Err(AttrError::new(
+                        attr.span,
+                        ErrorKind::Invalid(attr.to_string()),
+                    ));
+                }
             }
         }
 
@@ -273,7 +283,12 @@ impl AttrField {
                 ("flatten", None) => {
                     flatten = true;
                 }
-                _ => {}
+                _ => {
+                    return Err(AttrError::new(
+                        attr.span,
+                        ErrorKind::Invalid(attr.to_string()),
+                    ));
+                }
             }
         }
 
@@ -308,6 +323,9 @@ pub(crate) struct AttrOverrides {
 }
 
 impl AttrOverrides {
+    /// Identify override attributes in the workbuffer.
+    /// Returns identified overrides and removes them from the workbuffer.
+    /// This allow to report errors on unknown attributes in the caller handler.
     pub(crate) fn identify(workbuffer: &mut Vec<AttrNameValue>) -> Result<Self, AttrError> {
         let mut custom_to_tvf = None;
         let mut custom_into_tvf = None;
@@ -315,34 +333,49 @@ impl AttrOverrides {
         let mut skip_to_tvf = false;
         let mut skip_from_tvf = false;
 
-        for attr in workbuffer.iter() {
-            match (attr.name.as_str(), attr.value.as_ref()) {
+        for index in (0..workbuffer.len()).rev() {
+            let elem = &workbuffer[index];
+
+            // Check if this attribute is recognized
+            let identified = match (elem.name.as_str(), elem.value.as_deref()) {
                 ("skip", None) => {
                     skip_to_tvf = true;
                     skip_from_tvf = true;
+                    true
                 }
                 ("skip_to_tvf", None) => {
                     skip_to_tvf = true;
+                    true
                 }
                 ("skip_from_tvf", None) => {
                     skip_from_tvf = true;
+                    true
                 }
                 ("to_tvf", Some(value)) => {
                     custom_to_tvf = Some(Box::new(path_from_expr(value)?));
+                    true
                 }
                 ("into_tvf", Some(value)) => {
                     custom_into_tvf = Some(Box::new(path_from_expr(value)?));
+                    true
                 }
                 ("from_tvf", Some(value)) => {
                     custom_from_tvf = Some(Box::new(path_from_expr(value)?));
+                    true
                 }
                 ("with", Some(value)) => {
                     let path = path_from_expr(value)?;
                     custom_to_tvf = Some(Box::new(parse_quote![#path::to_tvf]));
                     custom_into_tvf = Some(Box::new(parse_quote![#path::into_tvf]));
                     custom_from_tvf = Some(Box::new(parse_quote![#path::from_tvf]));
+                    true
                 }
-                _ => {}
+                _ => false,
+            };
+
+            // When identified, remove from workbuffer
+            if identified {
+                workbuffer.swap_remove(index);
             }
         }
 
