@@ -3,7 +3,7 @@ mod macro_tests {
     use prosa_macros::{FromTvf, IntoTvf, ToTvf, tvf};
     use prosa_utils::msg::{
         simple_string_tvf::SimpleStringTvf,
-        tvf::{FromTvf, IntoTvf, ToTvf},
+        tvf::{FromTvf, IntoTvf, ToTvf, Tvf, TvfError},
     };
 
     /// Define fields' identifier as constants
@@ -20,21 +20,45 @@ mod macro_tests {
         c: String,
     }
 
-    #[derive(Debug, PartialEq, Clone, FromTvf, IntoTvf, ToTvf)]
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
     #[tvf(tag_id = MY_FIELD, tag_type = "string")]
     enum B {
         C,
         D { a: u32, b: f32 },
     }
 
-    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
+    #[derive(Debug, PartialEq, FromTvf, ToTvf, IntoTvf)]
     struct E<T: Clone, S>
     where
         S: Clone,
     {
+        #[tvf(
+            to_tvf = "custom_to_tvf",
+            into_tvf = "custom_into_tvf",
+            from_tvf = "custom_from_tvf"
+        )]
         a: u32,
         b: T,
         c: S,
+    }
+
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+    #[tvf(tag_id = MY_FIELD + 1, tag_type = "unsigned")]
+    enum F {
+        G = 10,
+        H = 12,
+    }
+
+    fn custom_to_tvf<TVF: Tvf>(value: &u32, id: usize, msg: &mut TVF) {
+        msg.put_unsigned(id, (*value << 4) as u64);
+    }
+
+    fn custom_into_tvf<TVF: Tvf>(value: u32, id: usize, msg: &mut TVF) {
+        msg.put_unsigned(id, (value << 4) as u64);
+    }
+
+    fn custom_from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<u32, TvfError> {
+        msg.get_unsigned(id).map(|value| (value as u32) >> 4)
     }
 
     #[test]
@@ -88,7 +112,7 @@ mod macro_tests {
     #[test]
     fn test_derive_generic() {
         let e0 = tvf![SimpleStringTvf {
-            0 => 12u64,
+            0 => 192u64,
             1 => {
                 0   => 24u64,
                 10  => 0u8,
@@ -114,5 +138,26 @@ mod macro_tests {
         // deserialize from TVF
         let e3 = E::<A, B>::from_tvf(&e0).expect("Deserialization from TVF should work");
         assert_eq!(e1, e3);
+    }
+
+    #[test]
+    fn test_derive_enum2() {
+        // G variant
+        let fg0 = tvf![SimpleStringTvf { (MY_FIELD + 1) => 10 as Unsigned }];
+        let fg1 = F::G;
+        let mut fg2 = SimpleStringTvf::default();
+        fg1.to_tvf(&mut fg2);
+        assert_eq!(fg0, fg2);
+        let fg3 = F::from_tvf(&fg0).expect("Deserialization from TVF should work");
+        assert_eq!(fg1, fg3);
+
+        // H variant
+        let fh0 = tvf![SimpleStringTvf { (MY_FIELD + 1) => 12 as Unsigned }];
+        let fh1 = F::H;
+        let mut fh2 = SimpleStringTvf::default();
+        fh1.to_tvf(&mut fh2);
+        assert_eq!(fh0, fh2);
+        let fh3 = F::from_tvf(&fh0).expect("Deserialization from TVF should work");
+        assert_eq!(fh1, fh3);
     }
 }
