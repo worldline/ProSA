@@ -185,16 +185,38 @@ impl AttrVariant {
 pub(crate) struct AttrField {
     /// Field index where to store and read the value
     /// We store it as an expression to allow using predefined constants
-    pub field_id: Option<Expr>,
+    pub field_id: Option<Box<Expr>>,
 
     /// Override default `to_tvf` implementation
-    pub custom_to_tvf: Option<Path>,
+    pub custom_to_tvf: Option<Box<Path>>,
 
     /// Override default `into_tvf` implementation
-    pub custom_into_tvf: Option<Path>,
+    pub custom_into_tvf: Option<Box<Path>>,
 
     /// Override default `from_tvf` implementation
-    pub custom_from_tvf: Option<Path>,
+    pub custom_from_tvf: Option<Box<Path>>,
+
+    /// Specify whenever the field should fallback to a default value when missing
+    pub default: AttrDefault,
+
+    /// Flag the field as skipped when writing to TVF
+    pub skip_to_tvf: bool,
+
+    /// Flag the field as skipped when reading from TVF
+    pub skip_from_tvf: bool,
+}
+
+#[derive(Default, Clone, PartialEq, Eq)]
+pub(crate) enum AttrDefault {
+    /// No default value, if missing, throw error
+    #[default]
+    None,
+
+    /// Use `Default` implementation for the type
+    Default,
+
+    /// Use custom function for obtaining the default value
+    Custom(Box<Path>),
 }
 
 impl AttrField {
@@ -203,6 +225,9 @@ impl AttrField {
         let mut custom_to_tvf = None;
         let mut custom_into_tvf = None;
         let mut custom_from_tvf = None;
+        let mut default = AttrDefault::None;
+        let mut skip_to_tvf = false;
+        let mut skip_from_tvf = false;
 
         // Iterate over all the attributes of the field and only
         // pick the attributes of the form `#[tvf(...)]`.
@@ -211,31 +236,72 @@ impl AttrField {
                 && let Meta::List(list) = &attr.meta
             {
                 // Now look at the list of tags
-                let name_values = list
-                    .parse_args_with(Punctuated::<MetaNameValue, Token![,]>::parse_terminated)
+                let metas = list
+                    .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
                     .map_err(|_| AttrError::new(list.span(), ErrorKind::Format))?;
-                for name_value in name_values {
-                    if let Some(name) = name_value.path.get_ident() {
-                        let name = name.to_string();
-                        match name.as_str() {
-                            "id" => {
-                                field_id = Some(name_value.value);
+                for meta in metas {
+                    match meta {
+                        Meta::Path(path) => {
+                            if let Some(name) = path.get_ident() {
+                                let name = name.to_string();
+                                match name.as_str() {
+                                    "default" => {
+                                        default = AttrDefault::Default;
+                                    }
+                                    "skip" => {
+                                        skip_to_tvf = true;
+                                        skip_from_tvf = true;
+                                    }
+                                    "skip_to_tvf" => {
+                                        skip_to_tvf = true;
+                                    }
+                                    "skip_from_tvf" => {
+                                        skip_from_tvf = true;
+                                    }
+                                    _ => {
+                                        return Err(AttrError::new(
+                                            path.span(),
+                                            ErrorKind::Invalid(name),
+                                        ));
+                                    }
+                                }
                             }
-                            "to_tvf" => {
-                                custom_to_tvf = Some(path_from_expr(&name_value.value)?);
+                        }
+                        Meta::NameValue(name_value) => {
+                            if let Some(name) = name_value.path.get_ident() {
+                                let name = name.to_string();
+                                match name.as_str() {
+                                    "default" => {
+                                        default = AttrDefault::Custom(Box::new(path_from_expr(
+                                            &name_value.value,
+                                        )?));
+                                    }
+                                    "id" => {
+                                        field_id = Some(Box::new(name_value.value));
+                                    }
+                                    "to_tvf" => {
+                                        custom_to_tvf =
+                                            Some(Box::new(path_from_expr(&name_value.value)?));
+                                    }
+                                    "into_tvf" => {
+                                        custom_into_tvf =
+                                            Some(Box::new(path_from_expr(&name_value.value)?));
+                                    }
+                                    "from_tvf" => {
+                                        custom_from_tvf =
+                                            Some(Box::new(path_from_expr(&name_value.value)?));
+                                    }
+                                    _ => {
+                                        return Err(AttrError::new(
+                                            name_value.span(),
+                                            ErrorKind::Invalid(name),
+                                        ));
+                                    }
+                                }
                             }
-                            "into_tvf" => {
-                                custom_into_tvf = Some(path_from_expr(&name_value.value)?);
-                            }
-                            "from_tvf" => {
-                                custom_from_tvf = Some(path_from_expr(&name_value.value)?);
-                            }
-                            _ => {
-                                return Err(AttrError::new(
-                                    name_value.span(),
-                                    ErrorKind::Invalid(name),
-                                ));
-                            }
+                        }
+                        _ => {
+                            return Err(AttrError::new(meta.span(), ErrorKind::Format));
                         }
                     }
                 }
@@ -247,6 +313,9 @@ impl AttrField {
             custom_to_tvf,
             custom_into_tvf,
             custom_from_tvf,
+            default,
+            skip_to_tvf,
+            skip_from_tvf,
         })
     }
 }
