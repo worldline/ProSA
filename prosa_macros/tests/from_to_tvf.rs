@@ -39,9 +39,9 @@ mod macro_tests {
         S: Clone,
     {
         #[tvf(
-            to_tvf = "custom_to_tvf",
-            into_tvf = "custom_into_tvf",
-            from_tvf = "custom_from_tvf"
+            to_tvf = "custom::to_tvf",
+            into_tvf = "custom::into_tvf",
+            from_tvf = "custom::from_tvf"
         )]
         a: u32,
         b: T,
@@ -55,22 +55,36 @@ mod macro_tests {
 
         #[tvf(default = "default_float")]
         f: f32,
+
+        #[tvf(skip_to_tvf, default = "default_bool_true")]
+        g: bool,
+
+        #[tvf(skip_from_tvf, default = "default_bool_true")]
+        h: bool,
     }
 
-    fn custom_to_tvf<TVF: Tvf>(value: &u32, id: usize, msg: &mut TVF) {
-        msg.put_unsigned(id, (*value << 4) as u64);
-    }
+    pub mod custom {
+        use prosa_utils::msg::tvf::{Tvf, TvfError};
 
-    fn custom_into_tvf<TVF: Tvf>(value: u32, id: usize, msg: &mut TVF) {
-        msg.put_unsigned(id, (value << 4) as u64);
-    }
+        pub fn to_tvf<TVF: Tvf>(value: &u32, id: usize, msg: &mut TVF) {
+            msg.put_unsigned(id, (*value << 4) as u64);
+        }
 
-    fn custom_from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<u32, TvfError> {
-        msg.get_unsigned(id).map(|value| (value as u32) >> 4)
+        pub fn into_tvf<TVF: Tvf>(value: u32, id: usize, msg: &mut TVF) {
+            msg.put_unsigned(id, (value << 4) as u64);
+        }
+
+        pub fn from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<u32, TvfError> {
+            msg.get_unsigned(id).map(|value| (value as u32) >> 4)
+        }
     }
 
     const fn default_float() -> f32 {
         42.0
+    }
+
+    const fn default_bool_true() -> bool {
+        true
     }
 
     #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
@@ -155,6 +169,7 @@ mod macro_tests {
             2 => { MY_FIELD => "C" },
             4 => 64,
             5 => 36.5,
+            7 => true,
         }];
         let e1 = E::<A, B> {
             a: 12,
@@ -167,6 +182,8 @@ mod macro_tests {
             d: 0,
             e: 64,
             f: 36.5,
+            g: true,
+            h: true,
         };
 
         // serialize to TVF
