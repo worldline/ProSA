@@ -47,8 +47,8 @@ pub(crate) fn to_token_stream_for_deserialize(
 
     // generate the code to deserialize the fields
     Ok(quote! [
-        impl __tvf::FromTvf for #type_name {
-            fn from_tvf_buffer(buffer: &dyn __tvf::Tvf) ->
+        impl __tvf::FromTvf<__TVF> for #type_name {
+            fn from_tvf(__msg: &__TVF) ->
                 ::core::result::Result<Self, __tvf::TvfError>
             {
                 #deny_unknown_counter
