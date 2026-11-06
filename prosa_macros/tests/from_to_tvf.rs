@@ -3,7 +3,7 @@ mod macro_tests {
     use prosa_macros::{FromTvf, IntoTvf, ToTvf, tvf};
     use prosa_utils::msg::{
         simple_string_tvf::SimpleStringTvf,
-        tvf::{FromTvf, IntoTvf, ToTvf},
+        tvf::{FromTvf, IntoTvf, ToTvf, Tvf},
     };
     use std::{
         borrow::Cow,
@@ -135,6 +135,70 @@ mod macro_tests {
 
         pub fn from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<f32, TvfError> {
             msg.get_float(id).map(|value| (value as f32) * 2.0)
+        }
+    }
+
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+    #[tvf(tag_id = MY_FIELD + 1, tag_type = "unsigned")]
+    pub enum K {
+        #[tvf(tag = 10, with = "custom_variant")]
+        Custom { value: u32 },
+
+        #[tvf(tag = 11, skip_to_tvf)]
+        SkipTo { value: u32 },
+
+        #[tvf(tag = 12, skip_from_tvf)]
+        SkipFrom { value: u32 },
+
+        #[tvf(tag = 13, skip)]
+        SkipBoth { value: u32 },
+
+        #[tvf(tag = 14)]
+        Regular { value: u32 },
+
+        #[tvf(tag = 15, to_tvf = "custom_variant::to_only")]
+        ToOnly { value: u32 },
+
+        #[tvf(tag = 16, into_tvf = "custom_variant::into_only")]
+        IntoOnly { value: u32 },
+    }
+
+    pub mod custom_variant {
+        use super::K;
+        use prosa_utils::msg::tvf::{Tvf, TvfError};
+
+        pub fn to_tvf<TVF: Tvf>(value: &K, id: usize, msg: &mut TVF) {
+            let K::Custom { value } = value else {
+                unreachable!();
+            };
+            msg.put_unsigned(id + 1, *value as u64);
+        }
+
+        pub fn into_tvf<TVF: Tvf>(value: K, id: usize, msg: &mut TVF) {
+            let K::Custom { value } = value else {
+                unreachable!();
+            };
+            msg.put_unsigned(id + 1, value as u64);
+        }
+
+        pub fn from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<K, TvfError> {
+            msg.get_unsigned(id + 1).map(|value| K::Custom {
+                value: value as u32,
+            })
+        }
+
+        pub fn to_only<TVF: Tvf>(value: &K, id: usize, msg: &mut TVF) {
+            let K::ToOnly { value } = value else {
+                unreachable!();
+            };
+            msg.put_unsigned(id + 1, (*value * 10) as u64);
+        }
+
+        pub fn into_only<TVF: Tvf>(value: K, id: usize, msg: &mut TVF) {
+            let K::IntoOnly { value } = value else {
+                unreachable!();
+            };
+            msg.put_unsigned(id + 1, (value * 10) as u64);
         }
     }
 
@@ -358,5 +422,84 @@ mod macro_tests {
 
         let decoded = J::from_tvf(&expected).expect("Custom field paths should deserialize");
         assert_eq!(value, decoded);
+    }
+
+    #[test]
+    fn test_derive_enum_variant_overrides() {
+        let expected_custom = tvf![SimpleStringTvf {
+            (MY_FIELD + 1) => 10u64,
+            (MY_FIELD + 2) => 42u64,
+        }];
+        let custom = K::Custom { value: 42 };
+
+        let mut encoded = SimpleStringTvf::default();
+        custom.to_tvf(&mut encoded);
+        assert_eq!(expected_custom, encoded);
+
+        let mut encoded = SimpleStringTvf::default();
+        custom.clone().into_tvf(&mut encoded);
+        assert_eq!(expected_custom, encoded);
+        assert_eq!(custom, K::from_tvf(&expected_custom).unwrap());
+
+        let skipped_to = K::SkipTo { value: 7 };
+        let mut encoded = SimpleStringTvf::default();
+        skipped_to.to_tvf(&mut encoded);
+        assert!(encoded.is_empty());
+
+        let mut encoded = SimpleStringTvf::default();
+        skipped_to.into_tvf(&mut encoded);
+        assert!(encoded.is_empty());
+
+        let skipped_from = K::SkipFrom { value: 8 };
+        let mut encoded = SimpleStringTvf::default();
+        skipped_from.to_tvf(&mut encoded);
+        assert!(K::from_tvf(&encoded).is_err());
+
+        let skipped_both = K::SkipBoth { value: 9 };
+        let mut encoded = SimpleStringTvf::default();
+        skipped_both.to_tvf(&mut encoded);
+        assert!(encoded.is_empty());
+
+        let skipped_tag = tvf![SimpleStringTvf { (MY_FIELD + 1) => 13u64 }];
+        assert!(K::from_tvf(&skipped_tag).is_err());
+
+        let regular = K::Regular { value: 12 };
+        let mut encoded = SimpleStringTvf::default();
+        regular.to_tvf(&mut encoded);
+        assert_eq!(regular, K::from_tvf(&encoded).unwrap());
+
+        let to_only = K::ToOnly { value: 5 };
+        let expected_to_only = tvf![SimpleStringTvf {
+            (MY_FIELD + 1) => 15u64,
+            (MY_FIELD + 2) => 50u64,
+        }];
+        let mut encoded = SimpleStringTvf::default();
+        to_only.to_tvf(&mut encoded);
+        assert_eq!(expected_to_only, encoded);
+
+        let expected_to_only_into = tvf![SimpleStringTvf {
+            (MY_FIELD + 1) => 15u64,
+            0 => 5u32,
+        }];
+        let mut encoded = SimpleStringTvf::default();
+        to_only.into_tvf(&mut encoded);
+        assert_eq!(expected_to_only_into, encoded);
+
+        let into_only = K::IntoOnly { value: 6 };
+        let expected_into_only_to = tvf![SimpleStringTvf {
+            (MY_FIELD + 1) => 16u64,
+            0 => 6u32,
+        }];
+        let mut encoded = SimpleStringTvf::default();
+        into_only.to_tvf(&mut encoded);
+        assert_eq!(expected_into_only_to, encoded);
+
+        let expected_into_only = tvf![SimpleStringTvf {
+            (MY_FIELD + 1) => 16u64,
+            (MY_FIELD + 2) => 60u64,
+        }];
+        let mut encoded = SimpleStringTvf::default();
+        into_only.into_tvf(&mut encoded);
+        assert_eq!(expected_into_only, encoded);
     }
 }

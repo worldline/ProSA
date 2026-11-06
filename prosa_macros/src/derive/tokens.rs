@@ -33,11 +33,23 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_to_tvf(owned);
+            let tokens = if variant.attr.overrides.skip_to_tvf {
+                TokenStream::new()
+            } else if let Some(custom) = variant.attr.overrides.impl_to_tvf(owned) {
+                quote![
+                    #put_variant(__msg, #tag_id, #discri);
+                    #custom(self, #tag_id, __msg);
+                ]
+            } else {
+                let fields_tokens = variant.fields.impl_to_tvf(owned);
+                quote![
+                    #put_variant(__msg, #tag_id, #discri);
+                    #fields_tokens
+                ]
+            };
 
             cases.push(quote! [
                 Self::#var_ident #fields => {
-                    #put_variant(__msg, #tag_id, #discri);
                     #tokens
                 }
             ]);
@@ -50,22 +62,63 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_to_tvf(owned);
+            let tokens = if variant.attr.overrides.skip_to_tvf {
+                TokenStream::new()
+            } else if let Some(custom) = variant.attr.overrides.impl_to_tvf(owned) {
+                quote![
+                    #put_variant(__msg, #tag_id, #discri);
+                    #custom(self, #tag_id, __msg);
+                ]
+            } else {
+                let fields_tokens = variant.fields.impl_to_tvf(owned);
+                quote![
+                    #put_variant(__msg, #tag_id, #discri);
+                    #fields_tokens
+                ]
+            };
 
             // Add the variant as a regular entry in the store_on list
             cases.push(quote! [
                 Self::#var_ident #fields => {
-                    #put_variant(__msg, #tag_id, #discri);
                     #tokens
                 }
             ]);
         }
+
+        let owned_overrides = if owned {
+            let mut overrides = Vec::new();
+            for variant in self.variants.iter().chain(self.default_variant.iter()) {
+                let var_ident = variant.variant_ident;
+                let fields = variant.fields.structuring();
+                let discri = variant.ident_discri();
+
+                if variant.attr.overrides.skip_to_tvf {
+                    overrides.push(quote![
+                        if let Self::#var_ident #fields = &self {
+                            return;
+                        }
+                    ]);
+                } else if let Some(func) = &variant.attr.overrides.custom_into_tvf {
+                    overrides.push(quote![
+                        if let Self::#var_ident #fields = &self {
+                            #put_variant(__msg, #tag_id, #discri);
+                            #func(self, #tag_id, __msg);
+                            return;
+                        }
+                    ]);
+                }
+            }
+            quote![ #(#overrides)* ]
+        } else {
+            TokenStream::new()
+        };
 
         let main_trait = if owned {
             quote! {
                 impl #impl_generics __tvf::IntoTvf<__TVF> for #type_name #ty_generics #where_clause {
                     fn into_tvf(self, __msg: &mut __TVF) {
                         #decl_discris
+                        #owned_overrides
                         match self { #(#cases),* }
                     }
                 }
@@ -224,13 +277,22 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_from_tvf();
+            let tokens = if variant.attr.overrides.skip_from_tvf {
+                quote![::core::result::Result::Err(
+                    __tvf::TvfError::SerializationError("Skipped enum variant".to_string())
+                )]
+            } else if let Some(custom) = variant.attr.overrides.impl_from_tvf() {
+                quote![ #custom(__msg, #tag_id) ]
+            } else {
+                let fields_tokens = variant.fields.impl_from_tvf();
+                quote![
+                    #fields_tokens
+                    ::core::result::Result::Ok(Self::#var_ident #fields)
+                ]
+            };
 
             cases.push(quote! [
-                #discri => {
-                    #tokens
-                    ::core::result::Result::Ok(Self::#var_ident #fields)
-                }
+                #discri => { #tokens }
             ]);
         }
 
@@ -241,20 +303,26 @@ impl<'f> TvfEnum<'f> {
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
             let discri = variant.ident_discri();
-            let tokens = variant.fields.impl_from_tvf();
+            let tokens = if variant.attr.overrides.skip_from_tvf {
+                quote![::core::result::Result::Err(
+                    __tvf::TvfError::SerializationError("Skipped enum variant".to_string())
+                )]
+            } else if let Some(custom) = variant.attr.overrides.impl_from_tvf() {
+                quote![ #custom(__msg, #tag_id) ]
+            } else {
+                let fields_tokens = variant.fields.impl_from_tvf();
+                quote![
+                    #fields_tokens
+                    ::core::result::Result::Ok(Self::#var_ident #fields)
+                ]
+            };
 
             // Add the variant as a regular entry in the store_on list
             cases.push(quote! [
-                #discri => {
-                    #tokens
-                    ::core::result::Result::Ok(Self::#var_ident #fields)
-                }
+                #discri => { #tokens }
             ]);
 
-            quote![
-                #tokens
-                ::core::result::Result::Ok(Self::#var_ident #fields)
-            ]
+            tokens
         } else {
             quote![::core::result::Result::Err(
                 __tvf::TvfError::SerializationError(format!["Unknown tag \"{}\"", __disc])
