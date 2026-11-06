@@ -60,7 +60,7 @@ impl TvfFieldData {
         // check if the field was found
         quote! [
             #accessor: {
-                if let ::core::result::Result::Ok(value) = buffer.get_field(#field_id as usize) {
+                if let ::core::result::Result::Ok(value) = __msg.get_field(#field_id as usize) {
                     #increment_counter
                     #deserialize_tokens
                 } else {

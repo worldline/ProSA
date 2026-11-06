@@ -20,9 +20,9 @@ impl TvfFieldData {
         // generate the code to serialize the fields
         quote! [
             {
-                let mut buffer = __tvf::Tvf::with_capacity(#len);
+                let mut __msg = __tvf::Tvf::with_capacity(#len);
                 #(#serialize_tokens)*
-                buffer
+                __msg
             }
         ]
     }
@@ -52,11 +52,11 @@ impl TvfFieldData {
         let store_serialization = if skip_none && self.is_option {
             quote! [
                 if let ::core::option::Option::Some(#variable) = #variable {
-                    buffer.put_field(#field_id as usize, #serialize_tokens);
+                    __msg.put_field(#field_id as usize, #serialize_tokens);
                 }
             ]
         } else {
-            quote! [ buffer.put_field(#field_id as usize, #serialize_tokens); ]
+            quote! [ __msg.put_field(#field_id as usize, #serialize_tokens); ]
         };
 
         // if the skip is conditional, suround the serialization code with an if statement

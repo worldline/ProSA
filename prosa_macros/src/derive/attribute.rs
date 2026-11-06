@@ -73,7 +73,7 @@ impl BaseAttribute {
     pub(crate) fn deny_unknown_check(&self) -> TokenStream {
         if self.deny_unkown_fields {
             quote! [
-                let buffer_size = <__BUFFER as __tvf::Tvf>::len(&buffer);
+                let buffer_size = <__TVF as __tvf::Tvf>::len(&__msg);
                 if fields_count < buffer_size {
                     return ::core::result::Result::Err(__tvf::TvfError::SerializationError(
                         format! [
