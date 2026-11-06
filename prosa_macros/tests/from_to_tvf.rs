@@ -439,7 +439,10 @@ mod macro_tests {
         let mut encoded = SimpleStringTvf::default();
         custom.clone().into_tvf(&mut encoded);
         assert_eq!(expected_custom, encoded);
-        assert_eq!(custom, K::from_tvf(&expected_custom).unwrap());
+        assert_eq!(
+            custom,
+            K::from_tvf(&expected_custom).expect("Should decode")
+        );
 
         let skipped_to = K::SkipTo { value: 7 };
         let mut encoded = SimpleStringTvf::default();
@@ -466,7 +469,7 @@ mod macro_tests {
         let regular = K::Regular { value: 12 };
         let mut encoded = SimpleStringTvf::default();
         regular.to_tvf(&mut encoded);
-        assert_eq!(regular, K::from_tvf(&encoded).unwrap());
+        assert_eq!(regular, K::from_tvf(&encoded).expect("Should decode"));
 
         let to_only = K::ToOnly { value: 5 };
         let expected_to_only = tvf![SimpleStringTvf {
