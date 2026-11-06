@@ -18,7 +18,7 @@ pub use prosa_utils::config::{
 pub mod listener;
 pub mod pool;
 #[cfg(feature = "openssl")]
-mod ssl;
+pub(crate) mod ssl;
 pub mod stream;
 
 /// Trait to define ProSA IO.
