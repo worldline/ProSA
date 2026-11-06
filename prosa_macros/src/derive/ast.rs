@@ -210,7 +210,7 @@ pub(crate) fn extend_generics(
             }
         }
         ImplTrait::Into => {
-            // Add `ToField` trait bound to each generic type
+            // Add `IntoField` trait bound to each generic type
             for param in generics.params.iter() {
                 if let GenericParam::Type(gtype) = param {
                     let gtype = &gtype.ident;
