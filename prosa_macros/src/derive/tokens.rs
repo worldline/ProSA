@@ -143,7 +143,7 @@ impl<'f> TvfFields<'f> {
             let ident = field.tmp_ident();
             let id = field.ident_field_id();
 
-            let f = if field.attr.skip_to_tvf {
+            let f = if field.attr.overrides.skip_to_tvf {
                 TokenStream::new()
             } else if field.attr.flatten {
                 // When flatten attribute is set, write in the parent message directly
@@ -154,14 +154,14 @@ impl<'f> TvfFields<'f> {
                 }
             } else if owned {
                 // Select "into_tvf" function
-                if let Some(func) = &field.attr.custom_into_tvf {
+                if let Some(func) = &field.attr.overrides.custom_into_tvf {
                     quote![ #func(#ident, #id, __msg); ]
                 } else {
                     quote![ <#ty as __tvf::IntoField<__TVF>>::into_field(#ident, #id, __msg); ]
                 }
             } else {
                 // Select "to_tvf" function
-                if let Some(func) = &field.attr.custom_to_tvf {
+                if let Some(func) = &field.attr.overrides.custom_to_tvf {
                     quote![ #func(&#ident, #id, __msg); ]
                 } else {
                     quote![ <#ty as __tvf::ToField<__TVF>>::to_field(&#ident, #id, __msg); ]
@@ -334,7 +334,7 @@ impl<'f> TvfFields<'f> {
             let id = field.ident_field_id();
 
             // Select "tvf_from" function
-            let f = if field.attr.skip_from_tvf {
+            let f = if field.attr.overrides.skip_from_tvf {
                 let default_impl = field
                     .get_default(true)
                     .expect("Forced generating a default call");
@@ -354,7 +354,7 @@ impl<'f> TvfFields<'f> {
                     ]
                 }
             } else if let Some(default_impl) = field.get_default(false) {
-                if let Some(func) = &field.attr.custom_from_tvf {
+                if let Some(func) = &field.attr.overrides.custom_from_tvf {
                     quote![
                         let #ident = #func(__msg, #id).unwrap_or_else(|_| #default_impl);
                     ]
@@ -365,7 +365,7 @@ impl<'f> TvfFields<'f> {
                     ]
                 }
             } else {
-                if let Some(func) = &field.attr.custom_from_tvf {
+                if let Some(func) = &field.attr.overrides.custom_from_tvf {
                     quote![
                         let #ident = #func(__msg, #id)?;
                     ]
