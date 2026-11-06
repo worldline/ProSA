@@ -113,6 +113,28 @@ mod macro_tests {
         arc: Arc<String>,
     }
 
+    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
+    struct J {
+        #[tvf(to_tvf = "custom2::to_tvf", from_tvf = "custom2::from_tvf")]
+        a: f32,
+
+        #[tvf(with = "custom2")]
+        b: f32,
+    }
+
+    /// Module without `into_tvf`
+    pub mod custom2 {
+        use prosa_utils::msg::tvf::{Tvf, TvfError};
+
+        pub fn to_tvf<TVF: Tvf>(value: &f32, id: usize, msg: &mut TVF) {
+            msg.put_float(id, (*value * 0.5) as f64);
+        }
+
+        pub fn from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<f32, TvfError> {
+            msg.get_float(id).map(|value| (value as f32) * 2.0)
+        }
+    }
+
     #[test]
     fn test_derive_struct() {
         let a0 = tvf![SimpleStringTvf {
@@ -306,5 +328,21 @@ mod macro_tests {
         // deserialize from TVF
         let i3 = I::from_tvf(&i0).expect("Deserialization from TVF should work");
         assert_eq!(i1, i3);
+    }
+
+    #[test]
+    fn test_derive_custom_field_paths() {
+        let expected = tvf![SimpleStringTvf {
+            0 => 1.5,
+            1 => 2.0,
+        }];
+        let value = J { a: 3.0, b: 4.0 };
+
+        let mut encoded = SimpleStringTvf::default();
+        value.to_tvf(&mut encoded);
+        assert_eq!(expected, encoded);
+
+        let decoded = J::from_tvf(&expected).expect("Custom field paths should deserialize");
+        assert_eq!(value, decoded);
     }
 }
