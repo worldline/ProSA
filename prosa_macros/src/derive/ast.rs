@@ -1,4 +1,4 @@
-use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrVariant, ErrorKind};
+use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrNameValue, AttrVariant, ErrorKind};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
@@ -84,12 +84,14 @@ impl<'f> TvfEnum<'f> {
         generics: &'f Generics,
         enum_data: &'f DataEnum,
     ) -> Result<Self, AttrError> {
+        let mut workbuffer = Vec::new();
+
         // We will collect metadata about the variants as we iterate over them.
         let var_count = enum_data.variants.len();
         let mut out_vars = Vec::with_capacity(var_count);
         let mut count_def = 0;
 
-        let enum_attr = AttrEnum::identify(attrs)?;
+        let enum_attr = AttrEnum::identify(attrs, &mut workbuffer)?;
 
         // Look for a default variant if any
         let mut def_var = None;
@@ -97,11 +99,11 @@ impl<'f> TvfEnum<'f> {
         // Iterate over all the fields and identify their attributes.
         for (index, variant) in enum_data.variants.iter().enumerate() {
             // Parse the attributes of the field and identify them.
-            let var_attr = AttrVariant::identify(&variant.attrs)?;
+            let var_attr = AttrVariant::identify(&variant.attrs, &mut workbuffer)?;
             let is_def = var_attr.default;
 
             // Recover the fields of the variant
-            let fields = TvfFields::new(&variant.fields)?;
+            let fields = TvfFields::new(&variant.fields, &mut workbuffer)?;
 
             // Count the number of variants tagged as default
             let var = TvfVariant {
@@ -145,7 +147,8 @@ impl<'f> TvfStruct<'f> {
         generics: &'f Generics,
         struct_data: &'f DataStruct,
     ) -> Result<Self, AttrError> {
-        let fields = TvfFields::new(&struct_data.fields)?;
+        let mut workbuffer = Vec::new();
+        let fields = TvfFields::new(&struct_data.fields, &mut workbuffer)?;
 
         // Return the ordered list of fields
         Ok(Self {
@@ -158,14 +161,17 @@ impl<'f> TvfStruct<'f> {
 
 impl<'f> TvfFields<'f> {
     /// Analyze the fields
-    pub(crate) fn new(fields: &'f Fields) -> Result<Self, AttrError> {
+    pub(crate) fn new(
+        fields: &'f Fields,
+        workbuffer: &mut Vec<AttrNameValue>,
+    ) -> Result<Self, AttrError> {
         // We will collect metadata about the fields as we iterate over them.
         let mut out_fields = Vec::with_capacity(fields.len());
 
         // Iterate over all the fields and identify their attributes.
         for (index, field) in fields.iter().enumerate() {
             // Parse the attributes of the field and identify them.
-            let attr = AttrField::identify(&field.attrs)?;
+            let attr = AttrField::identify(&field.attrs, workbuffer)?;
 
             // Add the new entry to the list
             out_fields.push(TvfField { attr, index, field });

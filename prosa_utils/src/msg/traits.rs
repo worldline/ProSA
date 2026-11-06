@@ -880,7 +880,10 @@ mod tests {
         let mut consumed_vector = SimpleStringTvf::default();
         vector.clone().into_tvf(&mut consumed_vector);
         assert_eq!(expected_vector, consumed_vector);
-        assert_eq!(vector, Vec::<u16>::from_tvf(&expected_vector).unwrap());
+        assert_eq!(
+            vector,
+            Vec::<u16>::from_tvf(&expected_vector).expect("Vec deserialization failed")
+        );
 
         let hash_map = HashMap::from([(1usize, 10u32), (3, 30)]);
         let mut expected_hash_map = SimpleStringTvf::default();
@@ -896,7 +899,8 @@ mod tests {
         assert_eq!(expected_hash_map, consumed_hash_map);
         assert_eq!(
             hash_map,
-            HashMap::<usize, u32>::from_tvf(&expected_hash_map).unwrap()
+            HashMap::<usize, u32>::from_tvf(&expected_hash_map)
+                .expect("HashMap deserialization failed")
         );
 
         let tree_map = BTreeMap::from([(2usize, -20i32), (4, 40)]);
@@ -913,7 +917,8 @@ mod tests {
         assert_eq!(expected_tree_map, consumed_tree_map);
         assert_eq!(
             tree_map,
-            BTreeMap::<usize, i32>::from_tvf(&expected_tree_map).unwrap()
+            BTreeMap::<usize, i32>::from_tvf(&expected_tree_map)
+                .expect("BTreeMap deserialization failed")
         );
     }
 
@@ -973,7 +978,7 @@ mod tests {
             Rc<i32>,
             Arc<String>,
         )>::from_tvf(&expected)
-        .unwrap();
+        .expect("Tuple deserialization failed");
         assert_eq!(values, decoded);
         assert!(matches!(decoded.2, Cow::Owned(_)));
         assert_eq!(None, decoded.4);
