@@ -387,6 +387,22 @@ impl AttrOverrides {
             skip_from_tvf,
         })
     }
+
+    /// Get override for `ToTvf` or `IntoTvf` implementation
+    #[inline]
+    pub(crate) fn impl_to_tvf(&self, owned: bool) -> Option<&Path> {
+        if owned {
+            self.custom_into_tvf.as_deref()
+        } else {
+            self.custom_to_tvf.as_deref()
+        }
+    }
+
+    /// Get override for `FromTvf` implementation
+    #[inline]
+    pub(crate) fn impl_from_tvf(&self) -> Option<&Path> {
+        self.custom_from_tvf.as_deref()
+    }
 }
 
 // MARK: Attribute helpers
