@@ -1,13 +1,15 @@
 //! Define traits to convert a Rust type into a TVF representation and back
 
 use crate::msg::tvf::{Tvf, TvfError};
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use chrono::{NaiveDate, NaiveDateTime};
 use num_traits::AsPrimitive;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
     hash::Hash,
+    rc::Rc,
+    sync::Arc,
 };
 
 /// Convert a Rust's type into a TVF message
@@ -101,15 +103,12 @@ impl<T: Tvf> ToField<T> for Bytes {
     }
 }
 
-/*
-/// Allow inserting a TVF sub-messages into a main message
-impl<T: Tvf + Clone> ToField<T> for T {
+impl<T: Tvf> ToField<T> for BytesMut {
     #[inline]
     fn to_field(&self, id: usize, msg: &mut T) {
-        msg.put_buffer(id, self.clone());
+        msg.put_bytes(id, self.clone().freeze());
     }
 }
-*/
 
 /// Insert the field into the buffer if its value is set
 impl<T: Tvf, F: ToField<T>> ToField<T> for Option<F> {
@@ -129,6 +128,20 @@ impl<T: Tvf, F: ToField<T>> ToField<T> for Box<F> {
 }
 
 impl<'f, T: Tvf, F: ToField<T> + Clone> ToField<T> for Cow<'f, F> {
+    #[inline]
+    fn to_field(&self, id: usize, msg: &mut T) {
+        self.as_ref().to_field(id, msg);
+    }
+}
+
+impl<T: Tvf, F: ToField<T>> ToField<T> for Rc<F> {
+    #[inline]
+    fn to_field(&self, id: usize, msg: &mut T) {
+        self.as_ref().to_field(id, msg);
+    }
+}
+
+impl<T: Tvf, F: ToField<T>> ToField<T> for Arc<F> {
     #[inline]
     fn to_field(&self, id: usize, msg: &mut T) {
         self.as_ref().to_field(id, msg);
@@ -318,15 +331,12 @@ impl<T: Tvf> IntoField<T> for Bytes {
     }
 }
 
-/*
-/// Allow inserting a TVF sub-messages into a main message
-impl<T: Tvf> IntoField<T> for T {
+impl<T: Tvf> IntoField<T> for BytesMut {
     #[inline]
     fn into_field(self, id: usize, msg: &mut T) {
-        msg.put_buffer(id, self);
+        msg.put_bytes(id, self.freeze());
     }
 }
-*/
 
 /// Insert the field into the buffer if its value is set
 impl<T: Tvf, F: IntoField<T>> IntoField<T> for Option<F> {
@@ -351,6 +361,22 @@ impl<'f, T: Tvf, F: IntoField<T> + Clone> IntoField<T> for Cow<'f, F> {
     fn into_field(self, id: usize, msg: &mut T) {
         let field: F = self.into_owned();
         field.into_field(id, msg);
+    }
+}
+
+/// Serialize the inner value by reference rather than by consuming it
+impl<T: Tvf, F: ToField<T>> IntoField<T> for Rc<F> {
+    #[inline]
+    fn into_field(self, id: usize, msg: &mut T) {
+        self.as_ref().to_field(id, msg);
+    }
+}
+
+/// Serialize the inner value by reference rather than by consuming it
+impl<T: Tvf, F: ToField<T>> IntoField<T> for Arc<F> {
+    #[inline]
+    fn into_field(self, id: usize, msg: &mut T) {
+        self.as_ref().to_field(id, msg);
     }
 }
 
@@ -522,17 +548,20 @@ impl_from_field![ f64  ; get_float               ];
 impl_from_field![ NaiveDate     ; get_date             ];
 impl_from_field![ NaiveDateTime ; get_datetime         ];
 impl_from_field![ String        ; get_string   "owned" ];
-impl_from_field![ Bytes         ; get_bytes    "owned" ];
 
-/*
-/// Allow extracting a TVF sub-messages from a main message
-impl<T: Tvf + Clone> FromField<T> for T {
+impl<T: Tvf> FromField<T> for Bytes {
     #[inline]
     fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
-        Ok(msg.get_buffer(id)?.into_owned())
+        Ok(msg.get_bytes(id)?.into_owned())
     }
 }
-*/
+
+impl<T: Tvf> FromField<T> for BytesMut {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        Ok(BytesMut::from(msg.get_bytes(id)?.into_owned()))
+    }
+}
 
 /// Extract a value from a buffer if the field exists
 impl<T: Tvf, F: FromField<T>> FromField<T> for Option<F> {
@@ -559,6 +588,22 @@ impl<'f, T: Tvf, F: FromField<T> + Clone> FromField<T> for Cow<'f, F> {
     fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
         let field = F::from_field(msg, id)?;
         Ok(Cow::Owned(field))
+    }
+}
+
+impl<T: Tvf, F: FromField<T>> FromField<T> for Rc<F> {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        let field = F::from_field(msg, id)?;
+        Ok(Rc::new(field))
+    }
+}
+
+impl<T: Tvf, F: FromField<T>> FromField<T> for Arc<F> {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        let field = F::from_field(msg, id)?;
+        Ok(Arc::new(field))
     }
 }
 
@@ -705,6 +750,8 @@ impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 =>
 impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11 ];
 impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11, 12 => F12 ];
 
+// MARK: Tests
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,4 +820,164 @@ mod tests {
         let a3 = A::from_tvf(&a0).expect("Sample struct deserialization should work");
         assert_eq!(a1, a3);
     }
+
+    #[test]
+    fn test_primitive_tuple_tvf_round_trip() {
+        let values = (
+            true,
+            false,
+            u8::MAX,
+            u16::MAX,
+            u32::MAX,
+            u64::MAX,
+            i8::MIN,
+            i16::MIN,
+            i32::MIN,
+            i64::MIN,
+            1.25f32,
+            -1234.5f64,
+        );
+
+        let mut expected = SimpleStringTvf::default();
+        expected.put_byte(1, 1);
+        expected.put_byte(2, 0);
+        expected.put_byte(3, u8::MAX);
+        expected.put_unsigned(4, u16::MAX as u64);
+        expected.put_unsigned(5, u32::MAX as u64);
+        expected.put_unsigned(6, u64::MAX);
+        expected.put_signed(7, i8::MIN as i64);
+        expected.put_signed(8, i16::MIN as i64);
+        expected.put_signed(9, i32::MIN as i64);
+        expected.put_signed(10, i64::MIN);
+        expected.put_float(11, 1.25);
+        expected.put_float(12, -1234.5);
+
+        let mut borrowed_message = SimpleStringTvf::default();
+        values.to_tvf(&mut borrowed_message);
+        assert_eq!(expected, borrowed_message);
+
+        let mut consumed_message = SimpleStringTvf::default();
+        values.into_tvf(&mut consumed_message);
+        assert_eq!(expected, consumed_message);
+
+        let decoded =
+            <(bool, bool, u8, u16, u32, u64, i8, i16, i32, i64, f32, f64)>::from_tvf(&expected)
+                .expect("Primitive tuple deserialization should work");
+        assert_eq!(values, decoded);
+    }
+
+    #[test]
+    fn test_collection_tvf_round_trip() {
+        let vector = vec![u16::MAX, 7];
+        let mut expected_vector = SimpleStringTvf::default();
+        expected_vector.put_unsigned(1, u16::MAX as u64);
+        expected_vector.put_unsigned(2, 7);
+
+        let mut borrowed_vector = SimpleStringTvf::default();
+        vector.to_tvf(&mut borrowed_vector);
+        assert_eq!(expected_vector, borrowed_vector);
+
+        let mut consumed_vector = SimpleStringTvf::default();
+        vector.clone().into_tvf(&mut consumed_vector);
+        assert_eq!(expected_vector, consumed_vector);
+        assert_eq!(vector, Vec::<u16>::from_tvf(&expected_vector).unwrap());
+
+        let hash_map = HashMap::from([(1usize, 10u32), (3, 30)]);
+        let mut expected_hash_map = SimpleStringTvf::default();
+        expected_hash_map.put_unsigned(1, 10);
+        expected_hash_map.put_unsigned(3, 30);
+
+        let mut borrowed_hash_map = SimpleStringTvf::default();
+        hash_map.to_tvf(&mut borrowed_hash_map);
+        assert_eq!(expected_hash_map, borrowed_hash_map);
+
+        let mut consumed_hash_map = SimpleStringTvf::default();
+        hash_map.clone().into_tvf(&mut consumed_hash_map);
+        assert_eq!(expected_hash_map, consumed_hash_map);
+        assert_eq!(
+            hash_map,
+            HashMap::<usize, u32>::from_tvf(&expected_hash_map).unwrap()
+        );
+
+        let tree_map = BTreeMap::from([(2usize, -20i32), (4, 40)]);
+        let mut expected_tree_map = SimpleStringTvf::default();
+        expected_tree_map.put_signed(2, -20);
+        expected_tree_map.put_signed(4, 40);
+
+        let mut borrowed_tree_map = SimpleStringTvf::default();
+        tree_map.to_tvf(&mut borrowed_tree_map);
+        assert_eq!(expected_tree_map, borrowed_tree_map);
+
+        let mut consumed_tree_map = SimpleStringTvf::default();
+        tree_map.clone().into_tvf(&mut consumed_tree_map);
+        assert_eq!(expected_tree_map, consumed_tree_map);
+        assert_eq!(
+            tree_map,
+            BTreeMap::<usize, i32>::from_tvf(&expected_tree_map).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_nested_wrapper_tvf_round_trip() {
+        let borrowed_string = String::from("borrowed");
+        let values = (
+            vec![u16::MAX, 7],
+            Box::new(u32::MAX),
+            Cow::Borrowed(&borrowed_string),
+            Some(11u16),
+            None::<u16>,
+            HashMap::from([(2usize, -20i32), (4, 40)]),
+            BTreeMap::from([(3usize, String::from("three")), (8, String::from("eight"))]),
+            Rc::new(13i32),
+            Arc::new(String::from("shared")),
+        );
+
+        let mut vector_buffer = SimpleStringTvf::default();
+        vector_buffer.put_unsigned(1, u16::MAX as u64);
+        vector_buffer.put_unsigned(2, 7);
+
+        let mut hash_map_buffer = SimpleStringTvf::default();
+        hash_map_buffer.put_signed(2, -20);
+        hash_map_buffer.put_signed(4, 40);
+
+        let mut tree_map_buffer = SimpleStringTvf::default();
+        tree_map_buffer.put_string(3, "three");
+        tree_map_buffer.put_string(8, "eight");
+
+        let mut expected = SimpleStringTvf::default();
+        expected.put_buffer(1, vector_buffer);
+        expected.put_unsigned(2, u32::MAX as u64);
+        expected.put_string(3, "borrowed");
+        expected.put_unsigned(4, 11);
+        expected.put_buffer(6, hash_map_buffer);
+        expected.put_buffer(7, tree_map_buffer);
+        expected.put_signed(8, 13);
+        expected.put_string(9, "shared");
+
+        let mut borrowed_message = SimpleStringTvf::default();
+        values.to_tvf(&mut borrowed_message);
+        assert_eq!(expected, borrowed_message);
+
+        let mut consumed_message = SimpleStringTvf::default();
+        values.clone().into_tvf(&mut consumed_message);
+        assert_eq!(expected, consumed_message);
+
+        let decoded = <(
+            Vec<u16>,
+            Box<u32>,
+            Cow<'_, String>,
+            Option<u16>,
+            Option<u16>,
+            HashMap<usize, i32>,
+            BTreeMap<usize, String>,
+            Rc<i32>,
+            Arc<String>,
+        )>::from_tvf(&expected)
+        .unwrap();
+        assert_eq!(values, decoded);
+        assert!(matches!(decoded.2, Cow::Owned(_)));
+        assert_eq!(None, decoded.4);
+    }
+
+    
 }
