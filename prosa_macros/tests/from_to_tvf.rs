@@ -167,40 +167,44 @@ mod macro_tests {
         use super::K;
         use prosa_utils::msg::tvf::{Tvf, TvfError};
 
-        pub fn to_tvf<TVF: Tvf>(value: &K, id: usize, msg: &mut TVF) {
-            let K::Custom { value } = value else {
-                unreachable!();
-            };
-            msg.put_unsigned(id + 1, *value as u64);
+        pub fn to_tvf<TVF: Tvf>(value: &u32, msg: &mut TVF) {
+            msg.put_unsigned(1, *value as u64);
         }
 
-        pub fn into_tvf<TVF: Tvf>(value: K, id: usize, msg: &mut TVF) {
-            let K::Custom { value } = value else {
-                unreachable!();
-            };
-            msg.put_unsigned(id + 1, value as u64);
+        pub fn into_tvf<TVF: Tvf>(value: u32, msg: &mut TVF) {
+            msg.put_unsigned(1, value as u64);
         }
 
-        pub fn from_tvf<TVF: Tvf>(msg: &TVF, id: usize) -> Result<K, TvfError> {
-            msg.get_unsigned(id + 1).map(|value| K::Custom {
+        pub fn from_tvf<TVF: Tvf>(msg: &TVF) -> Result<K, TvfError> {
+            msg.get_unsigned(1).map(|value| K::Custom {
                 value: value as u32,
             })
         }
 
-        pub fn to_only<TVF: Tvf>(value: &K, id: usize, msg: &mut TVF) {
-            let K::ToOnly { value } = value else {
-                unreachable!();
-            };
-            msg.put_unsigned(id + 1, (*value * 10) as u64);
+        pub fn to_only<TVF: Tvf>(value: &u32, msg: &mut TVF) {
+            msg.put_unsigned(1, (*value * 10) as u64);
         }
 
-        pub fn into_only<TVF: Tvf>(value: K, id: usize, msg: &mut TVF) {
-            let K::IntoOnly { value } = value else {
-                unreachable!();
-            };
-            msg.put_unsigned(id + 1, (value * 10) as u64);
+        pub fn into_only<TVF: Tvf>(value: u32, msg: &mut TVF) {
+            msg.put_unsigned(1, (value * 10) as u64);
         }
     }
+
+    #[derive(IntoTvf)]
+    #[tvf(tag_id = 1, tag_type = "unsigned")]
+    pub enum L {
+        A {
+            s: String,
+            f: f32,
+        },
+
+        #[tvf(tag = 10, into_tvf = "into_lv")]
+        V {
+            s: String,
+            f: f32,
+        },
+    }
+    pub fn into_lv<T: Tvf>(_v: String, _f: f32, _m: &mut T) {}
 
     #[test]
     fn test_derive_struct() {
@@ -428,7 +432,7 @@ mod macro_tests {
     fn test_derive_enum_variant_overrides() {
         let expected_custom = tvf![SimpleStringTvf {
             (MY_FIELD + 1) => 10u64,
-            (MY_FIELD + 2) => 42u64,
+            (1) => 42u64,
         }];
         let custom = K::Custom { value: 42 };
 
@@ -474,7 +478,7 @@ mod macro_tests {
         let to_only = K::ToOnly { value: 5 };
         let expected_to_only = tvf![SimpleStringTvf {
             (MY_FIELD + 1) => 15u64,
-            (MY_FIELD + 2) => 50u64,
+            (1) => 50u64,
         }];
         let mut encoded = SimpleStringTvf::default();
         to_only.to_tvf(&mut encoded);
@@ -499,7 +503,7 @@ mod macro_tests {
 
         let expected_into_only = tvf![SimpleStringTvf {
             (MY_FIELD + 1) => 16u64,
-            (MY_FIELD + 2) => 60u64,
+            (1) => 60u64,
         }];
         let mut encoded = SimpleStringTvf::default();
         into_only.into_tvf(&mut encoded);

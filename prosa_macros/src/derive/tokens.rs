@@ -27,8 +27,8 @@ impl<'f> TvfEnum<'f> {
         let put_variant = self.attr.tag_type.put_method();
         let tag_id = &self.attr.tag_id;
 
-        // Process all variants
-        for variant in self.variants.iter() {
+        // Generate tokens for each variant and the default one
+        let gen_tokens = |variant: &TvfVariant<'_>| -> TokenStream {
             // (de)structure the variant
             let var_ident = variant.variant_ident;
             let fields = variant.fields.structuring();
@@ -36,9 +36,18 @@ impl<'f> TvfEnum<'f> {
             let tokens = if variant.attr.overrides.skip_to_tvf {
                 TokenStream::new()
             } else if let Some(custom) = variant.attr.overrides.impl_to_tvf(owned) {
+                let fields = variant
+                    .fields
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        let ident = f.tmp_ident();
+                        quote! { #ident, }
+                    })
+                    .collect::<TokenStream>();
                 quote![
                     #put_variant(__msg, #tag_id, #discri);
-                    #custom(self, #tag_id, __msg);
+                    #custom(#fields __msg);
                 ]
             } else {
                 let fields_tokens = variant.fields.impl_to_tvf(owned);
@@ -48,77 +57,29 @@ impl<'f> TvfEnum<'f> {
                 ]
             };
 
-            cases.push(quote! [
+            quote! [
                 Self::#var_ident #fields => {
                     #tokens
                 }
-            ]);
+            ]
+        };
+
+        // Process all variants
+        for variant in self.variants.iter() {
+            cases.push(gen_tokens(variant));
         }
 
         // If one variant is the default one, for any unknown discriminant,
         // we try to construct the selected variant.
         if let Some(variant) = &self.default_variant {
-            // (de)structure the variant
-            let var_ident = variant.variant_ident;
-            let fields = variant.fields.structuring();
-            let discri = variant.ident_discri();
-            let tokens = if variant.attr.overrides.skip_to_tvf {
-                TokenStream::new()
-            } else if let Some(custom) = variant.attr.overrides.impl_to_tvf(owned) {
-                quote![
-                    #put_variant(__msg, #tag_id, #discri);
-                    #custom(self, #tag_id, __msg);
-                ]
-            } else {
-                let fields_tokens = variant.fields.impl_to_tvf(owned);
-                quote![
-                    #put_variant(__msg, #tag_id, #discri);
-                    #fields_tokens
-                ]
-            };
-
-            // Add the variant as a regular entry in the store_on list
-            cases.push(quote! [
-                Self::#var_ident #fields => {
-                    #tokens
-                }
-            ]);
+            cases.push(gen_tokens(variant));
         }
-
-        let owned_overrides = if owned {
-            let mut overrides = Vec::new();
-            for variant in self.variants.iter().chain(self.default_variant.iter()) {
-                let var_ident = variant.variant_ident;
-                let fields = variant.fields.structuring();
-                let discri = variant.ident_discri();
-
-                if variant.attr.overrides.skip_to_tvf {
-                    overrides.push(quote![
-                        if let Self::#var_ident #fields = &self {
-                            return;
-                        }
-                    ]);
-                } else if let Some(func) = &variant.attr.overrides.custom_into_tvf {
-                    overrides.push(quote![
-                        if let Self::#var_ident #fields = &self {
-                            #put_variant(__msg, #tag_id, #discri);
-                            #func(self, #tag_id, __msg);
-                            return;
-                        }
-                    ]);
-                }
-            }
-            quote![ #(#overrides)* ]
-        } else {
-            TokenStream::new()
-        };
 
         let main_trait = if owned {
             quote! {
                 impl #impl_generics __tvf::IntoTvf<__TVF> for #type_name #ty_generics #where_clause {
                     fn into_tvf(self, __msg: &mut __TVF) {
                         #decl_discris
-                        #owned_overrides
                         match self { #(#cases),* }
                     }
                 }
@@ -236,7 +197,7 @@ fn impl_to_field(type_name: &Ident, generics: Generics, owned: bool) -> TokenStr
             impl #impl_generics __tvf::IntoField<__TVF> for #type_name #ty_generics #where_clause {
                 fn into_field(self, __id: usize, __msg: &mut __TVF) {
                     let mut __buffer = __TVF::default();
-                    self.into_tvf(&mut __buffer);
+                    <Self as __tvf::IntoTvf<__TVF>>::into_tvf(self, &mut __buffer);
                     __msg.put_buffer(__id, __buffer);
                 }
             }
@@ -248,7 +209,7 @@ fn impl_to_field(type_name: &Ident, generics: Generics, owned: bool) -> TokenStr
             impl #impl_generics __tvf::ToField<__TVF> for #type_name #ty_generics #where_clause {
                 fn to_field(&self, __id: usize, __msg: &mut __TVF) {
                     let mut __buffer = __TVF::default();
-                    self.to_tvf(&mut __buffer);
+                    <Self as __tvf::ToTvf<__TVF>>::to_tvf(&self, &mut __buffer);
                     __msg.put_buffer(__id, __buffer);
                 }
             }
@@ -282,7 +243,7 @@ impl<'f> TvfEnum<'f> {
                     __tvf::TvfError::SerializationError("Skipped enum variant".to_string())
                 )]
             } else if let Some(custom) = variant.attr.overrides.impl_from_tvf() {
-                quote![ #custom(__msg, #tag_id) ]
+                quote![ #custom(__msg) ]
             } else {
                 let fields_tokens = variant.fields.impl_from_tvf();
                 quote![
@@ -308,7 +269,7 @@ impl<'f> TvfEnum<'f> {
                     __tvf::TvfError::SerializationError("Skipped enum variant".to_string())
                 )]
             } else if let Some(custom) = variant.attr.overrides.impl_from_tvf() {
-                quote![ #custom(__msg, #tag_id) ]
+                quote![ #custom(__msg) ]
             } else {
                 let fields_tokens = variant.fields.impl_from_tvf();
                 quote![
@@ -325,7 +286,7 @@ impl<'f> TvfEnum<'f> {
             tokens
         } else {
             quote![::core::result::Result::Err(
-                __tvf::TvfError::SerializationError(format!["Unknown tag \"{}\"", __disc])
+                __tvf::TvfError::SerializationError(::std::format!["Unknown tag \"{}\"", __disc])
             )]
         };
 
@@ -378,7 +339,7 @@ impl<'f> TvfStruct<'f> {
                     Self: ::core::marker::Sized,
                 {
                     #tokens
-                    Ok(Self #fields)
+                    ::core::result::Result::Ok(Self #fields)
                 }
             }
         };
@@ -456,7 +417,7 @@ fn impl_from_field(type_name: &Ident, generics: Generics) -> TokenStream {
 
     quote! {
         impl #impl_generics __tvf::FromField<__TVF> for #type_name #ty_generics #where_clause {
-            fn from_field(__msg: &__TVF, __id: usize) -> Result<Self, __tvf::TvfError> {
+            fn from_field(__msg: &__TVF, __id: usize) -> ::core::result::Result<Self, __tvf::TvfError> {
                 let __buffer = __msg.get_buffer(__id)?;
                 <Self as __tvf::FromTvf<__TVF>>::from_tvf(__buffer.as_ref())
             }
