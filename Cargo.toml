@@ -42,7 +42,6 @@ opentelemetry_sdk = { version = "0.33", features = ["metrics", "trace", "logs", 
 prometheus = { version = "0.14", default-features = false }
 
 # Config SSL
-openssl-sys = { version = "0.9" }
 openssl = { version = "0.10" }
 
 # Web
