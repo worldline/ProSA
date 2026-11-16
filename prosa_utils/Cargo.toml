@@ -11,14 +11,14 @@ include.workspace = true
 
 [features]
 default = ["msg", "config", "config-openssl", "config-observability"]
-msg = []
+msg = ["dep:bytes", "dep:chrono", "dep:hex"]
 msg-serde = ["msg", "dep:serde", "chrono/serde", "bytes/serde"]
-config = ["dep:glob", "dep:notify", "dep:log", "dep:serde","dep:yaml_serde", "dep:base64", "dep:percent-encoding", "dep:uuid"]
-config-openssl = ["config", "dep:openssl"]
+config = ["dep:glob", "dep:notify", "dep:log", "dep:serde", "dep:base64", "dep:percent-encoding", "dep:uuid", "dep:url"]
+config-openssl = ["config", "dep:openssl", "dep:bytes"]
 config-openssl-vendored = ["config-openssl", "openssl/vendored"]
-config-observability = ["dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:opentelemetry-appender-tracing"]
+config-observability = ["dep:chrono", "dep:log", "dep:tracing-core", "dep:tracing-subscriber", "dep:tracing-opentelemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-stdout", "dep:opentelemetry-otlp", "dep:opentelemetry-appender-tracing"]
 config-observability-gzip = ["dep:flate2", "opentelemetry-otlp/gzip-tonic", "opentelemetry-otlp/gzip-http"]
-config-observability-prometheus = ["config-observability", "dep:prometheus", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
+config-observability-prometheus = ["config-observability", "dep:bytes", "dep:prometheus", "dep:opentelemetry-prometheus", "dep:tokio", "dep:hyper", "dep:http-body-util", "dep:hyper-util"]
 queue = []
 
 [package.metadata.docs.rs]
@@ -33,16 +33,15 @@ unwrap_used = "deny"
 
 [dependencies]
 thiserror.workspace = true
-bytes.workspace = true
-url.workspace = true
-chrono.workspace = true
-hex = "0.4"
+bytes = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+hex = { version = "0.4", optional = true }
 
 # Config
 glob = { version = "0.3", optional = true }
 notify = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
-yaml_serde = { version = "0.10", optional = true }
 base64 = { version = "0.23", optional = true }
 percent-encoding = { version = "2", optional = true }
 uuid = { version = "1", optional = true, features = ["v1", "v4"] }
@@ -73,3 +72,4 @@ flate2 = { version = "1", optional = true }
 [dev-dependencies]
 tokio.workspace = true
 tokio-openssl = "0.6"
+yaml_serde.workspace = true
