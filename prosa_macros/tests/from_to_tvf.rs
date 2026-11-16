@@ -209,7 +209,7 @@ mod macro_tests {
     #[test]
     fn test_derive_struct() {
         let a0 = tvf![SimpleStringTvf {
-            0   => 12u64,
+            1   => 12u64,
             10  => 1u8,
             100 => "HELLO",
         }];
@@ -243,8 +243,8 @@ mod macro_tests {
         // D variant
         let bd0 = tvf![SimpleStringTvf {
             MY_FIELD => "D",
-            0 => 123,
-            1 => 0.125,
+            1 => 123,
+            2 => 0.125,
         }];
         let bd1 = B::D { a: 123, b: 0.125 };
         let mut bd2 = SimpleStringTvf::default();
@@ -257,17 +257,17 @@ mod macro_tests {
     #[test]
     fn test_derive_generic() {
         let e0 = tvf![SimpleStringTvf {
-            0 => 192u64,
-            1 => {
-                0   => 24u64,
+            1 => 192u64,
+            2 => {
+                1   => 24u64,
                 10  => 0u8,
                 100 => "BYE",
             },
-            2 => { MY_FIELD => "C" },
-            4 => 64,
-            5 => 36.5,
-            7 => true,
-            8 => 1600,
+            3 => { MY_FIELD => "C" },
+            5 => 64,
+            6 => 36.5,
+            8 => true,
+            9 => 1600,
         }];
         let e1 = E::<A, B> {
             a: 12,
@@ -319,14 +319,14 @@ mod macro_tests {
     #[test]
     fn test_derive_std_types() {
         let i0 = tvf![SimpleStringTvf {
-            0 => [ 10, 20, 30, 40 ],
-            1 => 64,
-            // field 2 is skipped
-            3 => 128,
-            4 => { 2 => 40, 4 => 80 },
-            5 => { 3 => 50, 5 => 90 },
-            6 => 250,
-            7 => "shared",
+            1 => [ 10, 20, 30, 40 ],
+            2 => 64,
+            // field 3 is skipped
+            4 => 128,
+            5 => { 2 => 40, 4 => 80 },
+            6 => { 3 => 50, 5 => 90 },
+            7 => 250,
+            8 => "shared",
         }];
         let i1 = I {
             vector: vec![10, 20, 30, 40],
@@ -365,14 +365,14 @@ mod macro_tests {
         // second test
 
         let i0 = tvf![SimpleStringTvf {
-            0 => [],
-            1 => 32,
-            2 => 33,
-            3 => 34,
-            4 => {},
+            1 => [],
+            2 => 32,
+            3 => 33,
+            4 => 34,
             5 => {},
-            6 => 35,
-            7 => "arc",
+            6 => {},
+            7 => 35,
+            8 => "arc",
         }];
 
         let int = 34;
@@ -404,7 +404,7 @@ mod macro_tests {
     #[test]
     fn test_derive_custom_field_paths() {
         let expected = tvf![SimpleStringTvf {
-            0 => 12u64,
+            1 => 12u64,
             10 => 1u8,
             MY_FIELD => "HELLO",
             6 => 1.5,
@@ -486,7 +486,7 @@ mod macro_tests {
 
         let expected_to_only_into = tvf![SimpleStringTvf {
             (MY_FIELD + 1) => 15u64,
-            0 => 5u32,
+            1 => 5u32,
         }];
         let mut encoded = SimpleStringTvf::default();
         to_only.into_tvf(&mut encoded);
@@ -495,7 +495,7 @@ mod macro_tests {
         let into_only = K::IntoOnly { value: 6 };
         let expected_into_only_to = tvf![SimpleStringTvf {
             (MY_FIELD + 1) => 16u64,
-            0 => 6u32,
+            1 => 6u32,
         }];
         let mut encoded = SimpleStringTvf::default();
         into_only.to_tvf(&mut encoded);

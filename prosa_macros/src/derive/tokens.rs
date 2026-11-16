@@ -531,7 +531,7 @@ impl<'f> TvfField<'f> {
         if let Some(ident) = &self.field.ident {
             ident.to_token_stream()
         } else {
-            let index = Index::from(self.index);
+            let index = Index::from(self.index + 1);
             quote! [#index]
         }
     }
@@ -574,7 +574,7 @@ impl<'f> TvfField<'f> {
         let value = if let Some(id) = &self.attr.field_id {
             quote![ (#id) as usize ]
         } else {
-            let index = self.index;
+            let index = self.index + 1;
             quote![ #index ]
         };
         quote![ const #ident: usize = #value; ]
