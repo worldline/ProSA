@@ -374,8 +374,11 @@ impl<'f> TvfFields<'f> {
                 // When flatten attribute is set, read from the parent message directly
                 if let Some(default_impl) = field.get_default(false) {
                     quote![
-                        let #ident = <#ty as __tvf::FromTvf<__TVF>>::from_tvf(__msg)
-                            .unwrap_or_else(|_| #default_impl);
+                        let #ident = match <#ty as __tvf::FromTvf<__TVF>>::from_tvf(__msg) {
+                            Ok(value) => value,
+                            Err(__tvf::TvfError::FieldNotFound(_)) => { #default_impl },
+                            Err(err) => { return Err(err); },
+                        };
                     ]
                 } else {
                     quote![
@@ -385,12 +388,19 @@ impl<'f> TvfFields<'f> {
             } else if let Some(default_impl) = field.get_default(false) {
                 if let Some(func) = &field.attr.overrides.custom_from_tvf {
                     quote![
-                        let #ident = #func(__msg, #id).unwrap_or_else(|_| #default_impl);
+                        let #ident = match #func(__msg, #id) {
+                            Ok(value) => value,
+                            Err(__tvf::TvfError::FieldNotFound(_)) => { #default_impl },
+                            Err(err) => { return Err(err); },
+                        };
                     ]
                 } else {
                     quote![
-                        let #ident = <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id)
-                            .unwrap_or_else(|_| #default_impl);
+                        let #ident = match <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id) {
+                            Ok(value) => value,
+                            Err(__tvf::TvfError::FieldNotFound(_)) => { #default_impl },
+                            Err(err) => { return Err(err); },
+                        };
                     ]
                 }
             } else {
@@ -531,7 +541,7 @@ impl<'f> TvfField<'f> {
         if let Some(ident) = &self.field.ident {
             ident.to_token_stream()
         } else {
-            let index = Index::from(self.index + 1);
+            let index = Index::from(self.index);
             quote! [#index]
         }
     }

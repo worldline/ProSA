@@ -3,7 +3,7 @@ mod macro_tests {
     use prosa_macros::{FromTvf, IntoTvf, ToTvf, tvf};
     use prosa_utils::msg::{
         simple_string_tvf::SimpleStringTvf,
-        tvf::{FromTvf, IntoTvf, ToTvf, Tvf},
+        tvf::{FromTvf, IntoTvf, ToTvf, Tvf, TvfError},
     };
     use std::{
         borrow::Cow,
@@ -213,6 +213,16 @@ mod macro_tests {
         pub b: u16,
     }
 
+    #[derive(Debug, PartialEq, FromTvf, ToTvf, IntoTvf)]
+    struct TupleStruct(u32, String);
+
+    #[derive(Debug, PartialEq, FromTvf, ToTvf, IntoTvf)]
+    #[tvf(tag_id = 100, tag_type = "unsigned")]
+    enum TupleVariant {
+        #[tvf(tag = 10)]
+        Values(u32, String),
+    }
+
     #[test]
     fn test_derive_struct() {
         let a0 = tvf![SimpleStringTvf {
@@ -234,6 +244,38 @@ mod macro_tests {
         // deserialize from TVF
         let a3 = A::from_tvf(&a0).expect("Deserialization from TVF should work");
         assert_eq!(a1, a3);
+    }
+
+    #[test]
+    fn test_derive_tuple_struct_and_variant() {
+        let tuple_struct = TupleStruct(42, String::from("tuple"));
+        let expected_struct = tvf![SimpleStringTvf {
+            1 => 42u32,
+            2 => "tuple",
+        }];
+
+        let mut encoded_struct = SimpleStringTvf::default();
+        tuple_struct.to_tvf(&mut encoded_struct);
+        assert_eq!(expected_struct, encoded_struct);
+        assert_eq!(
+            tuple_struct,
+            TupleStruct::from_tvf(&expected_struct).expect("Tuple struct should decode")
+        );
+
+        let tuple_variant = TupleVariant::Values(42, String::from("variant"));
+        let expected_variant = tvf![SimpleStringTvf {
+            100 => 10u64,
+            1 => 42u32,
+            2 => "variant",
+        }];
+
+        let mut encoded_variant = SimpleStringTvf::default();
+        tuple_variant.to_tvf(&mut encoded_variant);
+        assert_eq!(expected_variant, encoded_variant);
+        assert_eq!(
+            tuple_variant,
+            TupleVariant::from_tvf(&expected_variant).expect("Tuple variant should decode")
+        );
     }
 
     #[test]
@@ -552,5 +594,25 @@ mod macro_tests {
         m.put_unsigned(1, 70000);
         m.put_unsigned(2, 70000);
         let _ = O::from_tvf(&m).expect_err("Invalid integer values");
+
+        let mut invalid_defaulted_value = SimpleStringTvf::default();
+        invalid_defaulted_value.put_unsigned(2, 70000);
+        assert!(matches!(
+            O::from_tvf(&invalid_defaulted_value),
+            Err(TvfError::ConvertionError(_))
+        ));
+
+        let mut mismatched_defaulted_value = SimpleStringTvf::default();
+        mismatched_defaulted_value.put_string(2, "abc");
+        assert_eq!(
+            Err(TvfError::TypeMismatch),
+            O::from_tvf(&mismatched_defaulted_value)
+        );
+
+        assert_eq!(
+            O { a: None, b: 0 },
+            O::from_tvf(&SimpleStringTvf::default())
+                .expect("A missing defaulted field should use its default")
+        );
     }
 }

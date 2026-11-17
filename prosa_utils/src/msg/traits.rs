@@ -13,6 +13,9 @@ use std::{
     sync::Arc,
 };
 
+/// Maximum allowed size for vectors when deserialized from a TVF message
+const MAX_VECTOR_SIZE: usize = 100_000;
+
 /// Convert a Rust's type into a TVF message
 pub trait ToTvf<T: Tvf> {
     /// Populate the given TVF message with this Rust's type
@@ -638,8 +641,17 @@ impl<T: Tvf, F: FromField<T> + Default> FromTvf<T> for Vec<F> {
 
         // Collect effective fields
         for id in msg.keys() {
-            // Start indexes at 1
-            if id > 0 {
+            // Allowed indexes are in the range 1..MAX_VECTOR_SIZE
+            if id == 0 {
+                let text = "Field identifier cannot be zero".to_string();
+                return Err(TvfError::SerializationError(text));
+            } else if id >= MAX_VECTOR_SIZE {
+                let text = format!(
+                    "Field identifier {} is greater than the allowed limit {}",
+                    id, MAX_VECTOR_SIZE
+                );
+                return Err(TvfError::SerializationError(text));
+            } else {
                 // We want to set the field value in a given cell of the vector.
                 // First we check if the vector is large enough,
                 // and we resize it if it is not the case.
@@ -1042,5 +1054,16 @@ mod tests {
 
         let v2 = Vec::<Option<u32>>::from_tvf(&m).expect("Recover initial construct");
         assert_eq!(v2, v);
+    }
+
+    #[test]
+    fn test_vector_rejects_excessive_field_id() {
+        let mut message = SimpleStringTvf::default();
+        message.put_unsigned(1usize << 40, 1);
+
+        assert!(matches!(
+            Vec::<u32>::from_tvf(&message),
+            Err(TvfError::SerializationError(_))
+        ));
     }
 }
