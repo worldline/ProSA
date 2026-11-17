@@ -1020,4 +1020,27 @@ mod tests {
         assert!(matches!(decoded.2, Cow::Owned(_)));
         assert_eq!(None, decoded.4);
     }
+
+    #[test]
+    fn test_invalid_keys() {
+        let h = HashMap::from([(65537usize, 1u32)]);
+        let mut m = SimpleStringTvf::default();
+        h.to_tvf(&mut m);
+        let _err = HashMap::<u16, u32>::from_tvf(&m).expect_err("65537 doesn't fit in u16");
+    }
+
+    #[test]
+    fn test_vector_with_options() {
+        // Vector of optional values
+        let v = vec![None, Some(1u32)];
+        let mut m = SimpleStringTvf::default();
+        v.to_tvf(&mut m);
+
+        let mut expected = SimpleStringTvf::default();
+        expected.put_unsigned(2, 1);
+        assert_eq!(expected, m);
+
+        let v2 = Vec::<Option<u32>>::from_tvf(&m).expect("Recover initial construct");
+        assert_eq!(v2, v);
+    }
 }

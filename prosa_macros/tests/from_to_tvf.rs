@@ -553,20 +553,4 @@ mod macro_tests {
         m.put_unsigned(2, 70000);
         let _ = O::from_tvf(&m).expect_err("Invalid integer values");
     }
-
-    #[test]
-    fn test_options() {
-        // Vector of optional values
-        let v = vec![None, Some(1u32)];
-        let mut m = SimpleStringTvf::default();
-        v.to_tvf(&mut m);
-
-        let expected = tvf!(SimpleStringTvf {
-            2 => 1u32,
-        });
-        assert_eq!(expected, m);
-
-        let v2 = Vec::<Option<u32>>::from_tvf(&m).expect("Recover initial construct");
-        assert_eq!(v2, v);
-    }
 }
