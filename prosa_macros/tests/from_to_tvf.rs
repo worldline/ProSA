@@ -3,7 +3,7 @@ mod macro_tests {
     use prosa_macros::{FromTvf, IntoTvf, ToTvf, tvf};
     use prosa_utils::msg::{
         simple_string_tvf::SimpleStringTvf,
-        tvf::{FromTvf, IntoTvf, ToTvf, Tvf},
+        tvf::{FromTvf, IntoTvf, ToTvf, Tvf, TvfError},
     };
     use std::{
         borrow::Cow,
@@ -205,6 +205,13 @@ mod macro_tests {
         },
     }
     pub fn into_lv<T: Tvf>(_v: String, _f: f32, _m: &mut T) {}
+
+    #[derive(Debug, FromTvf, PartialEq)]
+    pub struct O {
+        pub a: Option<u16>,
+        #[tvf(default)]
+        pub b: u16,
+    }
 
     #[test]
     fn test_derive_struct() {
@@ -508,5 +515,30 @@ mod macro_tests {
         let mut encoded = SimpleStringTvf::default();
         into_only.into_tvf(&mut encoded);
         assert_eq!(expected_into_only, encoded);
+    }
+
+    #[test]
+    fn test_invalid_conversion() {
+        // 70000 exceed `u16` max capacity, thus the deserialization will fail
+        let mut m = SimpleStringTvf::default();
+        m.put_unsigned(1, 70000);
+        m.put_unsigned(2, 70000);
+        let _ = O::from_tvf(&m).expect_err("Invalid integer values");
+    }
+
+    #[test]
+    fn test_options() {
+        // Vector of optional values
+        let v = vec![None, Some(1u32)];
+        let mut m = SimpleStringTvf::default();
+        v.to_tvf(&mut m);
+
+        let expected = tvf!(SimpleStringTvf {
+            2 => 1u32,
+        });
+        assert_eq!(expected, m);
+
+        let v2 = Vec::<Option<u32>>::from_tvf(&m).expect("Recover initial construct");
+        assert_eq!(v2, v);
     }
 }

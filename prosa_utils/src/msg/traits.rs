@@ -567,10 +567,10 @@ impl<T: Tvf> FromField<T> for BytesMut {
 impl<T: Tvf, F: FromField<T>> FromField<T> for Option<F> {
     #[inline]
     fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
-        if let Ok(field) = F::from_field(msg, id) {
-            Ok(Some(field))
-        } else {
-            Ok(None)
+        match F::from_field(msg, id) {
+            Ok(value) => Ok(Some(value)),
+            Err(TvfError::FieldNotFound(_)) => Ok(None),
+            Err(err) => Err(err),
         }
     }
 }
@@ -621,13 +621,24 @@ macro_rules! impl_from_field_tvf {
 }
 
 /// Extract a vector of fields from a TVF message
-impl<T: Tvf, F: FromField<T>> FromTvf<T> for Vec<F> {
+impl<T: Tvf, F: FromField<T> + Default> FromTvf<T> for Vec<F> {
     fn from_tvf(msg: &T) -> Result<Self, TvfError> {
-        // Collect fields into a vector
+        // Allocate a vector with an estimate of the number of cells necessary
         let count = msg.len();
         let mut vector = Vec::with_capacity(count);
-        for id in 1..=count {
-            vector.push(F::from_field(msg, id)?);
+
+        // Collect effective fields
+        for id in msg.keys() {
+            // Start indexes at 1
+            if id > 0 {
+                // We want to set the field value in a given cell of the vector.
+                // First we check if the vector is large enough,
+                // and we resize it if it is not the case.
+                if vector.len() <= id {
+                    vector.resize_with(id, || Default::default());
+                }
+                vector[id - 1] = F::from_field(msg, id)?;
+            }
         }
         Ok(vector)
     }
@@ -636,7 +647,7 @@ impl_from_field_tvf! {
     impl[T, F] FromField<T> for Vec<F>
     where
         T: Tvf + Clone,
-        F: FromField<T>,
+        F: FromField<T> + Default,
 }
 
 /// Extract a list of fields from a TVF message

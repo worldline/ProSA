@@ -552,7 +552,7 @@ impl<'f> TvfField<'f> {
     pub(crate) fn get_default(&self, force: bool) -> Option<TokenStream> {
         #[inline]
         fn default_impl() -> Option<TokenStream> {
-            Some(quote![core::default::Default::default()])
+            Some(quote![::core::default::Default::default()])
         }
 
         match &self.attr.default {
