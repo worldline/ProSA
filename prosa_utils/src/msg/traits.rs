@@ -3,8 +3,9 @@
 use crate::msg::tvf::{Tvf, TvfError};
 use bytes::{Bytes, BytesMut};
 use chrono::{NaiveDate, NaiveDateTime};
-use num_traits::AsPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive};
 use std::{
+    any::type_name,
     borrow::Cow,
     collections::{BTreeMap, HashMap},
     hash::Hash,
@@ -211,12 +212,14 @@ impl_to_field_tvf! {
 impl<T, I, F> ToTvf<T> for HashMap<I, F>
 where
     T: Tvf,
-    I: AsPrimitive<usize> + Copy,
+    I: ToPrimitive + Copy,
     F: ToField<T>,
 {
     fn to_tvf(&self, msg: &mut T) {
         for (i, f) in self.iter() {
-            f.to_field((*i).as_(), msg);
+            if let Some(id) = i.to_usize() {
+                f.to_field(id, msg);
+            }
         }
     }
 }
@@ -224,7 +227,7 @@ impl_to_field_tvf! {
     impl[T, I, F] ToField<T> for HashMap<I, F>
     where
         T: Tvf + Default,
-        I: AsPrimitive<usize> + Copy,
+        I: ToPrimitive + Copy,
         F: ToField<T>,
 }
 
@@ -232,12 +235,14 @@ impl_to_field_tvf! {
 impl<T, I, F> ToTvf<T> for BTreeMap<I, F>
 where
     T: Tvf,
-    I: AsPrimitive<usize> + Copy,
+    I: ToPrimitive + Copy,
     F: ToField<T>,
 {
     fn to_tvf(&self, msg: &mut T) {
         for (i, f) in self.iter() {
-            f.to_field((*i).as_(), msg);
+            if let Some(id) = i.to_usize() {
+                f.to_field(id, msg);
+            }
         }
     }
 }
@@ -245,7 +250,7 @@ impl_to_field_tvf! {
     impl[T, I, F] ToField<T> for BTreeMap<I, F>
     where
         T: Tvf + Default,
-        I: AsPrimitive<usize> + Copy,
+        I: ToPrimitive + Copy,
         F: ToField<T>,
 }
 
@@ -428,12 +433,14 @@ impl_into_field_tvf! {
 impl<T, I, F> IntoTvf<T> for HashMap<I, F>
 where
     T: Tvf,
-    I: AsPrimitive<usize> + Copy,
+    I: ToPrimitive + Copy,
     F: IntoField<T>,
 {
     fn into_tvf(self, msg: &mut T) {
         for (i, f) in self {
-            f.into_field(i.as_(), msg);
+            if let Some(id) = i.to_usize() {
+                f.into_field(id, msg);
+            }
         }
     }
 }
@@ -441,7 +448,7 @@ impl_into_field_tvf! {
     impl[T, I, F] IntoField<T> for HashMap<I, F>
     where
         T: Tvf + Default,
-        I: AsPrimitive<usize> + Copy,
+        I: ToPrimitive + Copy,
         F: IntoField<T>,
 }
 
@@ -449,12 +456,14 @@ impl_into_field_tvf! {
 impl<T, I, F> IntoTvf<T> for BTreeMap<I, F>
 where
     T: Tvf,
-    I: AsPrimitive<usize> + Copy,
+    I: ToPrimitive + Copy,
     F: IntoField<T>,
 {
     fn into_tvf(self, msg: &mut T) {
         for (i, f) in self {
-            f.into_field(i.as_(), msg);
+            if let Some(id) = i.to_usize() {
+                f.into_field(id, msg);
+            }
         }
     }
 }
@@ -462,7 +471,7 @@ impl_into_field_tvf! {
     impl[T, I, F] IntoField<T> for BTreeMap<I, F>
     where
         T: Tvf + Default,
-        I: AsPrimitive<usize> + Copy,
+        I: ToPrimitive + Copy,
         F: IntoField<T>,
 }
 
@@ -685,16 +694,20 @@ impl_from_field_tvf! {
 impl<T, I, F> FromTvf<T> for HashMap<I, F>
 where
     T: Tvf,
-    I: 'static + Copy + Hash + Eq,
-    usize: AsPrimitive<I>,
+    I: 'static + FromPrimitive + Copy + Hash + Eq,
     F: FromField<T>,
 {
     fn from_tvf(msg: &T) -> Result<Self, TvfError> {
         let keys = msg.keys();
         let mut map = Self::with_capacity(keys.len());
         for key in keys {
-            let field = F::from_field(msg, key)?;
-            map.insert(key.as_(), field);
+            // Check if the id can be converted into the target key type
+            if let Some(id) = I::from_usize(key) {
+                let field = F::from_field(msg, key)?;
+                map.insert(id, field);
+            } else {
+                return Err(id_conversion_error::<I>(key));
+            }
         }
         Ok(map)
     }
@@ -703,8 +716,7 @@ impl_from_field_tvf! {
     impl[T, I, F] FromField<T> for HashMap<I, F>
     where
         T: Tvf + Clone,
-        I: 'static + Copy + Hash + Eq,
-        usize: AsPrimitive<I>,
+        I: 'static + FromPrimitive + Copy + Hash + Eq,
         F: FromField<T>,
 }
 
@@ -712,15 +724,19 @@ impl_from_field_tvf! {
 impl<T, I, F> FromTvf<T> for BTreeMap<I, F>
 where
     T: Tvf,
-    I: 'static + Copy + Ord,
-    usize: AsPrimitive<I>,
+    I: 'static + FromPrimitive + Copy + Ord,
     F: FromField<T>,
 {
     fn from_tvf(msg: &T) -> Result<Self, TvfError> {
         let mut map = Self::new();
         for key in msg.keys() {
-            let field = F::from_field(msg, key)?;
-            map.insert(key.as_(), field);
+            // Check if the id can be converted into the target key type
+            if let Some(id) = I::from_usize(key) {
+                let field = F::from_field(msg, key)?;
+                map.insert(id, field);
+            } else {
+                return Err(id_conversion_error::<I>(key));
+            }
         }
         Ok(map)
     }
@@ -729,8 +745,7 @@ impl_from_field_tvf! {
     impl[T, I, F] FromField<T> for BTreeMap<I, F>
     where
         T: Tvf + Clone,
-        I: 'static + Copy + Ord,
-        usize: AsPrimitive<I>,
+        I: 'static + FromPrimitive + Copy + Ord,
         F: FromField<T>,
 }
 
@@ -760,6 +775,17 @@ impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 =>
 impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10 ];
 impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11 ];
 impl_from_tvf_tuple![ 0 => F0, 1 => F1, 2 => F2, 3 => F3, 4 => F4, 5 => F5, 6 => F6, 7 => F7, 8 => F8, 9 => F9, 10 => F10, 11 => F11, 12 => F12 ];
+
+/// Create an error message when failing to convert a TVF field identifier into the target key type
+#[inline]
+fn id_conversion_error<I>(id: usize) -> TvfError {
+    let err = format!(
+        "Cannot convert id {} into target key type {}",
+        id,
+        type_name::<I>()
+    );
+    TvfError::SerializationError(err)
+}
 
 // MARK: Tests
 

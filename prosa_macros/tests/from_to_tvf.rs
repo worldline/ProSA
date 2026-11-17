@@ -3,7 +3,7 @@ mod macro_tests {
     use prosa_macros::{FromTvf, IntoTvf, ToTvf, tvf};
     use prosa_utils::msg::{
         simple_string_tvf::SimpleStringTvf,
-        tvf::{FromTvf, IntoTvf, ToTvf, Tvf, TvfError},
+        tvf::{FromTvf, IntoTvf, ToTvf, Tvf},
     };
     use std::{
         borrow::Cow,
@@ -515,6 +515,34 @@ mod macro_tests {
         let mut encoded = SimpleStringTvf::default();
         into_only.into_tvf(&mut encoded);
         assert_eq!(expected_into_only, encoded);
+    }
+
+    #[test]
+    fn test_derive_enum_custom_into_tvf() {
+        let value = L::A {
+            s: String::from("value"),
+            f: 1.5,
+        };
+        let expected = tvf![SimpleStringTvf {
+            1 => "value",
+            2 => 1.5,
+        }];
+
+        let mut encoded = SimpleStringTvf::default();
+        value.into_tvf(&mut encoded);
+
+        assert_eq!(expected, encoded);
+
+        let value = L::V {
+            s: String::from("value"),
+            f: 1.5,
+        };
+        let expected = tvf![SimpleStringTvf { 1 => 10u64 }];
+
+        let mut encoded = SimpleStringTvf::default();
+        value.into_tvf(&mut encoded);
+
+        assert_eq!(expected, encoded);
     }
 
     #[test]
