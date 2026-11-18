@@ -87,8 +87,7 @@ impl<'f> TvfEnum<'f> {
         let mut workbuffer = Vec::new();
 
         // We will collect metadata about the variants as we iterate over them.
-        let var_count = enum_data.variants.len();
-        let mut out_vars = Vec::with_capacity(var_count);
+        let mut out_vars = Vec::with_capacity(enum_data.variants.len());
         let mut count_def = 0;
 
         let enum_attr = AttrEnum::identify(attrs, &mut workbuffer)?;
@@ -147,7 +146,7 @@ impl<'f> TvfStruct<'f> {
         generics: &'f Generics,
         struct_data: &'f DataStruct,
     ) -> Result<Self, AttrError> {
-        let mut workbuffer = Vec::new();
+        let mut workbuffer = Vec::with_capacity(struct_data.fields.len());
         let fields = TvfFields::new(&struct_data.fields, &mut workbuffer)?;
 
         // Return the ordered list of fields
@@ -199,8 +198,7 @@ pub(crate) fn extend_generics(mut generics: Generics, impl_trait: ImplTrait) -> 
     let type_g = quote![ #type_g ];
 
     // For each generic type, introduce a `FromField` or `ToField` trait bound.
-    let count = generics.params.len();
-    let mut bounds = Vec::with_capacity(count);
+    let mut bounds = Vec::with_capacity(generics.params.len());
     match impl_trait {
         ImplTrait::To => {
             // Add `ToField` trait bound to each generic type

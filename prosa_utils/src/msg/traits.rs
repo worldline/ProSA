@@ -633,33 +633,19 @@ macro_rules! impl_from_field_tvf {
 }
 
 /// Extract a vector of fields from a TVF message
-impl<T: Tvf, F: FromField<T> + Default> FromTvf<T> for Vec<F> {
+///
+/// The message must contain exactly the fields `1..=len`, without gaps.
+/// Use a map to extract sparse fields.
+impl<T: Tvf, F: FromField<T>> FromTvf<T> for Vec<F> {
     fn from_tvf(msg: &T) -> Result<Self, TvfError> {
-        // Allocate a vector with an estimate of the number of cells necessary
-        let count = msg.len();
-        let mut vector = Vec::with_capacity(count);
-
-        // Collect effective fields
-        for id in msg.keys() {
-            // Allowed indexes are in the range 1..MAX_VECTOR_SIZE
-            if id == 0 {
-                let text = "Field identifier cannot be zero".to_string();
-                return Err(TvfError::SerializationError(text));
-            } else if id >= MAX_VECTOR_SIZE {
-                let text = format!(
-                    "Field identifier {} is greater than the allowed limit {}",
-                    id, MAX_VECTOR_SIZE
-                );
-                return Err(TvfError::SerializationError(text));
-            } else {
-                // We want to set the field value in a given cell of the vector.
-                // First we check if the vector is large enough,
-                // and we resize it if it is not the case.
-                if vector.len() <= id {
-                    vector.resize_with(id, || Default::default());
-                }
-                vector[id - 1] = F::from_field(msg, id)?;
+        let len = msg.len();
+        let mut vector = Vec::with_capacity(len);
+        for id in 1..=len {
+            // Field identifiers are unique, so any id outside `1..=len` leaves a gap
+            if !msg.contains(id) {
+                return Err(TvfError::FieldNotFound(id));
             }
+            vector.push(F::from_field(msg, id)?);
         }
         Ok(vector)
     }
