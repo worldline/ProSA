@@ -1,15 +1,17 @@
 //! OpenSSL part of the streams and the listeners: the context they keep across connections, and
 //! the code that connects and handshakes with it.
 use std::{
+    collections::BTreeMap,
     fmt, io,
     pin::Pin,
     sync::{
-        Arc, PoisonError, RwLock,
-        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, PoisonError, RwLock,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
 
+use crate::otel::{KeyValue, metrics::AsyncInstrument};
 use openssl::ssl::{SslAcceptor, SslConnector};
 use prosa_utils::config::ssl::{SslConfig, SslContextBuild};
 use tokio::{
@@ -25,9 +27,30 @@ use super::{
     stream::{Stream, TargetSetting},
 };
 
+/// Expiration date and attributes of a loaded certificate
+type LoadedCertificate = (i64, Vec<KeyValue>);
+
+/// Certificates loaded by every [`SslContextCache`], by cache id
+static LOADED_CERTIFICATES: Mutex<BTreeMap<u64, Vec<LoadedCertificate>>> =
+    Mutex::new(BTreeMap::new());
+static NEXT_CACHE_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Observe the expiration date of every certificate loaded in an SSL context
+pub(crate) fn observe_certificates(observer: &dyn AsyncInstrument<i64>) {
+    for (not_after, attributes) in LOADED_CERTIFICATES
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .values()
+        .flatten()
+    {
+        observer.observe(*not_after, attributes);
+    }
+}
+
 /// SSL context kept across connections, with the generation of the [`SslConfig`] files it was
 /// built from
 pub(crate) struct SslContextCache<C> {
+    id: u64,
     context: RwLock<Option<(C, u64)>>,
     rebuilding: AtomicBool,
 }
@@ -35,19 +58,28 @@ pub(crate) struct SslContextCache<C> {
 impl<C> Default for SslContextCache<C> {
     fn default() -> Self {
         SslContextCache {
+            id: NEXT_CACHE_ID.fetch_add(1, Ordering::Relaxed),
             context: RwLock::new(None),
             rebuilding: AtomicBool::new(false),
         }
     }
 }
 
+impl<C> Drop for SslContextCache<C> {
+    fn drop(&mut self) {
+        LOADED_CERTIFICATES
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.id);
+    }
+}
+
 impl<C: SslContextBuild> SslContextCache<C> {
     /// Cache holding a context built elsewhere, never built again
-    pub(crate) fn with_context(context: C) -> Self {
-        SslContextCache {
-            context: RwLock::new(Some((context, 0))),
-            rebuilding: AtomicBool::new(false),
-        }
+    pub(crate) fn with_context(context: C, name: &str) -> Self {
+        let cache = SslContextCache::default();
+        cache.store(context, 0, &SslConfig::default(), name);
+        cache
     }
 
     pub(crate) fn current(&self) -> Option<(C, u64)> {
@@ -57,8 +89,18 @@ impl<C: SslContextBuild> SslContextCache<C> {
             .clone()
     }
 
-    pub(crate) fn store(&self, context: C, generation: u64) {
+    /// Keep the context, and the certificates it loaded for the metrics
+    pub(crate) fn store(&self, context: C, generation: u64, config: &SslConfig, name: &str) {
+        let certificates = context
+            .certificates(config)
+            .into_iter()
+            .map(|cert| (cert.not_after, cert.attributes(name)))
+            .collect();
         *self.context.write().unwrap_or_else(PoisonError::into_inner) = Some((context, generation));
+        LOADED_CERTIFICATES
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(self.id, certificates);
     }
 
     /// Context to connect with now.
@@ -84,16 +126,16 @@ impl<C: SslContextBuild> SslContextCache<C> {
             return Ok(context);
         }
 
-        let (config, host) = (config.clone(), host.map(String::from));
+        let (build_config, host) = (config.clone(), host.map(String::from));
         let (context, generation) = tokio::task::spawn_blocking(move || {
             // Read before the files, so a change made while reading them is a new generation.
             // Watching them starts here, out of the runtime
-            let generation = config.generation();
-            C::build(&config, host.as_deref()).map(|context| (context, generation))
+            let generation = build_config.generation();
+            C::build(&build_config, host.as_deref()).map(|context| (context, generation))
         })
         .await
         .map_err(std::io::Error::other)??;
-        self.store(context.clone(), generation);
+        self.store(context.clone(), generation, config, &name.to_string());
         Ok(context)
     }
 
@@ -102,7 +144,7 @@ impl<C: SslContextBuild> SslContextCache<C> {
     pub(crate) fn rebuild(&self, config: &SslConfig, host: Option<&str>, name: &str) {
         let generation = config.generation();
         match C::build(config, host) {
-            Ok(context) => self.store(context, generation),
+            Ok(context) => self.store(context, generation, config, name),
             Err(err) => {
                 log::warn!("Can't read the certificates of {name}, keep the previous ones: {err}");
                 if let Some((_, built)) = self
@@ -321,7 +363,7 @@ impl SslHandshaker {
     /// source decides when to replace them.
     pub fn new(acceptor: SslAcceptor, timeout: Option<Duration>) -> SslHandshaker {
         SslHandshaker {
-            acceptor: Arc::new(SslContextCache::with_context(acceptor)),
+            acceptor: Arc::new(SslContextCache::with_context(acceptor, "listener")),
             source: None,
             timeout: timeout.unwrap_or(StreamListener::DEFAULT_SSL_TIMEOUT),
         }
@@ -331,11 +373,12 @@ impl SslHandshaker {
     pub(super) async fn build(
         ssl_config: SslConfig,
         host: Option<String>,
+        name: String,
     ) -> Result<SslHandshaker, io::Error> {
         let handshaker = SslHandshaker {
             acceptor: Arc::default(),
             timeout: ssl_config.get_ssl_timeout(),
-            source: Some(Arc::new((ssl_config, host))),
+            source: Some(Arc::new((ssl_config, host, name))),
         };
         handshaker.acceptor().await?;
         Ok(handshaker)
@@ -345,10 +388,8 @@ impl SslHandshaker {
     pub(super) async fn acceptor(&self) -> Result<SslAcceptor, io::Error> {
         match &self.source {
             Some(source) => {
-                let (ssl_config, host) = source.as_ref();
-                self.acceptor
-                    .get(ssl_config, host.as_deref(), &"the listener")
-                    .await
+                let (ssl_config, host, name) = source.as_ref();
+                self.acceptor.get(ssl_config, host.as_deref(), name).await
             }
             None => self
                 .acceptor
@@ -442,6 +483,33 @@ mod tests {
     };
     use prosa_utils::config::ssl::SslConfigContext as _;
 
+    /// Type, name and serial of the certificates a cache registered for the metrics
+    fn registered<C>(cache: &SslContextCache<C>) -> Option<Vec<(String, String, String)>> {
+        let attribute = |attributes: &[KeyValue], key: &str| {
+            attributes
+                .iter()
+                .find(|kv| kv.key.as_str() == key)
+                .map(|kv| kv.value.to_string())
+                .unwrap_or_default()
+        };
+        LOADED_CERTIFICATES
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&cache.id)
+            .map(|certificates| {
+                certificates
+                    .iter()
+                    .map(|(_, attributes)| {
+                        (
+                            attribute(attributes, "type"),
+                            attribute(attributes, "name"),
+                            attribute(attributes, "serial"),
+                        )
+                    })
+                    .collect()
+            })
+    }
+
     #[test]
     fn rebuild_flag_is_released_when_a_task_is_dropped_or_panics() {
         #[derive(Clone)]
@@ -526,8 +594,20 @@ mod tests {
             false
         };
 
+        // Certificates registered for the metrics
+        let cache = listener
+            .handshaker()
+            .expect("The listener should accept SSL connections")
+            .acceptor
+            .clone();
+        let registered = || registered(&cache).expect("The certificate should be registered");
+
         let certificate = accept().await?;
         assert_eq!(served(), certificate);
+        let first = registered();
+        assert_eq!(1, first.len());
+        assert_eq!("certificate", first[0].0);
+        assert_eq!("https://localhost:0/", first[0].1);
 
         // Served straight away from the current context, and built again in the background for
         // the next clients
@@ -535,16 +615,31 @@ mod tests {
         assert!(accept_until_renewed(&certificate, 100).await);
         let renewed = served();
         assert_eq!(renewed, accept().await?);
+        let renewed_registered = registered();
+        assert_ne!(first, renewed_registered);
 
         // A key caught half written keeps the context it has
         std::fs::write(&key_path, "half written")?;
         assert!(!accept_until_renewed(&renewed, 10).await);
         assert_eq!(renewed, accept().await?);
+        assert_eq!(renewed_registered, registered());
 
         // And it's read again once written
         write_certificate(&cert_path, &key_path);
         assert!(accept_until_renewed(&renewed, 100).await);
         assert_eq!(served(), accept().await?);
+        assert_ne!(renewed_registered, registered());
+
+        // Unregistered with the listener
+        drop(listener);
+        let id = cache.id;
+        drop(cache);
+        assert!(
+            !LOADED_CERTIFICATES
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .contains_key(&id)
+        );
 
         std::fs::remove_dir_all(dir)
     }
@@ -553,6 +648,11 @@ mod tests {
     async fn listener_handed_an_acceptor_never_builds_it_again() -> io::Result<()> {
         let acceptor = SslConfig::default().init_tls_server_context(None)?.build();
         let handshaker = SslHandshaker::new(acceptor, None);
+        assert_eq!(
+            Some(vec!["self_signed".to_string()]),
+            registered(&handshaker.acceptor)
+                .map(|certificates| certificates.into_iter().map(|(kind, ..)| kind).collect())
+        );
         let certificate = handshaker
             .acceptor()
             .await?
@@ -648,6 +748,14 @@ mod tests {
         assert!(Arc::ptr_eq(&target.ssl_context, &clone.ssl_context));
         assert_eq!(first, connected(&clone).await?);
         assert_eq!(first, connected(&target).await?);
+
+        // A client without certificate registers the CAs of its store only (OpenSSL 3 lists them)
+        assert!(
+            registered(&target.ssl_context)
+                .expect("The target should register its certificates")
+                .iter()
+                .all(|(kind, ..)| kind == "store")
+        );
 
         // Built again once the trusted certificate is renewed, for the clones too
         write_certificate(&cert_path, &key_path);
