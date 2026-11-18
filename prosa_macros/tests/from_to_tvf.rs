@@ -101,6 +101,20 @@ mod macro_tests {
         H = 12,
     }
 
+    #[derive(ToTvf)]
+    #[repr(u64)]
+    #[tvf(tag_id = 1, tag_type = "unsigned")]
+    enum NumericDiscriminants {
+        First,
+        Explicit = 4,
+        ImplicitAfterExplicit,
+        #[tvf(tag = 20)]
+        Tagged,
+        ImplicitAfterTagged,
+        ExplicitAgain = 30,
+        ImplicitAfterExplicitAgain,
+    }
+
     #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
     struct I<'c> {
         vector: Vec<u32>,
@@ -363,6 +377,26 @@ mod macro_tests {
         assert_eq!(fh0, fh2);
         let fh3 = F::from_tvf(&fh0).expect("Deserialization from TVF should work");
         assert_eq!(fh1, fh3);
+    }
+
+    #[test]
+    fn test_derive_enum_numeric_discriminants() {
+        let variants = [
+            (NumericDiscriminants::First, 0),
+            (NumericDiscriminants::Explicit, 4),
+            (NumericDiscriminants::ImplicitAfterExplicit, 5),
+            (NumericDiscriminants::Tagged, 20),
+            (NumericDiscriminants::ImplicitAfterTagged, 21),
+            (NumericDiscriminants::ExplicitAgain, 30),
+            (NumericDiscriminants::ImplicitAfterExplicitAgain, 31),
+        ];
+
+        for (variant, expected_tag) in variants {
+            let expected = tvf![SimpleStringTvf { 1 => expected_tag as u64 }];
+            let mut encoded = SimpleStringTvf::default();
+            variant.to_tvf(&mut encoded);
+            assert_eq!(expected, encoded);
+        }
     }
 
     #[test]

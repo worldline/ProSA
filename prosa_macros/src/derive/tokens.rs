@@ -459,8 +459,15 @@ impl<'f> TvfEnum<'f> {
 
 impl<'f> TvfVariant<'f> {
     /// Generate an identifier for the discriminant constant
+    #[inline]
     pub(crate) fn ident_discri(&self) -> Ident {
-        format_ident!("__{}", self.variant_ident.to_string().to_uppercase())
+        Self::variant_ident_discri(self.index)
+    }
+
+    /// Generate an identifier for the discriminant constant
+    #[inline]
+    fn variant_ident_discri(index: usize) -> Ident {
+        format_ident!("__VAR_{}", index)
     }
 
     /// Declare a discriminant constant
@@ -481,9 +488,11 @@ impl<'f> TvfVariant<'f> {
                 quote![ #tag ]
             } else if let Some(expr) = self.discriminant {
                 quote![ #expr ]
+            } else if self.index == 0 {
+                quote![0]
             } else {
-                let index = self.index;
-                quote![ #index ]
+                let prev = Self::variant_ident_discri(self.index - 1);
+                quote![ #prev + 1 ]
             };
 
             // Either we can serialize the variant as a single byte or use a varint.
