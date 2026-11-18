@@ -73,3 +73,4 @@ flate2 = { version = "1", optional = true }
 tokio.workspace = true
 tokio-openssl = "0.6"
 yaml_serde.workspace = true
+prosa-macros = { path = "../prosa_macros" }
