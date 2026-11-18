@@ -63,7 +63,7 @@ config = { version = "0.15", default-features = false, features = ["toml", "yaml
 notify.workspace = true
 glob = { version = "0.3" }
 toml.workspace = true
-yaml_serde = "0.10"
+yaml_serde.workspace = true
 
 opentelemetry.workspace = true
 opentelemetry_sdk.workspace = true
