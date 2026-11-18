@@ -101,7 +101,7 @@ mod macro_tests {
         H = 12,
     }
 
-    #[derive(ToTvf)]
+    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
     #[repr(u64)]
     #[tvf(tag_id = 1, tag_type = "unsigned")]
     enum NumericDiscriminants {
@@ -113,6 +113,8 @@ mod macro_tests {
         ImplicitAfterTagged,
         ExplicitAgain = 30,
         ImplicitAfterExplicitAgain,
+        #[tvf(default)]
+        Default,
     }
 
     #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
@@ -389,6 +391,7 @@ mod macro_tests {
             (NumericDiscriminants::ImplicitAfterTagged, 21),
             (NumericDiscriminants::ExplicitAgain, 30),
             (NumericDiscriminants::ImplicitAfterExplicitAgain, 31),
+            (NumericDiscriminants::Default, 32),
         ];
 
         for (variant, expected_tag) in variants {
@@ -396,6 +399,10 @@ mod macro_tests {
             let mut encoded = SimpleStringTvf::default();
             variant.to_tvf(&mut encoded);
             assert_eq!(expected, encoded);
+            assert_eq!(
+                variant,
+                NumericDiscriminants::from_tvf(&expected).expect("Variant should deserialize")
+            );
         }
     }
 
