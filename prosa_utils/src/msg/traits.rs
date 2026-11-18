@@ -3,6 +3,12 @@
 use crate::msg::tvf::{Tvf, TvfError};
 use bytes::Bytes;
 use chrono::{NaiveDate, NaiveDateTime};
+use num_traits::AsPrimitive;
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    hash::Hash,
+};
 
 /// Convert a Rust's type into a TVF message
 pub trait ToTvf<T: Tvf> {
@@ -95,6 +101,7 @@ impl<T: Tvf> ToField<T> for Bytes {
     }
 }
 
+/*
 /// Allow inserting a TVF sub-messages into a main message
 impl<T: Tvf + Clone> ToField<T> for T {
     #[inline]
@@ -102,6 +109,7 @@ impl<T: Tvf + Clone> ToField<T> for T {
         msg.put_buffer(id, self.clone());
     }
 }
+*/
 
 /// Insert the field into the buffer if its value is set
 impl<T: Tvf, F: ToField<T>> ToField<T> for Option<F> {
@@ -113,6 +121,34 @@ impl<T: Tvf, F: ToField<T>> ToField<T> for Option<F> {
     }
 }
 
+impl<T: Tvf, F: ToField<T>> ToField<T> for Box<F> {
+    #[inline]
+    fn to_field(&self, id: usize, msg: &mut T) {
+        self.as_ref().to_field(id, msg);
+    }
+}
+
+impl<'f, T: Tvf, F: ToField<T> + Clone> ToField<T> for Cow<'f, F> {
+    #[inline]
+    fn to_field(&self, id: usize, msg: &mut T) {
+        self.as_ref().to_field(id, msg);
+    }
+}
+
+/// Implement the ToField traits if the type implement ToTvf
+macro_rules! impl_to_field_tvf {
+    ( impl[$($generics:tt)*] ToField<$tvf:ident> for $type:ty where $($where:tt)* ) => {
+        impl< $($generics)* > ToField<$tvf> for $type where $($where)* {
+            #[inline]
+            fn to_field(&self, id: usize, msg: &mut T) {
+                let mut buffer = T::default();
+                self.to_tvf(&mut buffer);
+                msg.put_buffer(id, buffer);
+            }
+        }
+    };
+}
+
 /// Convert a vector of fields into a TVF message
 impl<T: Tvf, F: ToField<T>> ToTvf<T> for Vec<F> {
     fn to_tvf(&self, msg: &mut T) {
@@ -121,13 +157,11 @@ impl<T: Tvf, F: ToField<T>> ToTvf<T> for Vec<F> {
         }
     }
 }
-impl<T: Tvf + Default, F: ToField<T>> ToField<T> for Vec<F> {
-    #[inline]
-    fn to_field(&self, id: usize, msg: &mut T) {
-        let mut buffer = T::default();
-        self.to_tvf(&mut buffer);
-        msg.put_buffer(id, buffer);
-    }
+impl_to_field_tvf! {
+    impl[T, F] ToField<T> for Vec<F>
+    where
+        T: Tvf + Default,
+        F: ToField<T>,
 }
 
 /// Convert a list of fields into a TVF message
@@ -138,13 +172,11 @@ impl<T: Tvf, F: ToField<T>, const S: usize> ToTvf<T> for [F; S] {
         }
     }
 }
-impl<T: Tvf + Default, const S: usize, F: ToField<T>> ToField<T> for [F; S] {
-    #[inline]
-    fn to_field(&self, id: usize, msg: &mut T) {
-        let mut buffer = T::default();
-        self.to_tvf(&mut buffer);
-        msg.put_buffer(id, buffer);
-    }
+impl_to_field_tvf! {
+    impl[T, F, const S: usize] ToField<T> for [F; S]
+    where
+        T: Tvf + Default,
+        F: ToField<T>,
 }
 
 /// Convert a list of fields into a TVF message
@@ -155,13 +187,53 @@ impl<T: Tvf, F: ToField<T>> ToTvf<T> for [F] {
         }
     }
 }
-impl<T: Tvf + Default, F: ToField<T>> ToField<T> for [F] {
-    #[inline]
-    fn to_field(&self, id: usize, msg: &mut T) {
-        let mut buffer = T::default();
-        self.to_tvf(&mut buffer);
-        msg.put_buffer(id, buffer);
+impl_to_field_tvf! {
+    impl[T, F] ToField<T> for [F]
+    where
+        T: Tvf + Default,
+        F: ToField<T>,
+}
+
+/// Convert a map of fields into a TVF message
+impl<T, I, F> ToTvf<T> for HashMap<I, F>
+where
+    T: Tvf,
+    I: AsPrimitive<usize> + Copy,
+    F: ToField<T>,
+{
+    fn to_tvf(&self, msg: &mut T) {
+        for (i, f) in self.iter() {
+            f.to_field((*i).as_(), msg);
+        }
     }
+}
+impl_to_field_tvf! {
+    impl[T, I, F] ToField<T> for HashMap<I, F>
+    where
+        T: Tvf + Default,
+        I: AsPrimitive<usize> + Copy,
+        F: ToField<T>,
+}
+
+/// Convert a map of fields into a TVF message
+impl<T, I, F> ToTvf<T> for BTreeMap<I, F>
+where
+    T: Tvf,
+    I: AsPrimitive<usize> + Copy,
+    F: ToField<T>,
+{
+    fn to_tvf(&self, msg: &mut T) {
+        for (i, f) in self.iter() {
+            f.to_field((*i).as_(), msg);
+        }
+    }
+}
+impl_to_field_tvf! {
+    impl[T, I, F] ToField<T> for BTreeMap<I, F>
+    where
+        T: Tvf + Default,
+        I: AsPrimitive<usize> + Copy,
+        F: ToField<T>,
 }
 
 /// Implement `ToTvf` trait for generic tuples
@@ -246,6 +318,7 @@ impl<T: Tvf> IntoField<T> for Bytes {
     }
 }
 
+/*
 /// Allow inserting a TVF sub-messages into a main message
 impl<T: Tvf> IntoField<T> for T {
     #[inline]
@@ -253,6 +326,7 @@ impl<T: Tvf> IntoField<T> for T {
         msg.put_buffer(id, self);
     }
 }
+*/
 
 /// Insert the field into the buffer if its value is set
 impl<T: Tvf, F: IntoField<T>> IntoField<T> for Option<F> {
@@ -264,6 +338,36 @@ impl<T: Tvf, F: IntoField<T>> IntoField<T> for Option<F> {
     }
 }
 
+impl<T: Tvf, F: IntoField<T>> IntoField<T> for Box<F> {
+    #[inline]
+    fn into_field(self, id: usize, msg: &mut T) {
+        let field: F = *self;
+        field.into_field(id, msg);
+    }
+}
+
+impl<'f, T: Tvf, F: IntoField<T> + Clone> IntoField<T> for Cow<'f, F> {
+    #[inline]
+    fn into_field(self, id: usize, msg: &mut T) {
+        let field: F = self.into_owned();
+        field.into_field(id, msg);
+    }
+}
+
+/// Implement the IntoField traits if the type implement IntoTvf
+macro_rules! impl_into_field_tvf {
+    ( impl[$($generics:tt)*] IntoField<$tvf:ident> for $type:ty where $($where:tt)* ) => {
+        impl< $($generics)* > IntoField<$tvf> for $type where $($where)* {
+            #[inline]
+            fn into_field(self, id: usize, msg: &mut T) {
+                let mut buffer = T::default();
+                self.into_tvf(&mut buffer);
+                msg.put_buffer(id, buffer);
+            }
+        }
+    };
+}
+
 /// Convert a vector of fields into a TVF message
 impl<T: Tvf, F: IntoField<T>> IntoTvf<T> for Vec<F> {
     fn into_tvf(self, msg: &mut T) {
@@ -272,13 +376,11 @@ impl<T: Tvf, F: IntoField<T>> IntoTvf<T> for Vec<F> {
         }
     }
 }
-impl<T: Tvf + Default, F: IntoField<T>> IntoField<T> for Vec<F> {
-    #[inline]
-    fn into_field(self, id: usize, msg: &mut T) {
-        let mut buffer = T::default();
-        self.into_tvf(&mut buffer);
-        msg.put_buffer(id, buffer);
-    }
+impl_into_field_tvf! {
+    impl[T, F] IntoField<T> for Vec<F>
+    where
+        T: Tvf + Default,
+        F: IntoField<T>,
 }
 
 /// Convert a list of fields into a TVF message
@@ -289,13 +391,53 @@ impl<T: Tvf, F: IntoField<T>, const S: usize> IntoTvf<T> for [F; S] {
         }
     }
 }
-impl<T: Tvf + Default, const S: usize, F: IntoField<T>> IntoField<T> for [F; S] {
-    #[inline]
-    fn into_field(self, id: usize, msg: &mut T) {
-        let mut buffer = T::default();
-        self.into_tvf(&mut buffer);
-        msg.put_buffer(id, buffer);
+impl_into_field_tvf! {
+    impl[T, F, const S: usize] IntoField<T> for [F; S]
+    where
+        T: Tvf + Default,
+        F: IntoField<T>,
+}
+
+/// Convert a map of fields into a TVF message
+impl<T, I, F> IntoTvf<T> for HashMap<I, F>
+where
+    T: Tvf,
+    I: AsPrimitive<usize> + Copy,
+    F: IntoField<T>,
+{
+    fn into_tvf(self, msg: &mut T) {
+        for (i, f) in self {
+            f.into_field(i.as_(), msg);
+        }
     }
+}
+impl_into_field_tvf! {
+    impl[T, I, F] IntoField<T> for HashMap<I, F>
+    where
+        T: Tvf + Default,
+        I: AsPrimitive<usize> + Copy,
+        F: IntoField<T>,
+}
+
+/// Convert a map of fields into a TVF message
+impl<T, I, F> IntoTvf<T> for BTreeMap<I, F>
+where
+    T: Tvf,
+    I: AsPrimitive<usize> + Copy,
+    F: IntoField<T>,
+{
+    fn into_tvf(self, msg: &mut T) {
+        for (i, f) in self {
+            f.into_field(i.as_(), msg);
+        }
+    }
+}
+impl_into_field_tvf! {
+    impl[T, I, F] IntoField<T> for BTreeMap<I, F>
+    where
+        T: Tvf + Default,
+        I: AsPrimitive<usize> + Copy,
+        F: IntoField<T>,
 }
 
 /// Implement `IntoTvf` trait for generic tuples
@@ -382,6 +524,7 @@ impl_from_field![ NaiveDateTime ; get_datetime         ];
 impl_from_field![ String        ; get_string   "owned" ];
 impl_from_field![ Bytes         ; get_bytes    "owned" ];
 
+/*
 /// Allow extracting a TVF sub-messages from a main message
 impl<T: Tvf + Clone> FromField<T> for T {
     #[inline]
@@ -389,6 +532,7 @@ impl<T: Tvf + Clone> FromField<T> for T {
         Ok(msg.get_buffer(id)?.into_owned())
     }
 }
+*/
 
 /// Extract a value from a buffer if the field exists
 impl<T: Tvf, F: FromField<T>> FromField<T> for Option<F> {
@@ -400,6 +544,35 @@ impl<T: Tvf, F: FromField<T>> FromField<T> for Option<F> {
             Ok(None)
         }
     }
+}
+
+impl<T: Tvf, F: FromField<T>> FromField<T> for Box<F> {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        let field = F::from_field(msg, id)?;
+        Ok(Box::new(field))
+    }
+}
+
+impl<'f, T: Tvf, F: FromField<T> + Clone> FromField<T> for Cow<'f, F> {
+    #[inline]
+    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+        let field = F::from_field(msg, id)?;
+        Ok(Cow::Owned(field))
+    }
+}
+
+/// Implement the FromField traits if the type implement FromTvf
+macro_rules! impl_from_field_tvf {
+    ( impl[$($generics:tt)*] FromField<$tvf:ident> for $type:ty where $($where:tt)* ) => {
+        impl< $($generics)* > FromField<$tvf> for $type where $($where)* {
+            #[inline]
+            fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
+                let buffer = msg.get_buffer(id)?;
+                Self::from_tvf(&buffer)
+            }
+        }
+    };
 }
 
 /// Extract a vector of fields from a TVF message
@@ -414,12 +587,11 @@ impl<T: Tvf, F: FromField<T>> FromTvf<T> for Vec<F> {
         Ok(vector)
     }
 }
-impl<T: Tvf + Clone, F: FromField<T>> FromField<T> for Vec<F> {
-    #[inline]
-    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
-        let buffer = msg.get_buffer(id)?;
-        Self::from_tvf(&buffer)
-    }
+impl_from_field_tvf! {
+    impl[T, F] FromField<T> for Vec<F>
+    where
+        T: Tvf + Clone,
+        F: FromField<T>,
 }
 
 /// Extract a list of fields from a TVF message
@@ -446,12 +618,64 @@ impl<T: Tvf, F: FromField<T>, const S: usize> FromTvf<T> for [F; S] {
         }
     }
 }
-impl<T: Tvf + Clone, const S: usize, F: FromField<T>> FromField<T> for [F; S] {
-    #[inline]
-    fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
-        let buffer = msg.get_buffer(id)?;
-        Self::from_tvf(&buffer)
+impl_from_field_tvf! {
+    impl[T, F, const S: usize] FromField<T> for [F; S]
+    where
+        T: Tvf + Clone,
+        F: FromField<T>,
+}
+
+/// Convert a map of fields into a TVF message
+impl<T, I, F> FromTvf<T> for HashMap<I, F>
+where
+    T: Tvf,
+    I: 'static + Copy + Hash + Eq,
+    usize: AsPrimitive<I>,
+    F: FromField<T>,
+{
+    fn from_tvf(msg: &T) -> Result<Self, TvfError> {
+        let keys = msg.keys();
+        let mut map = Self::with_capacity(keys.len());
+        for key in keys {
+            let field = F::from_field(msg, key)?;
+            map.insert(key.as_(), field);
+        }
+        Ok(map)
     }
+}
+impl_from_field_tvf! {
+    impl[T, I, F] FromField<T> for HashMap<I, F>
+    where
+        T: Tvf + Clone,
+        I: 'static + Copy + Hash + Eq,
+        usize: AsPrimitive<I>,
+        F: FromField<T>,
+}
+
+/// Convert a map of fields into a TVF message
+impl<T, I, F> FromTvf<T> for BTreeMap<I, F>
+where
+    T: Tvf,
+    I: 'static + Copy + Ord,
+    usize: AsPrimitive<I>,
+    F: FromField<T>,
+{
+    fn from_tvf(msg: &T) -> Result<Self, TvfError> {
+        let mut map = Self::new();
+        for key in msg.keys() {
+            let field = F::from_field(msg, key)?;
+            map.insert(key.as_(), field);
+        }
+        Ok(map)
+    }
+}
+impl_from_field_tvf! {
+    impl[T, I, F] FromField<T> for BTreeMap<I, F>
+    where
+        T: Tvf + Clone,
+        I: 'static + Copy + Ord,
+        usize: AsPrimitive<I>,
+        F: FromField<T>,
 }
 
 /// Implement `FromTvf` trait for generic tuples

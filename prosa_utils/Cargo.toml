@@ -11,7 +11,7 @@ include.workspace = true
 
 [features]
 default = ["msg", "config", "config-openssl", "config-observability"]
-msg = ["dep:bytes", "dep:chrono", "dep:hex"]
+msg = ["dep:bytes", "dep:chrono", "dep:hex", "dep:num-traits"]
 msg-serde = ["msg", "dep:serde", "chrono/serde", "bytes/serde"]
 config = ["dep:glob", "dep:notify", "dep:log", "dep:serde", "dep:base64", "dep:percent-encoding", "dep:uuid", "dep:url"]
 config-openssl = ["config", "dep:openssl", "dep:bytes"]
@@ -37,6 +37,7 @@ bytes = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 chrono = { workspace = true, optional = true }
 hex = { version = "0.4", optional = true }
+num-traits = { version = "0.2", optional = true }
 
 # Config
 glob = { version = "0.3", optional = true }
