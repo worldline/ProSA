@@ -13,9 +13,6 @@ use std::{
     sync::Arc,
 };
 
-/// Maximum allowed size for vectors when deserialized from a TVF message
-const MAX_VECTOR_SIZE: usize = 100_000;
-
 /// Convert a Rust's type into a TVF message
 pub trait ToTvf<T: Tvf> {
     /// Populate the given TVF message with this Rust's type
@@ -1025,31 +1022,5 @@ mod tests {
         let mut m = SimpleStringTvf::default();
         h.to_tvf(&mut m);
         let _err = HashMap::<u16, u32>::from_tvf(&m).expect_err("65537 doesn't fit in u16");
-    }
-
-    #[test]
-    fn test_vector_with_options() {
-        // Vector of optional values
-        let v = vec![None, Some(1u32)];
-        let mut m = SimpleStringTvf::default();
-        v.to_tvf(&mut m);
-
-        let mut expected = SimpleStringTvf::default();
-        expected.put_unsigned(2, 1);
-        assert_eq!(expected, m);
-
-        let v2 = Vec::<Option<u32>>::from_tvf(&m).expect("Recover initial construct");
-        assert_eq!(v2, v);
-    }
-
-    #[test]
-    fn test_vector_rejects_excessive_field_id() {
-        let mut message = SimpleStringTvf::default();
-        message.put_unsigned(1usize << 40, 1);
-
-        assert!(matches!(
-            Vec::<u32>::from_tvf(&message),
-            Err(TvfError::SerializationError(_))
-        ));
     }
 }

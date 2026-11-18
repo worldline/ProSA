@@ -1,4 +1,6 @@
-use crate::derive::attr::{AttrEnum, AttrError, AttrField, AttrNameValue, AttrVariant, ErrorKind};
+use crate::derive::attr::{
+    AttrEnum, AttrError, AttrField, AttrNameValue, AttrStruct, AttrVariant, ErrorKind,
+};
 use proc_macro2::{Span, TokenStream};
 use quote::{ToTokens, quote};
 use syn::{
@@ -46,6 +48,10 @@ pub(crate) struct TvfVariant<'v> {
 /// Container for an structure
 #[derive(Clone)]
 pub(crate) struct TvfStruct<'s> {
+    /// The attributes that have been identified for this struct.
+    #[allow(unused)]
+    pub attr: AttrStruct,
+
     /// Identifier of the struct type
     pub type_ident: &'s Ident,
 
@@ -142,15 +148,17 @@ impl<'f> TvfStruct<'f> {
     /// Analyze the struct
     pub(crate) fn new(
         type_ident: &'f Ident,
-        _attrs: &[Attribute],
+        attrs: &[Attribute],
         generics: &'f Generics,
         struct_data: &'f DataStruct,
     ) -> Result<Self, AttrError> {
         let mut workbuffer = Vec::with_capacity(struct_data.fields.len());
+        let attr = AttrStruct::identify(attrs, &mut workbuffer)?;
         let fields = TvfFields::new(&struct_data.fields, &mut workbuffer)?;
 
         // Return the ordered list of fields
         Ok(Self {
+            attr,
             type_ident,
             generics,
             fields,

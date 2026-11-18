@@ -88,7 +88,6 @@ impl AttrEnum {
 
         // Collect relevant tvf attributes
         find_attributes(attrs, workbuffer)?;
-        //let overrides = AttrOverrides::identify(workbuffer)?;
 
         for attr in workbuffer.iter() {
             match (attr.name.as_str(), attr.value.as_ref()) {
@@ -219,6 +218,33 @@ impl AttrVariant {
             tag,
             overrides,
         })
+    }
+}
+
+// MARK: Struct attributes
+
+/// Attributes defined on an struct
+#[derive(Default, Clone)]
+pub(crate) struct AttrStruct {/* placeholder */}
+
+impl AttrStruct {
+    pub(crate) fn identify(
+        attrs: &[Attribute],
+        workbuffer: &mut Vec<AttrNameValue>,
+    ) -> Result<Self, AttrError> {
+        // Collect relevant tvf attributes
+        find_attributes(attrs, workbuffer)?;
+
+        if let Some(attr) = workbuffer.iter().next() {
+            // Right now, no attributes is expected for structs,
+            // this may change in the future.
+            return Err(AttrError::new(
+                attr.span,
+                ErrorKind::Invalid(attr.to_string()),
+            ));
+        }
+
+        Ok(Self {})
     }
 }
 
