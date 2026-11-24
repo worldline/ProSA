@@ -239,6 +239,35 @@ mod macro_tests {
         Values(u32, String),
     }
 
+    #[repr(u8)]
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+    #[tvf(tag_id = 123)]
+    enum NumEnum {
+        /// Variant `NumEnum::F` will be encoded as `msg.put_byte(123, 3)`
+        F = 3,
+
+        /// Variant `NumEnum::G` will be encoded as `msg.put_byte(123, 4)`
+        G,
+
+        /// Variant `NumEnum::H` will be encoded as `msg.put_byte(123, 10)`
+        #[tvf(tag = 10)]
+        H,
+    }
+
+    #[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+    #[tvf(tag_id = 456)]
+    enum StrEnum {
+        /// Variant `StrEnum::Dog` will be encoded as `msg.put_string(456, "Dog")`
+        Dog = 3,
+
+        /// Variant `StrEnum::Cat` will be encoded as `msg.put_string(456, "Cat")`
+        Cat,
+
+        /// Variant `StrEnum::Bird` will be encoded as `msg.put_string(456, "toucan")`
+        #[tvf(tag = "toucan")]
+        Bird,
+    }
+
     #[test]
     fn test_derive_struct() {
         let a0 = tvf![SimpleStringTvf {
@@ -317,6 +346,41 @@ mod macro_tests {
         assert_eq!(bd0, bd2);
         let bd3 = B::from_tvf(&bd0).expect("Deserialization from TVF should work");
         assert_eq!(bd1, bd3);
+    }
+
+    #[test]
+    fn test_enum_encoding_matches_doc_comments() {
+        for (variant, expected_tag) in [(NumEnum::F, 3u8), (NumEnum::G, 4u8), (NumEnum::H, 10u8)] {
+            let mut expected = SimpleStringTvf::default();
+            expected.put_byte(123, expected_tag);
+
+            let mut encoded = SimpleStringTvf::default();
+            variant.to_tvf(&mut encoded);
+            assert_eq!(expected, encoded);
+
+            assert_eq!(
+                variant,
+                NumEnum::from_tvf(&expected).expect("Numeric enum variant should deserialize")
+            );
+        }
+
+        for (variant, expected_tag) in [
+            (StrEnum::Dog, "Dog"),
+            (StrEnum::Cat, "Cat"),
+            (StrEnum::Bird, "toucan"),
+        ] {
+            let mut expected = SimpleStringTvf::default();
+            expected.put_string(456, expected_tag);
+
+            let mut encoded = SimpleStringTvf::default();
+            variant.to_tvf(&mut encoded);
+            assert_eq!(expected, encoded);
+
+            assert_eq!(
+                variant,
+                StrEnum::from_tvf(&expected).expect("String enum variant should deserialize")
+            );
+        }
     }
 
     #[test]

@@ -219,7 +219,7 @@ struct A {
 
 When applied to an enumeration, ones have to specify the field used to encode the variant discriminant using the `tag_id` attribute.
 The `tag_type` attribute on the other hand is optional with the following possible values:
-- `string` (the default)
+- `string`
 - `byte`
 - `signed`
 - `unsigned`
@@ -232,6 +232,44 @@ enum B {
     D { a: u32, b: f32 },
 }
 ```
+
+If the enumeration has a `#[repr]` attribute, the type of encoding of the discriminant, can be deduced from it and the actual Rust's variant discriminant will be used.
+If no explicit `#[repr]` is set, the discriminant will be encoded as a string using the variants' names. 
+In all cases, it is possible to override the value being encoded by using the `tag` attribute on the variant.
+
+```rust,ignore
+#[repr(u8)]
+#[derive(FromTvf, ToTvf, IntoTvf)]
+#[tvf(tag_id = 123)]
+enum NumEnum {
+    /// Variant `NumEnum::F` will be encoded as `msg.put_byte(123, 3)`
+    F = 3,
+
+    /// Variant `NumEnum::G` will be encoded as `msg.put_byte(123, 4)` 
+    G,
+
+    /// Variant `NumEnum::H` will be encoded as `msg.put_byte(123, 10)`
+    #[tvf(tag = 10)]
+    H,
+}
+
+#[derive(FromTvf, ToTvf, IntoTvf)]
+#[tvf(tag_id = 456)]
+enum StrEnum {
+    /// Variant `StrEnum::Dog` will be encoded as `msg.put_string(456, "Dog")`
+    Dog = 3,
+
+    /// Variant `StrEnum::Cat` will be encoded as `msg.put_string(456, "Cat")` 
+    Cat,
+
+    /// Variant `StrEnum::Bird` will be encoded as `msg.put_string(456, "toucan")`
+    #[tvf(tag = "toucan")]
+    Bird,
+}
+```
+
+A `Vec` is encoded with its elements at identifiers `1..=len`.
+Decoding requires these identifiers without gaps, so use a map for sparse fields.
 
 It is also possible to override the conversion method for a specific field using the following attributes with the path to the function to use:
 - `to_tvf`

@@ -388,18 +388,18 @@ impl<'f> TvfFields<'f> {
             } else if let Some(default_impl) = field.get_default(false) {
                 if let Some(func) = &field.attr.overrides.custom_from_tvf {
                     quote![
-                        let #ident = match #func(__msg, #id) {
-                            Ok(value) => value,
-                            Err(__tvf::TvfError::FieldNotFound(_)) => { #default_impl },
-                            Err(err) => { return Err(err); },
+                        let #ident = if __msg.contains(#id) {
+                            #func(__msg, #id)?
+                        } else {
+                            #default_impl
                         };
                     ]
                 } else {
                     quote![
-                        let #ident = match <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id) {
-                            Ok(value) => value,
-                            Err(__tvf::TvfError::FieldNotFound(_)) => { #default_impl },
-                            Err(err) => { return Err(err); },
+                        let #ident = if __msg.contains(#id) {
+                            <#ty as __tvf::FromField<__TVF>>::from_field(__msg, #id)?
+                        } else {
+                            #default_impl
                         };
                     ]
                 }
@@ -438,8 +438,10 @@ fn impl_from_field(type_name: &Ident, generics: Generics) -> TokenStream {
 // MARK: Common
 
 impl<'f> TvfEnum<'f> {
-    /// Declare the variant discriminants
-    pub(crate) fn decl_discris(&self, tag_type: TagType, include_default: bool) -> TokenStream {
+    /// Declare the variant discriminants as constants for `match` statement.
+    /// Depending on the trait implemented (ToTvf or FromTvf) we may need or not
+    /// to declare a constant for the default variant too.
+    pub(crate) fn decl_discris(&self, tag_type: TagType, decl_default_too: bool) -> TokenStream {
         // Decalre constants for each variant
         let mut decls = self
             .variants
@@ -448,7 +450,7 @@ impl<'f> TvfEnum<'f> {
             .collect::<Vec<_>>();
 
         // If a default variant was defined, include it too
-        if include_default && let Some(default) = &self.default_variant {
+        if decl_default_too && let Some(default) = &self.default_variant {
             decls.push(default.decl_discri(tag_type));
         }
 
