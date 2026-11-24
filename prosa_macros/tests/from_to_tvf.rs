@@ -268,6 +268,16 @@ mod macro_tests {
         Bird,
     }
 
+    #[derive(Debug, FromTvf, ToTvf)]
+    struct EdgeCase {
+        /// This field is optional
+        /// But if one field of the `A` struct is missing, failing to deserialize
+        /// the `A` sub-message should trigger an error and not fail silently with
+        /// `optional` being set to `None`.
+        #[tvf(id = 10)]
+        optional: Option<A>,
+    }
+
     #[test]
     fn test_derive_struct() {
         let a0 = tvf![SimpleStringTvf {
@@ -289,6 +299,27 @@ mod macro_tests {
         // deserialize from TVF
         let a3 = A::from_tvf(&a0).expect("Deserialization from TVF should work");
         assert_eq!(a1, a3);
+    }
+
+    #[test]
+    fn test_optional_nested_struct_propagates_deserialization_errors() {
+        // Empty message, the optional field is not present, thus no error occurs
+        let absent_optional = SimpleStringTvf::default();
+        let decoded = EdgeCase::from_tvf(&absent_optional)
+            .expect("A missing optional field should deserialize successfully");
+        assert!(decoded.optional.is_none());
+
+        let incomplete_nested = tvf![SimpleStringTvf {
+            10 => {
+                1 => 12u32,
+                10 => true,
+                // field 100 is missing, it will cause an error
+            },
+        }];
+        assert!(
+            EdgeCase::from_tvf(&incomplete_nested).is_err(),
+            "A present but incomplete nested struct must return its deserialization error"
+        );
     }
 
     #[test]
