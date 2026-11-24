@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{num::NonZeroU32, time::Duration};
 
 use crate::otel::{KeyValue, metrics::Histogram};
 use crate::tracing::{trace, warn};
@@ -34,7 +34,7 @@ pub struct InjSettings {
     pub timeout_threshold: Duration,
     /// Max parallel transaction running at the same time
     #[serde(default = "InjSettings::default_max_concurrents_send")]
-    pub max_concurrents_send: u32,
+    pub max_concurrents_send: NonZeroU32,
     /// Number of value keep to calculate the injection speed
     #[serde(default = "InjSettings::default_speed_interval")]
     pub speed_interval: u16,
@@ -49,8 +49,8 @@ impl InjSettings {
         Duration::new(10, 0)
     }
 
-    fn default_max_concurrents_send() -> u32 {
-        1
+    fn default_max_concurrents_send() -> NonZeroU32 {
+        NonZeroU32::MIN
     }
 
     fn default_speed_interval() -> u16 {
