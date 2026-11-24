@@ -375,9 +375,9 @@ impl<'f> TvfFields<'f> {
                 if let Some(default_impl) = field.get_default(false) {
                     quote![
                         let #ident = match <#ty as __tvf::FromTvf<__TVF>>::from_tvf(__msg) {
-                            Ok(value) => value,
-                            Err(__tvf::TvfError::FieldNotFound(_)) => { #default_impl },
-                            Err(err) => { return Err(err); },
+                            ::core::result::Result::Ok(value) => value,
+                            ::core::result::Result::Err(__tvf::TvfError::FieldNotFound(_)) => { #default_impl },
+                            ::core::result::Result::Err(err) => { return ::core::result::Result::Err(err); },
                         };
                     ]
                 } else {

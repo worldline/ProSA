@@ -576,10 +576,10 @@ impl<T: Tvf> FromField<T> for BytesMut {
 impl<T: Tvf, F: FromField<T>> FromField<T> for Option<F> {
     #[inline]
     fn from_field(msg: &T, id: usize) -> Result<Self, TvfError> {
-        match F::from_field(msg, id) {
-            Ok(value) => Ok(Some(value)),
-            Err(TvfError::FieldNotFound(_)) => Ok(None),
-            Err(err) => Err(err),
+        if msg.contains(id) {
+            F::from_field(msg, id).map(Some)
+        } else {
+            Ok(None)
         }
     }
 }

@@ -268,7 +268,7 @@ pub(crate) struct AttrField {
     pub overrides: AttrOverrides,
 }
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Clone)]
 pub(crate) enum AttrDefault {
     /// No default value, if missing, throw error
     #[default]
@@ -434,7 +434,7 @@ impl AttrOverrides {
 // MARK: Attribute helpers
 
 /// Represents a name-value pair in an attribute.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct AttrNameValue {
     /// Span of the attribute
     span: Span,
@@ -546,12 +546,13 @@ pub(crate) fn check_repr(attrs: &[Attribute]) -> Option<TagType> {
                 let _ = attr.parse_nested_meta(|meta| {
                     let int = meta.path.require_ident()?.to_string();
                     // 4. Check if one of the arguments is any of the primitive integer types
-                    tag_type = match int.as_str() {
+                    // Keep the first integer type, ignore other arguments like `C`
+                    tag_type = tag_type.or(match int.as_str() {
                         "u8" => Some(TagType::Byte),
                         "u16" | "u32" | "u64" | "usize" => Some(TagType::Unsigned),
                         "i16" | "i32" | "i64" | "isize" | "i8" => Some(TagType::Signed),
                         _ => None,
-                    };
+                    });
                     Ok(())
                 });
 
