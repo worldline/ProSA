@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::otel::{KeyValue, metrics::Histogram};
-use crate::tracing::{debug, warn};
+use crate::tracing::{trace, warn};
 use prosa_macros::{proc, proc_settings};
 use serde::{Deserialize, Serialize};
 
@@ -157,7 +157,7 @@ impl InjProc {
                 );
 
                 if let Some(response) = response_data {
-                    debug!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = msg.get_service(), "{:?}", response);
+                    trace!(name: "resp_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = msg.get_service(), "{:?}", response);
                     adaptor.process_response(response, msg.get_service())?;
 
                     regulator.notify_receive_transaction(msg.elapsed());
@@ -177,7 +177,7 @@ impl InjProc {
                     ],
                 );
 
-                debug!(name: "resp_err_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = err_msg.get_service(), "{:?}", err_msg.get_err());
+                trace!(name: "resp_err_inj_proc", target: "prosa::inj::proc", proc_name = self.name(), service = err_msg.get_service(), "{:?}", err_msg.get_err());
 
                 match err_msg.get_err() {
                     ServiceError::Timeout(_, overhead) => {
@@ -289,7 +289,7 @@ where
                             RequestMsg::new(self.settings.service_name.clone(), adaptor.build_transaction(), self.proc.get_service_queue())
                         };
 
-                        debug!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = self.name(), service = self.settings.service_name, "{:?}", trans.get_data());
+                        trace!(name: "inj_proc", target: "prosa::inj::proc", parent: trans.get_span(), proc_name = self.name(), service = self.settings.service_name, "{:?}", trans.get_data());
                         service.proc_queue.send(InternalMsg::Request(trans)).await?;
 
                         regulator.notify_send_transaction();

@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
-use crate::tracing::{debug, info, warn};
+use crate::tracing::{info, trace, warn};
 use prosa_macros::proc_settings;
 use serde::{Deserialize, Serialize};
 
@@ -87,11 +87,11 @@ where
                         let request_data = msg.take_data().ok_or(BusError::NoData)?;
                         let enter_span = msg.enter_span();
 
-                        debug!(name: "stub_proc_request", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = self.name(), stub_service = msg.get_service(), "{:?}", msg.get_data());
+                        trace!(name: "stub_proc_request", target: "prosa::stub::proc", parent: msg.get_span(), proc_name = self.name(), stub_service = msg.get_service(), "{:?}", request_data);
 
                         match adaptor.process_request(msg.get_service(), request_data) {
                             MaybeAsync::Ready(resp) => {
-                                debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
+                                trace!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
                                 drop(enter_span);
                                 let _ = msg.return_result_to_sender(resp);
                             }
@@ -100,7 +100,7 @@ where
                                 tokio::spawn(async move {
                                     let enter_span = msg.enter_span();
                                     let resp = future_resp.await;
-                                    debug!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
+                                    trace!(name: "stub_proc_response", target: "prosa::stub::proc", parent: msg.get_span(), stub_service = msg.get_service(), "{resp:?}");
                                     drop(enter_span);
                                     let _ = msg.return_result_to_sender(resp);
                                 });
