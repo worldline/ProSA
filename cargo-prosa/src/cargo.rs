@@ -27,7 +27,7 @@
 //! adaptor = ["MyCustomAdaptor"]
 //! ```
 
-use std::{collections::HashMap, fmt, io};
+use std::{collections::HashMap, fmt, io, path::PathBuf};
 
 use serde::Deserialize;
 
@@ -63,9 +63,6 @@ impl fmt::Display for ComponentVersion<'_> {
 /// Metadata of a ProSA processor
 #[derive(Debug, Clone, Deserialize)]
 pub struct Metadata {
-    /// Name of the ProSA package (not included in the metadata)
-    #[serde(skip_deserializing)]
-    pub name: Option<String>,
     /// Description of the ProSA package (not included in the metadata)
     #[serde(skip_deserializing)]
     pub description: Option<String>,
@@ -159,25 +156,22 @@ impl Metadata {
         adaptor_name: Option<&str>,
         crate_name: Option<&str>,
     ) -> Result<ProcDesc, String> {
-        let name = if let Some(name) = &self.name {
-            Some(name.as_str())
-        } else {
-            self.proc
-                .as_ref()
-                .and_then(|p| p.rsplit_once(':').map(|(_, proc_name)| proc_name))
-        }
-        .ok_or(String::from("Missing ProSA `name` metadata"))?;
+        let name = self
+            .proc
+            .as_ref()
+            .and_then(|p| p.rsplit_once(':').map(|(_, proc_name)| proc_name))
+            .ok_or(String::from("Missing ProSA `proc` metadata"))?;
 
-        let adaptor = if let Some(adaptor) =
-            adaptor_name.and_then(|name| self.find_adaptor(name, crate_name))
-        {
-            Some(adaptor)
-        } else if let Some(adaptors) = &self.adaptor {
-            adaptors.first()
+        let adaptor = if let Some(adaptor_name) = adaptor_name {
+            self.find_adaptor(adaptor_name, crate_name).ok_or(format!(
+                "Can't find the ProSA adaptor `{adaptor_name}` for {name}"
+            ))?
         } else {
-            None
-        }
-        .ok_or(format!("Can't find a ProSA `adaptor` for {name}"))?;
+            self.adaptor
+                .as_ref()
+                .and_then(|adaptors| adaptors.first())
+                .ok_or(format!("Can't find a ProSA `adaptor` for {name}"))?
+        };
 
         Ok(ProcDesc {
             name: None,
@@ -228,6 +222,8 @@ pub struct PackageMetadata {
     pub documentation: Option<String>,
     /// Authors of the package
     pub authors: Vec<String>,
+    /// Path of the package `Cargo.toml`
+    pub manifest_path: PathBuf,
 
     /// Metadata of the package
     metadata: Option<HashMap<String, serde_json::Value>>,
@@ -248,11 +244,11 @@ impl PackageMetadata {
     /// Getter of the targets for a specific `kind` (bin, custom-build)
     pub fn get_targets(&self, kind: &str) -> Option<Vec<String>> {
         if let Some(targets) = &self.targets {
-            let kind_tera_value = tera::Value::String(kind.to_string());
+            let kind_value = serde_json::Value::String(kind.to_string());
             let mut binary_targets = Vec::new();
             for target in targets {
                 if let Some(kinds) = target.get("kind").and_then(|k| k.as_array())
-                    && kinds.contains(&kind_tera_value)
+                    && kinds.contains(&kind_value)
                     && let Some(name) = target.get("name").and_then(|k| k.as_str())
                 {
                     binary_targets.push(name.to_string());
@@ -476,46 +472,44 @@ pub struct CargoMetadata {
 }
 
 impl CargoMetadata {
-    /// Method to load metadata for the ProSA package
-    pub fn load_metadata() -> Result<CargoMetadata, io::Error> {
-        // Get packges metadata
+    /// Run `cargo metadata` with the given extra arguments
+    fn run(args: &[&str]) -> Result<CargoMetadata, io::Error> {
         let cargo_metadata = std::process::Command::new("cargo")
-            .args(vec!["metadata", "-q"])
-            .output()?;
-
-        Ok(serde_json::from_slice(cargo_metadata.stdout.as_slice())?)
-    }
-
-    /// Method to load metadata of the current ProSA package without its dependencies
-    pub fn load_package_metadata() -> Result<PackageMetadata, io::Error> {
-        // Get local packges metadata
-        let cargo_metadata = std::process::Command::new("cargo")
-            .args(vec!["metadata", "-q", "--no-deps"])
+            .args(["metadata", "-q", "--format-version", "1"])
+            .args(args)
             .output()?;
         if cargo_metadata.status.success() {
-            let mut metadata: CargoMetadata =
-                serde_json::from_slice(cargo_metadata.stdout.as_slice())?;
-            if let Some(package) = metadata.packages.pop()
-                && metadata.packages.is_empty()
-            {
-                Ok(package)
-            } else {
-                Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Local package metadata is not correct",
-                ))
-            }
+            Ok(serde_json::from_slice(cargo_metadata.stdout.as_slice())?)
         } else {
-            Err(io::Error::other(
-                std::str::from_utf8(cargo_metadata.stderr.as_slice()).unwrap_or(
-                    format!(
-                        "Can't retrieve package metadata {:?}",
-                        cargo_metadata.status.code()
-                    )
-                    .as_str(),
-                ),
-            ))
+            Err(io::Error::other(format!(
+                "Can't retrieve package metadata {:?}: {}",
+                cargo_metadata.status.code(),
+                String::from_utf8_lossy(&cargo_metadata.stderr)
+            )))
         }
+    }
+
+    /// Method to load metadata for the ProSA package
+    pub fn load_metadata() -> Result<CargoMetadata, io::Error> {
+        Self::run(&[])
+    }
+
+    /// Method to load metadata of the current ProSA package (in the current directory) without its dependencies
+    pub fn load_package_metadata() -> Result<PackageMetadata, io::Error> {
+        let metadata = Self::run(&["--no-deps"])?;
+        let manifest_path = std::env::current_dir()?.join("Cargo.toml").canonicalize()?;
+        metadata
+            .packages
+            .into_iter()
+            .find(|p| {
+                p.manifest_path
+                    .canonicalize()
+                    .is_ok_and(|p| p == manifest_path)
+            })
+            .ok_or(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("No package found for `{}`", manifest_path.display()),
+            ))
     }
 
     /// Method to get all merged ProSA proc metadata

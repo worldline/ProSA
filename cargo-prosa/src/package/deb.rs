@@ -7,7 +7,7 @@ use tera::Tera;
 
 use crate::{cargo::CargoMetadata, package::ASSETS_SYSTEMD_J2};
 
-/// Struct to handle Container file creation
+/// Struct to handle deb package data creation
 pub struct DebPkg {
     path: PathBuf,
     ctx: tera::Context,

@@ -30,17 +30,31 @@ impl InstanceInstall {
     pub fn new(args: &ArgMatches) -> io::Result<InstanceInstall> {
         let current_path = env::current_dir()?;
         let path = current_path.as_path();
-        let name = args
+        // The name is used in install paths, so only keep characters that can't escape them
+        let name: String = args
             .get_one::<String>("name")
             .map(|n| n.as_str())
             .or(path.file_name().and_then(|p| p.to_str()))
             .unwrap_or("prosa")
-            .to_lowercase()
-            .replace(['/', ' '], "_");
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c.to_ascii_lowercase()
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        if name.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "The ProSA instance name can't be empty",
+            ));
+        }
 
         // Get all path for system or home installation
-        let (install_bin_dir, install_config_dir, install_service_dir) = if args.get_flag("system")
-        {
+        let user_service = !args.get_flag("system");
+        let (install_bin_dir, install_config_dir, install_service_dir) = if !user_service {
             cfg_select! {
                 target_os = "linux" => {
                     (
@@ -109,6 +123,7 @@ impl InstanceInstall {
         let mut ctx = tera::Context::new();
         package_metadata.j2_context(&mut ctx);
         ctx.insert("name", &name);
+        ctx.insert("user_service", &user_service);
 
         let bin_name = package_metadata
             .get_targets("bin")
@@ -164,7 +179,7 @@ impl InstanceInstall {
         format!("com.prosa.{}.plist", self.name)
     }
 
-    fn create_service_file(&self) -> tera::Result<()> {
+    fn create_service_file(&self) -> tera::TeraResult<()> {
         let service_name = self.get_service_filename();
         let service_path = self.get_install_service_path();
         let service_file_path = service_path.join(&service_name);
@@ -184,38 +199,35 @@ impl InstanceInstall {
             format!("target/debug/{}", self.bin_name)
         };
 
-        // If the binary don't exist, compile the Rust project with cargo
-        match fs::exists(Path::new(&binary_path)) {
-            Ok(true) => {}
-            _ => {
-                let build_args = if release {
-                    vec!["build", "--release"]
-                } else {
-                    vec!["build"]
-                };
+        let build_args = if release {
+            vec!["build", "--release"]
+        } else {
+            vec!["build"]
+        };
 
-                let cargo_build = std::process::Command::new("cargo")
-                    .args(build_args)
-                    .output()?;
-                io::stdout().write_all(&cargo_build.stdout)?;
-                io::stderr().write_all(&cargo_build.stderr)?;
+        let cargo_build = std::process::Command::new("cargo")
+            .args(build_args)
+            .output()?;
+        io::stdout().write_all(&cargo_build.stdout)?;
+        io::stderr().write_all(&cargo_build.stderr)?;
 
-                if !cargo_build.status.success() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Error during ProSA build",
-                    ));
-                }
-            }
+        if !cargo_build.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Error during ProSA build",
+            ));
         }
 
-        // Copy the binary to the local output directory
+        // Copy then rename the binary, to replace it even if it's currently running
         let binary_output_path = self.get_install_bin_dir();
         fs::create_dir_all(&binary_output_path)?;
-        fs::copy(
-            binary_path,
+        let tmp_binary_path = binary_output_path.join(format!(".{}.tmp", self.bin_name));
+        let size = fs::copy(binary_path, &tmp_binary_path)?;
+        fs::rename(
+            tmp_binary_path,
             binary_output_path.join(Path::new(&self.bin_name)),
-        )
+        )?;
+        Ok(size)
     }
 
     fn gen_config(&self) -> io::Result<u64> {
@@ -224,11 +236,20 @@ impl InstanceInstall {
 
         // If the configuration file already exist, only add the missing parts to avoid removing some already configured things
         let config_path = config_dir.join("prosa.toml");
-        if let Ok(true) = fs::exists(&config_path)
-            && let Ok(new_config_toml) =
-                fs::read_to_string("target/config.toml")?.parse::<DocumentMut>()
-            && let Ok(mut config_toml) = fs::read_to_string(&config_path)?.parse::<DocumentMut>()
-        {
+        if fs::exists(&config_path)? {
+            // Fail on an unparsable existing configuration rather than overwriting it
+            let new_config_toml = fs::read_to_string("target/config.toml")?
+                .parse::<DocumentMut>()
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            let mut config_toml = fs::read_to_string(&config_path)?
+                .parse::<DocumentMut>()
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("Can't parse `{}`: {e}", config_path.display()),
+                    )
+                })?;
+
             let mut modified = false;
             let config_table = config_toml.as_table_mut();
             for (new_config_key, new_config_item) in new_config_toml.as_table() {

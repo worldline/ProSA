@@ -3,7 +3,7 @@
 ProSA is a framework that handles processors organized around a service bus.
 As such, ProSA needs to be built from internal or external Processors/Adaptor/Main.
 
-[cargo-prosa](https://github.com/worldline/ProSA/tree/main/cargo-prosa) is a utility to package and deliver a builded ProSA.
+[cargo-prosa](https://github.com/worldline/ProSA/tree/main/cargo-prosa) is a utility to package and deliver a built ProSA.
 This builder is packaged within cargo as a custom command to be well integrated with the Rust ecosystem.
 
 ## Install
@@ -38,11 +38,11 @@ _cargo-prosa_ is meant to evolve in the future.
 So maybe new things will be introduced.
 To update your model, you can update the generated file with `cargo prosa update`.
 
-At this point you'll want to add componennts to your ProSA.
+At this point you'll want to add components to your ProSA.
 To do so, you need to [add](https://doc.rust-lang.org/cargo/commands/cargo-add.html) crates that declare them into your `Cargo.toml`.
 
-Once it's done, you can list all component avaible to build your ProSA with `cargo prosa list`.
-This will list all available component:
+Once it's done, you can list all components available to build your ProSA with `cargo prosa list`.
+This will list all available components:
 - Main - Main task (`core::main::MainProc` by default).
 - TVF - Internal message format to use inside your ProSA (`msg::simple_string_tvf::SimpleStringTvf` by default).
 - Processor/Settings - Processor and its associate settings.
@@ -96,7 +96,7 @@ target/debug/my-prosa -n "MyBuiltProSA" -c default_config.yaml
 ## Deploy
 
 This builder offer you several possibilities to deploy your ProSA.
-The goal is to use the easiest method of a plateform to run your application.
+The goal is to use the easiest method of a platform to run your application.
 
 ### Locally
 
@@ -119,7 +119,7 @@ Use the same name when uninstalling:
 cargo prosa uninstall --name dummy
 ```
 
-If the package isn't compiled for debug or release (--release), it will automatically compile during installation.
+The project is compiled for debug or release (--release) during installation.
 
 Simulate an installation with:
 ```bash
@@ -131,9 +131,9 @@ cargo prosa install --dry_run -n dummy
 When you want to install ProSA with `cargo prosa install`:
 ```bash
 $ cargo prosa install -r -n dummy
-Creating service file OK
 Copying binary OK
 Generating configuration OK
+Creating service OK
 Installed [12183 kB] ProSA `dummy`
 Binary file : $HOME/.local/bin/prosa-dummy
 Config file : $HOME/.config/prosa/dummy/prosa.toml
@@ -151,9 +151,9 @@ $ systemctl --user status dummy.service
 To install it for the whole system, you can use the `--system` option:
 ```bash
 $ sudo -E $HOME/.cargo/bin/cargo prosa install -r -s -n dummy
-Creating service file OK
 Copying binary OK
 Generating configuration OK
+Creating service OK
 Installed [12184 kB] ProSA `dummy`
 Binary file : /usr/local/bin/prosa-dummy
 Config file : /etc/prosa/dummy/prosa.toml
@@ -172,14 +172,14 @@ $ sudo service dummy status
 
 On MacOS it's the same as Linux, but with MacOS specifics.
 
-So you can install it, and if the binary don't exist, it'll compil the project:
+So you can install it, and it'll compile the project:
 ```bash
 $ cargo prosa install -r -n dummy
-Creating service OK
    Compiling ...
     Finished `release` profile [optimized] target(s) in 24.58s
 Copying binary OK
 Generating configuration OK
+Creating service OK
 Installed [10578 kB] ProSA `dummy`
 Binary file : $HOME/.local/bin/prosa-dummy
 Config file : $HOME/.config/prosa/dummy/prosa.toml

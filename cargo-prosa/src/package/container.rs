@@ -66,7 +66,7 @@ impl ContainerFile {
     }
 
     /// Method to create a container file
-    pub fn create_container_file(&self) -> tera::Result<()> {
+    pub fn create_container_file(&self) -> tera::TeraResult<()> {
         let template_name = if self.is_docker {
             "Dockerfile"
         } else {
@@ -79,7 +79,7 @@ impl ContainerFile {
             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/container.j2")),
         )?;
 
-        let build_file = fs::File::create(self.get_path()).map_err(tera::Error::io_error)?;
+        let build_file = fs::File::create(self.get_path())?;
         tera_build.render_to(template_name, &self.ctx, build_file)
     }
 }

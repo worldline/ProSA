@@ -195,7 +195,8 @@ Package prosa-utils\[[0-9].[0-9].[0-9]\] \(ProSA utils\)
     cmd.args([
         "container",
         "--docker",
-        "-b rust-latest",
+        "-b",
+        "rust:latest",
         dockerfile_path.to_str().expect("PathBuf should be string"),
     ]);
     cmd.assert().success().stdout(predicate::str::is_match(
