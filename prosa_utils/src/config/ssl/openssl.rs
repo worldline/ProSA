@@ -12,6 +12,7 @@ use std::{
     net::IpAddr,
     num::TryFromIntError,
     ops::DerefMut,
+    sync::OnceLock,
     time,
 };
 
@@ -20,15 +21,16 @@ use openssl::{
     asn1::{Asn1Integer, Asn1Time},
     bn::{BigNum, MsbOption},
     ec::{Asn1Flag, EcGroup, EcKey},
+    ex_data::Index,
     hash::MessageDigest,
     nid::Nid,
-    pkey::PKey,
+    pkey::{Id, PKey},
     ssl::{
-        AlpnError, SslAcceptor, SslAcceptorBuilder, SslConnectorBuilder, SslContextBuilder,
-        SslFiletype, SslMethod, SslVerifyMode,
+        AlpnError, SslAcceptor, SslAcceptorBuilder, SslConnectorBuilder, SslContext,
+        SslContextBuilder, SslContextRef, SslFiletype, SslMethod, SslVerifyMode,
     },
     x509::{
-        X509, X509NameBuilder,
+        X509, X509NameBuilder, X509NameRef, X509Ref,
         extension::SubjectAlternativeName,
         store::{X509Store, X509StoreBuilder},
     },
@@ -36,7 +38,10 @@ use openssl::{
 
 use crate::config::{
     ConfigError, os_country,
-    ssl::{SslConfig, SslConfigContext, SslContextBuild, SslStore, Store},
+    ssl::{
+        CertificateInfo, CertificateKind, SslConfig, SslConfigContext, SslContextBuild, SslStore,
+        Store,
+    },
 };
 
 impl SslStore<X509, X509Store> for Store {
@@ -210,6 +215,12 @@ impl SslStore<X509, X509Store> for Store {
     }
 }
 
+/// Index of the marker set on a context once a certificate is added to its extra chain
+fn extra_chain_index() -> Option<Index<SslContext, ()>> {
+    static INDEX: OnceLock<Option<Index<SslContext, ()>>> = OnceLock::new();
+    *INDEX.get_or_init(|| SslContext::new_ex_index().ok())
+}
+
 /// Method to init an SSL context for a socket
 pub(crate) fn init_openssl_context<B>(
     config: &SslConfig,
@@ -237,6 +248,9 @@ where
                 if let Some(ca) = pkcs12.ca {
                     for cert in ca {
                         context_builder.add_extra_chain_cert(cert)?;
+                        if let Some(index) = extra_chain_index() {
+                            context_builder.set_ex_data(index, ());
+                        }
                     }
                 }
             }
@@ -480,10 +494,118 @@ impl SslConfigContext<SslConnectorBuilder, SslAcceptorBuilder> for SslConfig {
     }
 }
 
+/// Method to list the entries of an X509 name as `(short name, value)`, the values of a repeated
+/// name joined. Entries of unknown names are left out
+fn x509_name(name: &X509NameRef) -> Vec<(String, String)> {
+    let mut entries: Vec<(String, String)> = Vec::new();
+    for entry in name.entries() {
+        let nid = entry.object().nid();
+        let Some(key) = (nid != Nid::UNDEF).then(|| nid.short_name().ok()).flatten() else {
+            continue;
+        };
+        let value = entry.data().to_string().unwrap_or_else(|_| "?".to_string());
+        match entries.iter_mut().find(|(k, _)| k == key) {
+            Some((_, values)) => {
+                values.push_str(", ");
+                values.push_str(&value);
+            }
+            None => entries.push((key.to_string(), value)),
+        }
+    }
+    entries
+}
+
+/// Method to name the public key algorithm of a certificate, as `RSA-2048` or `ECDSA-prime256v1`
+fn key_encryption(cert: &X509Ref) -> String {
+    let Ok(key) = cert.public_key() else {
+        return "?".to_string();
+    };
+    match key.id() {
+        Id::RSA => format!("RSA-{}", key.bits()),
+        Id::EC => format!(
+            "ECDSA-{}",
+            key.ec_key()
+                .ok()
+                .and_then(|ec| ec.group().curve_name())
+                .and_then(|nid| nid.short_name().ok())
+                .unwrap_or("?")
+        ),
+        id => Nid::from_raw(id.as_raw())
+            .short_name()
+            .unwrap_or("?")
+            .to_string(),
+    }
+}
+
+/// Method to describe a certificate, [`None`] if one of its fields can't be read
+fn certificate_info(kind: CertificateKind, cert: &X509Ref) -> Option<CertificateInfo> {
+    let not_after = Asn1Time::from_unix(0).ok()?.diff(cert.not_after()).ok()?;
+    Some(CertificateInfo {
+        kind,
+        subject: x509_name(cert.subject_name()),
+        issuer: x509_name(cert.issuer_name()),
+        encryption: key_encryption(cert),
+        serial: cert
+            .serial_number()
+            .to_bn()
+            .ok()?
+            .to_hex_str()
+            .ok()?
+            .to_string(),
+        not_after: i64::from(not_after.days) * 86400 + i64::from(not_after.secs),
+    })
+}
+
+/// Method to describe the certificates of a context: the presented one, its chain, and the CAs of
+/// a configured store. The system store is left out
+fn context_certificates(
+    context: &SslContextRef,
+    config: &SslConfig,
+    is_server: bool,
+) -> Vec<CertificateInfo> {
+    let mut certificates = Vec::new();
+    if let Some(cert) = context.certificate() {
+        // Same condition as the self signed certificate of `init_openssl_context`
+        let kind = if is_server && config.pkcs12.is_none() && config.key.is_none() {
+            CertificateKind::SelfSigned
+        } else {
+            CertificateKind::Certificate
+        };
+        certificates.extend(certificate_info(kind, cert));
+    }
+
+    // OpenSSL has no chain until a certificate is added to it
+    if extra_chain_index().is_some_and(|index| context.ex_data(index).is_some()) {
+        certificates.extend(
+            context
+                .extra_chain_certs()
+                .iter()
+                .filter_map(|cert| certificate_info(CertificateKind::Chain, cert)),
+        );
+    }
+
+    #[cfg(ossl300)]
+    if matches!(config.store, Some(Store::File { .. } | Store::Cert { .. })) {
+        certificates.extend(
+            context
+                .cert_store()
+                .all_certificates()
+                .iter()
+                .filter_map(|cert| certificate_info(CertificateKind::Store, cert)),
+        );
+    }
+
+    certificates
+}
+
 impl SslContextBuild for openssl::ssl::SslConnector {
     fn build(config: &SslConfig, _host: Option<&str>) -> std::io::Result<Self> {
         let builder: openssl::ssl::SslConnectorBuilder = config.init_tls_client_context()?;
         Ok(builder.build())
+    }
+
+    fn certificates(&self, config: &SslConfig) -> Vec<CertificateInfo> {
+        context_certificates(self.context(), config, false)
     }
 }
 
@@ -493,6 +615,10 @@ impl SslContextBuild for openssl::ssl::SslAcceptor {
             .init_tls_server_context(host)
             .map(|builder: openssl::ssl::SslAcceptorBuilder| builder.build())
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
+    }
+
+    fn certificates(&self, config: &SslConfig) -> Vec<CertificateInfo> {
+        context_certificates(self.context(), config, true)
     }
 }
 
@@ -583,6 +709,79 @@ tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
         // Check for self signed certificate
         assert!(ssl_acceptor.context().private_key().is_some());
         assert!(ssl_acceptor.context().certificate().is_some());
+    }
+
+    #[test]
+    fn describes_self_signed_certificate() -> Result<(), Box<dyn std::error::Error>> {
+        let now = time::UNIX_EPOCH.elapsed()?.as_secs() as i64;
+        let config = SslConfig::default();
+        let acceptor = <SslAcceptor as SslContextBuild>::build(&config, None)?;
+        let certificates = acceptor.certificates(&config);
+        assert_eq!(1, certificates.len());
+        assert_eq!(CertificateKind::SelfSigned, certificates[0].kind);
+        assert_eq!(
+            Some(&("CN".to_string(), "ProSA".to_string())),
+            certificates[0].subject.last()
+        );
+        assert_eq!(certificates[0].subject, certificates[0].issuer);
+        assert_eq!("ECDSA-prime256v1", certificates[0].encryption);
+        assert!((certificates[0].not_after - (now + 1461 * 86400)).abs() < 60);
+
+        // No certificate presented by a client without one, nor its implicit system store
+        let connector = <openssl::ssl::SslConnector as SslContextBuild>::build(&config, None)?;
+        assert!(connector.certificates(&config).is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn describes_certificate_and_store() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = std::env::temp_dir().join(format!(
+            "prosa-describe-certificates-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir)?;
+        let signed = SslConfig::default().init_tls_server_context(None)?.build();
+        let cert = dir.join("cert.pem");
+        let key = dir.join("key.pem");
+        fs::write(
+            &cert,
+            signed
+                .context()
+                .certificate()
+                .expect("certificate")
+                .to_pem()?,
+        )?;
+        fs::write(
+            &key,
+            signed
+                .context()
+                .private_key()
+                .expect("key")
+                .private_key_to_pem_pkcs8()?,
+        )?;
+        let mut config = SslConfig::new_cert_key(
+            cert.to_string_lossy().into_owned(),
+            key.to_string_lossy().into_owned(),
+            None,
+        );
+        config.set_store(Store::File {
+            path: cert.to_string_lossy().into_owned(),
+        });
+        let acceptor = <SslAcceptor as SslContextBuild>::build(&config, None)?;
+        let certificates = acceptor.certificates(&config);
+        fs::remove_dir_all(dir)?;
+
+        assert_eq!(CertificateKind::Certificate, certificates[0].kind);
+        #[cfg(ossl300)]
+        {
+            assert_eq!(2, certificates.len());
+            assert_eq!(CertificateKind::Store, certificates[1].kind);
+            assert_eq!(certificates[0].serial, certificates[1].serial);
+        }
+        Ok(())
     }
 
     #[test]

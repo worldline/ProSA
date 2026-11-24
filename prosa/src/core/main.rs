@@ -556,6 +556,14 @@ where
             })
             .build();
 
+        // Monitor SSL certificates expiration
+        #[cfg(feature = "openssl")]
+        self.meter
+            .i64_observable_gauge("prosa_ssl_certificates")
+            .with_description("Expiration date, in Unix seconds, of the SSL certificates loaded")
+            .with_callback(|observer| crate::io::ssl::observe_certificates(observer))
+            .build();
+
         let mut proc_names = IntHashMap::with_hasher(BuildIntHasher::default());
 
         // Monitor processors objects
@@ -832,6 +840,41 @@ mod tests {
                     .first()
                     .map(|metric| metric.get_gauge().get_value())
             })
+    }
+
+    #[cfg(all(feature = "prometheus", feature = "openssl"))]
+    #[tokio::test]
+    async fn exports_ssl_certificates_expiration() {
+        let settings = HealthSettings {
+            observability: Observability::default(),
+        };
+        let (bus, main) = MainProc::<SimpleStringTvf>::create(&settings, Some(1));
+        let registry = bus.get_prometheus_registry().clone();
+        let main_task = tokio::spawn(main.run());
+
+        let listener = crate::io::listener::ListenerSetting::new(
+            url::Url::parse("https://localhost:0").expect("Listener url is valid"),
+            None,
+        )
+        .bind()
+        .await
+        .expect("listener should bind");
+        wait_until(|| gauge_value(&registry, "prosa_ssl_certificates").is_some()).await;
+        let now = std::time::UNIX_EPOCH
+            .elapsed()
+            .expect("time should be after the epoch")
+            .as_secs() as f64;
+        assert!(
+            registry
+                .gather()
+                .into_iter()
+                .filter(|family| family.name() == "prosa_ssl_certificates")
+                .flat_map(|family| family.get_metric().to_vec())
+                .any(|metric| metric.get_gauge().get_value() > now)
+        );
+
+        drop(listener);
+        main_task.abort();
     }
 
     #[tokio::test]
