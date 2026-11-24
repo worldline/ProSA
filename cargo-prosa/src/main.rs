@@ -11,7 +11,6 @@ use std::{
     env, fs,
     io::{self, Write},
     path::Path,
-    str::FromStr,
 };
 
 use cargo_prosa::{
@@ -72,7 +71,7 @@ where
 
         tera_build.render_to(RENDER_FILENAME, ctx, file)
     }
-    inner(fs::File::create(&path).map_err(tera::Error::io_error)?, ctx)
+    inner(fs::File::create(&path)?, ctx)
 }
 
 /// Function to render jinja build.rs file into prosa project
@@ -90,7 +89,7 @@ where
 
         tera_build.render_to(RENDER_FILENAME, ctx, file)
     }
-    inner(fs::File::create(&path).map_err(tera::Error::io_error)?, ctx)
+    inner(fs::File::create(&path)?, ctx)
 }
 
 /// Function to initiate ProSA project file (or update them if existing)
@@ -122,10 +121,7 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
     let cargo_add_build_cargo_prosa = cargo!("add", Some(path), "--build", "cargo-prosa");
     let cargo_add_build_toml = cargo!("add", Some(path), "--build", "toml");
 
-    // Run fmt to reformat code
-    let _ = cargo!("fmt", Some(path), "-q");
-
-    if cargo_add_prosa.status.success()
+    if !(cargo_add_prosa.status.success()
         && cargo_add_prosa_utils.status.success()
         && cargo_add_clap.status.success()
         && cargo_add_tokio.status.success()
@@ -133,85 +129,120 @@ fn init_prosa(path: &str, context: &tera::Context) -> io::Result<()> {
         && cargo_add_config.status.success()
         && cargo_add_log.status.success()
         && cargo_add_build_cargo_prosa.status.success()
-        && cargo_add_build_toml.status.success()
+        && cargo_add_build_toml.status.success())
     {
-        // Create (or replace) ProSA files
-        render_build_rs(prosa_path.join("build.rs"), context)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        render_main_rs(prosa_path.join("src").join("main.rs"), context)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        // Create ProSA.toml desc config file if it doesn't exist
-        let prosa_desc_config_path = prosa_path.join(CONFIGURATION_FILENAME);
-        if !prosa_desc_config_path.exists() {
-            Desc::default().create(prosa_desc_config_path)?;
-        }
-
-        // Add optional parameters for deb package build
-        let deb_pkg = context
-            .get("deb_pkg")
-            .is_some_and(|v| v.as_bool().unwrap_or(false));
-        let rpm_pkg = context
-            .get("rpm_pkg")
-            .is_some_and(|v| v.as_bool().unwrap_or(false));
-        if deb_pkg || rpm_pkg {
-            let cargo_toml = fs::read_to_string(prosa_path.join("Cargo.toml"))?;
-            let mut cargo_doc = cargo_toml
-                .parse::<DocumentMut>()
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            if let (Some(toml_edit::Item::Table(package_table)), Some(name)) = (
-                cargo_doc.get_mut("package"),
-                context.get("name").and_then(|v| v.as_str()),
-            ) {
-                if let Some(toml_edit::Item::Table(metadata_table)) =
-                    package_table.get_mut("metadata")
-                {
-                    if let Some(toml_edit::Item::Table(deb_table)) = metadata_table.get_mut("deb") {
-                        DebPkg::add_deb_pkg_metadata(deb_table, name);
-                    } else if deb_pkg {
-                        let mut deb_table = toml_edit::Table::new();
-                        DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
-
-                        metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
-                    }
-
-                    if let Some(toml_edit::Item::Table(rpm_table)) =
-                        metadata_table.get_mut("generate-rpm")
-                    {
-                        RpmPkg::add_rpm_pkg_metadata(rpm_table, name);
-                    } else if rpm_pkg {
-                        let mut rpm_table = toml_edit::Table::new();
-                        RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
-
-                        metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
-                    }
-                } else {
-                    let mut metadata_table = toml_edit::Table::new();
-                    metadata_table.set_implicit(true);
-
-                    if deb_pkg {
-                        let mut deb_table = toml_edit::Table::new();
-                        DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
-                        metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
-                    }
-
-                    if rpm_pkg {
-                        let mut rpm_table = toml_edit::Table::new();
-                        RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
-                        metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
-                    }
-
-                    if deb_pkg || rpm_pkg {
-                        package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
-                    }
-                }
-            }
-
-            let mut cargo_toml_file = fs::File::create(prosa_path.join("Cargo.toml"))?;
-            cargo_toml_file.write_all(cargo_doc.to_string().as_bytes())?;
-        }
+        return Err(io::Error::other("Can't add ProSA dependencies"));
     }
 
+    // Create (or replace) ProSA files
+    render_build_rs(prosa_path.join("build.rs"), context)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    render_main_rs(prosa_path.join("src").join("main.rs"), context)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    // Create ProSA.toml desc config file if it doesn't exist
+    let prosa_desc_config_path = prosa_path.join(CONFIGURATION_FILENAME);
+    if !prosa_desc_config_path.exists() {
+        Desc::default().create(prosa_desc_config_path)?;
+    }
+
+    // Add optional parameters for deb package build
+    let deb_pkg = context
+        .get("deb_pkg")
+        .is_some_and(|v| v.as_bool().unwrap_or(false));
+    let rpm_pkg = context
+        .get("rpm_pkg")
+        .is_some_and(|v| v.as_bool().unwrap_or(false));
+    if deb_pkg || rpm_pkg {
+        let cargo_toml = fs::read_to_string(prosa_path.join("Cargo.toml"))?;
+        let mut cargo_doc = cargo_toml
+            .parse::<DocumentMut>()
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        if let (Some(toml_edit::Item::Table(package_table)), Some(name)) = (
+            cargo_doc.get_mut("package"),
+            context.get("name").and_then(|v| v.as_str()),
+        ) {
+            if let Some(toml_edit::Item::Table(metadata_table)) = package_table.get_mut("metadata")
+            {
+                if let Some(toml_edit::Item::Table(deb_table)) = metadata_table.get_mut("deb") {
+                    DebPkg::add_deb_pkg_metadata(deb_table, name);
+                } else if deb_pkg {
+                    let mut deb_table = toml_edit::Table::new();
+                    DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+
+                    metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+                }
+
+                if let Some(toml_edit::Item::Table(rpm_table)) =
+                    metadata_table.get_mut("generate-rpm")
+                {
+                    RpmPkg::add_rpm_pkg_metadata(rpm_table, name);
+                } else if rpm_pkg {
+                    let mut rpm_table = toml_edit::Table::new();
+                    RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
+
+                    metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
+                }
+            } else {
+                let mut metadata_table = toml_edit::Table::new();
+                metadata_table.set_implicit(true);
+
+                if deb_pkg {
+                    let mut deb_table = toml_edit::Table::new();
+                    DebPkg::add_deb_pkg_metadata(&mut deb_table, name);
+                    metadata_table.insert("deb", toml_edit::Item::Table(deb_table));
+                }
+
+                if rpm_pkg {
+                    let mut rpm_table = toml_edit::Table::new();
+                    RpmPkg::add_rpm_pkg_metadata(&mut rpm_table, name);
+                    metadata_table.insert("generate-rpm", toml_edit::Item::Table(rpm_table));
+                }
+
+                if deb_pkg || rpm_pkg {
+                    package_table.insert("metadata", toml_edit::Item::Table(metadata_table));
+                }
+            }
+        }
+
+        let mut cargo_toml_file = fs::File::create(prosa_path.join("Cargo.toml"))?;
+        cargo_toml_file.write_all(cargo_doc.to_string().as_bytes())?;
+    }
+
+    // Run fmt to reformat code
+    let _ = cargo!("fmt", Some(path), "-q");
+
+    Ok(())
+}
+
+/// Select a single component whose path contains `name` (an exact path match wins)
+fn select_component(components: Vec<String>, name: &str, kind: &str) -> Result<String, String> {
+    let mut matching: Vec<String> = components
+        .into_iter()
+        .filter(|c| c.contains(name))
+        .collect();
+    if let Some(pos) = matching.iter().position(|c| c == name) {
+        return Ok(matching.swap_remove(pos));
+    }
+
+    match matching.len() {
+        0 => Err(format!(
+            "Can't find the {kind} `{name}`, use `cargo prosa list` to see available ones"
+        )),
+        1 => Ok(matching.swap_remove(0)),
+        _ => Err(format!(
+            "Ambiguous {kind} `{name}`, it matches: {}",
+            matching.join(", ")
+        )),
+    }
+}
+
+/// Set a value in the `[prosa]` table of the ProSA description
+fn set_prosa_value(prosa_doc: &mut DocumentMut, key: &str, value: String) -> Result<(), String> {
+    let Some(toml_edit::Item::Table(table)) = prosa_doc.get_mut("prosa") else {
+        return Err(format!("Missing [prosa] table in {CONFIGURATION_FILENAME}"));
+    };
+    table.insert(key, toml_edit::value(value));
     Ok(())
 }
 
@@ -262,14 +293,14 @@ fn cli() -> Command {
         .subcommand(
             Command::new("main")
                 .about("Change the ProSA main processor")
-                .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
+                .arg(arg!(--dry_run "Displays what would be changed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
                 .arg(arg!(<MAIN> "Name of the main processor"))
                 .arg_required_else_help(true),
         )
         .subcommand(
             Command::new("tvf")
                 .about("Change the ProSA TVF (internal messaging)")
-                .arg(arg!(--dry_run "Displays what would be removed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
+                .arg(arg!(--dry_run "Displays what would be changed, but doesn't actually write the ProSA files").action(clap::ArgAction::SetTrue))
                 .arg(arg!(<TVF> "Name of the TVF"))
                 .arg_required_else_help(true),
         )
@@ -311,7 +342,7 @@ fn cli() -> Command {
     prosa_cmd = prosa_cmd.subcommand(
         Command::new("completion")
             .about("Output shell completion code for the specified shell (Bash, Elvish, Fish, PowerShell, or Zsh)")
-            .arg(arg!(<SHELL>))
+            .arg(arg!(<SHELL>).value_parser(clap::value_parser!(clap_complete::Shell)))
             .arg_required_else_help(true),
     );
 
@@ -335,8 +366,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     args.push("--name");
                     args.push(name);
                     j2_context.insert("name", name);
-                } else {
-                    j2_context.insert("name", path);
+                } else if let Some(name) = Path::new(path).file_name().and_then(|n| n.to_str()) {
+                    j2_context.insert("name", name);
                 }
 
                 args.push(path);
@@ -364,7 +395,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     args.push(name);
                     j2_context.insert("name", name);
                 } else if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    j2_context.insert("name", &tera::Value::String(name.into()));
+                    j2_context.insert("name", name);
                 }
 
                 j2_context.insert("deb_pkg", &matches.get_flag("deb"));
@@ -393,11 +424,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let package_metadata = CargoMetadata::load_package_metadata()?;
                 let mut j2_context = tera::Context::new();
                 package_metadata.j2_context(&mut j2_context);
-                if !j2_context.contains_key("deb_pkg") {
-                    j2_context.insert("deb_pkg", &matches.get_flag("deb"));
-                }
-                if !j2_context.contains_key("rpm_pkg") {
-                    j2_context.insert("rpm_pkg", &matches.get_flag("rpm"));
+                for (key, flag) in [("deb_pkg", "deb"), ("rpm_pkg", "rpm")] {
+                    let enabled = matches.get_flag(flag)
+                        || j2_context
+                            .get(key)
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                    j2_context.insert(key, &enabled);
                 }
 
                 if let Some(path_name) = env::current_dir()?.as_path().to_str() {
@@ -414,40 +447,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let dry_run = matches.get_flag("dry_run");
                 let prosa_toml = fs::read_to_string(CONFIGURATION_FILENAME)?;
                 let mut prosa_doc = prosa_toml.parse::<DocumentMut>()?;
-                if let Some(processor) = matches.get_one::<String>("PROCESSOR")
-                    && let Some(proc_metadata) = CargoMetadata::load_metadata()?
-                        .prosa_proc_metadata()
-                        .get(processor.as_str())
-                {
-                    let mut proc_desc = proc_metadata.get_proc_desc(
-                        matches.get_one::<String>("adaptor").map(|x| x.as_str()),
-                        None,
-                    )?;
-                    if let Some(name) = matches.get_one::<String>("name") {
-                        proc_desc.name = Some(name.clone());
-                    } else if proc_desc.name.is_none() {
-                        proc_desc.name = Some(processor.clone());
-                    }
+                let processor = matches
+                    .get_one::<String>("PROCESSOR")
+                    .expect("required processor");
+                let cargo_metadata = CargoMetadata::load_metadata()?;
+                let proc_metadata = cargo_metadata
+                    .prosa_proc_metadata()
+                    .remove(processor.as_str())
+                    .ok_or(format!(
+                        "Can't find the processor `{processor}`, use `cargo prosa list` to see available ones"
+                    ))?;
+                let mut proc_desc = proc_metadata.get_proc_desc(
+                    matches.get_one::<String>("adaptor").map(|x| x.as_str()),
+                    None,
+                )?;
+                if let Some(name) = matches.get_one::<String>("name") {
+                    proc_desc.name = Some(name.clone());
+                } else if proc_desc.name.is_none() {
+                    proc_desc.name = Some(processor.clone());
+                }
 
-                    // Use the processor name instead of the crate name
-                    proc_desc.proc_name = processor.clone();
+                // Use the processor name instead of the crate name
+                proc_desc.proc_name = processor.clone();
 
-                    if !dry_run {
-                        if let Some(toml_edit::Item::ArrayOfTables(array_tables)) =
-                            prosa_doc.get_mut("proc")
-                        {
-                            array_tables.push(proc_desc.into());
-                        } else {
-                            let mut array_tables = toml_edit::ArrayOfTables::new();
-                            array_tables.push(proc_desc.into());
-                            prosa_doc.insert("proc", toml_edit::Item::ArrayOfTables(array_tables));
-                        }
-
-                        let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
-                        prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
+                if !dry_run {
+                    if let Some(toml_edit::Item::ArrayOfTables(array_tables)) =
+                        prosa_doc.get_mut("proc")
+                    {
+                        array_tables.push(proc_desc.into());
                     } else {
-                        println!("Will add {proc_desc}");
+                        let mut array_tables = toml_edit::ArrayOfTables::new();
+                        array_tables.push(proc_desc.into());
+                        prosa_doc.insert("proc", toml_edit::Item::ArrayOfTables(array_tables));
                     }
+
+                    let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
+                    prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
+                } else {
+                    println!("Will add {proc_desc}");
                 }
             }
             Some(("remove", matches)) => {
@@ -459,6 +496,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let prosa_toml = fs::read_to_string(CONFIGURATION_FILENAME)?;
                 let mut prosa_doc = prosa_toml.parse::<DocumentMut>()?;
+                let mut removed = HashSet::new();
                 if let Some(toml_edit::Item::ArrayOfTables(array_tables)) =
                     prosa_doc.get_mut("proc")
                 {
@@ -467,6 +505,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             table.get("name")
                             && processors.contains(&name.value())
                         {
+                            removed.insert(name.value().clone());
                             if dry_run {
                                 println!("Will remove {}", name.value());
                             } else {
@@ -478,6 +517,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     });
                 }
 
+                let missing: Vec<&str> = processors
+                    .iter()
+                    .filter(|p| !removed.contains(p.as_str()))
+                    .map(|p| p.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    return Err(format!(
+                        "Can't find processor(s) {} in {CONFIGURATION_FILENAME}",
+                        missing.join(", ")
+                    )
+                    .into());
+                }
+
                 if !dry_run {
                     let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
                     prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
@@ -487,60 +539,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let dry_run = matches.get_flag("dry_run");
                 let prosa_toml = fs::read_to_string(CONFIGURATION_FILENAME)?;
                 let mut prosa_doc = prosa_toml.parse::<DocumentMut>()?;
-                if let Some(main_name) = matches.get_one::<String>("MAIN") {
-                    for main in CargoMetadata::load_metadata()?.prosa_main() {
-                        if main.contains(main_name) {
-                            if !dry_run {
-                                if let Some(toml_edit::Item::Table(table)) =
-                                    prosa_doc.get_mut("prosa")
-                                {
-                                    table.insert(
-                                        "main",
-                                        toml_edit::Item::Value(toml_edit::Value::String(
-                                            toml_edit::Formatted::new(main),
-                                        )),
-                                    );
-                                }
-
-                                let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
-                                prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
-                                break;
-                            } else {
-                                println!("Will replace main proc with {main}");
-                                break;
-                            }
-                        }
-                    }
+                let main_name = matches.get_one::<String>("MAIN").expect("required main");
+                let main = select_component(
+                    CargoMetadata::load_metadata()?.prosa_main(),
+                    main_name,
+                    "main",
+                )?;
+                if !dry_run {
+                    set_prosa_value(&mut prosa_doc, "main", main)?;
+                    let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
+                    prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
+                } else {
+                    println!("Will replace main proc with {main}");
                 }
             }
             Some(("tvf", matches)) => {
                 let dry_run = matches.get_flag("dry_run");
                 let prosa_toml = fs::read_to_string(CONFIGURATION_FILENAME)?;
                 let mut prosa_doc = prosa_toml.parse::<DocumentMut>()?;
-                if let Some(tvf_name) = matches.get_one::<String>("TVF") {
-                    for tvf in CargoMetadata::load_metadata()?.prosa_tvf() {
-                        if tvf.contains(tvf_name) {
-                            if !dry_run {
-                                if let Some(toml_edit::Item::Table(table)) =
-                                    prosa_doc.get_mut("prosa")
-                                {
-                                    table.insert(
-                                        "tvf",
-                                        toml_edit::Item::Value(toml_edit::Value::String(
-                                            toml_edit::Formatted::new(tvf),
-                                        )),
-                                    );
-                                }
-
-                                let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
-                                prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
-                                break;
-                            } else {
-                                println!("Will replace TVF format with {tvf}");
-                                break;
-                            }
-                        }
-                    }
+                let tvf_name = matches.get_one::<String>("TVF").expect("required TVF");
+                let tvf =
+                    select_component(CargoMetadata::load_metadata()?.prosa_tvf(), tvf_name, "TVF")?;
+                if !dry_run {
+                    set_prosa_value(&mut prosa_doc, "tvf", tvf)?;
+                    let mut prosa_toml_file = fs::File::create(CONFIGURATION_FILENAME)?;
+                    prosa_toml_file.write_all(prosa_doc.to_string().as_bytes())?;
+                } else {
+                    println!("Will replace TVF format with {tvf}");
                 }
             }
             Some(("list", _matches)) => {
@@ -579,13 +604,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("completion", matches)) => {
-                let shell = clap_complete::Shell::from_str(
-                    matches
-                        .get_one::<String>("SHELL")
-                        .expect("required")
-                        .as_str(),
-                )
-                .expect("Unkown shell");
+                let shell = *matches
+                    .get_one::<clap_complete::Shell>("SHELL")
+                    .expect("required");
                 clap_complete::generate(shell, &mut cli(), "cargo", &mut std::io::stdout())
             }
             _ => unreachable!(), // All subcommands are defined above, anything else is unreachable!()

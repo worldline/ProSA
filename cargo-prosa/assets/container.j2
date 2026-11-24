@@ -5,7 +5,7 @@ COPY . .
 
 RUN mkdir -p ~/.ssh \
  && touch ~/.ssh/config \
- && echo "Host *\n    StrictHostKeyChecking=accept-new" >> ~/.ssh/config \
+ && printf "Host *\n    StrictHostKeyChecking=accept-new\n" >> ~/.ssh/config \
  && chmod 644 ~/.ssh/config
 
 {% if package_manager == "apt" -%}

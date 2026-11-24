@@ -9,7 +9,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use toml_edit::{Item, Table, Value};
+use toml_edit::{Item, Table};
 
 use crate::cargo::{CargoMetadata, ComponentVersion};
 
@@ -86,56 +86,11 @@ impl fmt::Display for ProcDesc {
         writeln!(
             f,
             "ProSA processor {} ({})",
-            self.name.as_ref().unwrap_or(&self.proc),
+            self.name.as_ref().unwrap_or(&self.proc_name),
             self.proc_name,
         )?;
         writeln!(f, "  Processor {}", self.proc)?;
         writeln!(f, "  Adaptor {}", self.adaptor)
-    }
-}
-
-impl TryFrom<&Item> for ProcDesc {
-    type Error = &'static str;
-
-    fn try_from(item: &Item) -> Result<Self, Self::Error> {
-        if let Item::ArrayOfTables(array_tables) = item {
-            let mut name = None;
-            let mut proc_name = None;
-            let mut proc = None;
-            let mut adaptor = None;
-            for array in array_tables {
-                if let Some(Item::Value(Value::String(item_name))) = array.get("name") {
-                    name = Some(item_name.value().clone());
-                } else if let Some(Item::Value(Value::String(item_name))) = array.get("proc_name") {
-                    proc_name = Some(item_name.value().clone());
-                } else if let Some(Item::Value(Value::String(item_name))) = array.get("proc") {
-                    proc = Some(item_name.value().clone());
-                } else if let Some(Item::Value(Value::String(item_name))) = array.get("adaptor") {
-                    adaptor = Some(item_name.value().clone());
-                }
-            }
-
-            if let Some(proc_name) = proc_name {
-                if let Some(proc) = proc {
-                    if let Some(adaptor) = adaptor {
-                        Ok(ProcDesc {
-                            name,
-                            proc_name,
-                            proc,
-                            adaptor,
-                        })
-                    } else {
-                        Err("No `adaptor` key in toml ProSA description")
-                    }
-                } else {
-                    Err("No `proc` key in toml ProSA description")
-                }
-            } else {
-                Err("No `proc_name` key in toml ProSA description")
-            }
-        } else {
-            Err("The item type is not correct for ProSAProxDesc")
-        }
     }
 }
 

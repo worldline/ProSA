@@ -46,22 +46,19 @@ fn write_settings_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, M
 fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetadata) -> io::Result<()> {{ '{' }}
     let mut f = fs::File::create(Path::new(&out_dir).join("config.rs"))?;
 
-    writeln!(f, "\n/// List of all ProSA components versions")?;
+    let mut versions = String::from(env!("CARGO_PKG_VERSION"));
     if let Some(main_version) = cargo_metadata.get_main_version(desc.prosa.main.as_str()) {{ '{' }}
-        write!(f, "const PROSA_VERSIONS: &str = \"{{ '{}' }} - {{ '{}' }}", env!("CARGO_PKG_VERSION"), main_version)?;
-        if let Some(procs) = &desc.proc {{ '{' }}
-            for proc in procs {{ '{' }}
-                write!(f, "\n  {{ '{}' }}", proc.get_name())?;
-                if let (Some(proc_version), Some(adaptor_version)) = cargo_metadata.get_versions(proc.proc.as_str(), proc.adaptor.as_str()) {{ '{' }}
-                    write!(f, "\n    Processor: {{ '{proc_version}' }}")?;
-                    write!(f, "\n    Adaptor  : {{ '{adaptor_version}' }}")?;
-                {{ '}' }}
-            {{ '}' }};
+        versions.push_str(&format!(" - {{ '{main_version}' }}"));
+        for proc in desc.proc.iter().flatten() {{ '{' }}
+            versions.push_str(&format!("\n  {{ '{}' }}", proc.get_name()));
+            if let (Some(proc_version), Some(adaptor_version)) = cargo_metadata.get_versions(proc.proc.as_str(), proc.adaptor.as_str()) {{ '{' }}
+                versions.push_str(&format!("\n    Processor: {{ '{proc_version}' }}"));
+                versions.push_str(&format!("\n    Adaptor  : {{ '{adaptor_version}' }}"));
+            {{ '}' }}
         {{ '}' }}
-        writeln!(f, "\";")?;
-    {{ '}' }} else {{ '{' }}
-        writeln!(f, "const PROSA_VERSIONS: &str = \"{{ '{}' }}\"", env!("CARGO_PKG_VERSION"))?;
     {{ '}' }}
+    writeln!(f, "\n/// List of all ProSA components versions")?;
+    writeln!(f, "const PROSA_VERSIONS: &str = {{ '{versions:?}' }};")?;
 
     writeln!(f, "\nfn cli() -> ::clap::Command {{ '{{' }}")?;
     writeln!(f, "    ::clap::Command::new(\"prosa\")")?;
@@ -70,12 +67,12 @@ fn write_config_rs(out_dir: &OsString, desc: &Desc, cargo_metadata: &CargoMetada
 
     let authors = env!("CARGO_PKG_AUTHORS");
     if !authors.is_empty() {{ '{' }}
-        writeln!(f, "        .author(\"{{ '{authors}' }}\")")?;
+        writeln!(f, "        .author({{ '{authors:?}' }})")?;
     {{ '}' }}
 
     let description = env!("CARGO_PKG_DESCRIPTION");
     if !description.is_empty() {{ '{' }}
-        writeln!(f, "        .about(\"{{ '{description}' }}\")")?;
+        writeln!(f, "        .about({{ '{description:?}' }})")?;
     {{ '}' }}
 
     writeln!(f, "        .arg(")?;
@@ -117,12 +114,12 @@ fn write_run_rs(out_dir: &OsString, desc: &Desc, metadata: &HashMap<&str, Metada
     if let Some(processors) = &desc.proc {{ '{' }}
         for processor in processors {{ '{' }}
             proc_id += 1;
-            writeln!(f, "    log::debug!(\"Start processor {{ '{}' }}\");", processor.get_name())?;
+            writeln!(f, "    log::debug!(\"Start processor {{ '{{}}' }}\", {{ '{:?}' }});", processor.get_name())?;
             let proc_metadata = metadata.get(processor.proc_name.as_str()).unwrap_or_else(|| panic!("Can't get the processor {{ '{}' }} metadata ({{ '{:?}' }})", processor.proc, processor.name));
             if proc_metadata.settings.is_some() {{ '{' }}
-                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, \"{{ '{}' }}\".to_string(), bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name(), processor.get_name().replace('-', "_"))?;
+                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create({{ '{}' }}, {{ '{:?}' }}.to_string(), bus.clone(), settings.{{ '{}' }}.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name(), processor.get_name().replace('-', "_"))?;
             {{ '}' }} else {{ '{' }}
-                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, \"{{ '{}' }}\".to_string(), bus.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name())?;
+                writeln!(f, "    let proc = {{ '{}' }}::<{{ '{}' }}>::create_raw({{ '{}' }}, {{ '{:?}' }}.to_string(), bus.clone());", processor.proc, desc.prosa.tvf, proc_id, processor.get_name())?;
             {{ '}' }}
 
             writeln!(f, "    prosa::core::proc::Proc::<{{ '{}' }}>::run(proc)?;", processor.adaptor)?;
@@ -152,46 +149,26 @@ fn write_target_config(out_dir: &OsString, target_dir: &Path) -> io::Result<()> 
     writeln!(f, "use serde::{{ '{{' }}Deserialize, Serialize{{ '}}' }};\n")?;
     writeln!(f, "include!(\"settings.rs\");\n")?;
     writeln!(f, "fn main() -> std::io::Result<()> {{ '{{' }}")?;
-    writeln!(f, "    let args: Vec<String> = std::env::args().collect();")?;
-    writeln!(f, "    RunSettings::default().write_config(args.last().expect(\"Missing config path\"))")?;
+    writeln!(f, "    for config_path in std::env::args().skip(1) {{ '{{' }}")?;
+    writeln!(f, "        RunSettings::default().write_config(&config_path)?;")?;
+    writeln!(f, "    {{ '}}' }}")?;
+    writeln!(f, "    Ok(())")?;
     writeln!(f, "{{ '}}' }}")?;
 
-    let config_build_yml = std::process::Command::new("cargo")
-        .args(["run", "--", target_dir.join("config.yml").to_str().unwrap()])
+    // Use a dedicated target dir: an inherited one would be locked by the current build
+    let config_build = std::process::Command::new("cargo")
+        .args(["run", "-q", "--"])
+        .arg(target_dir.join("config.yml"))
+        .arg(target_dir.join("config.toml"))
+        .env("CARGO_TARGET_DIR", prosa_config_path.join("target"))
         .current_dir(&prosa_config_path)
-        .output()
-        .expect("Failed to generate config.yml");
-    if !config_build_yml.status.success() {{ '{' }}
-        return Err(io::Error::other(
-            std::str::from_utf8(config_build_yml.stderr.as_slice()).unwrap_or(
-                format!(
-                    "Can't build config.yml config file {:?}",
-                    config_build_yml.status.code()
-                )
-                .as_str(),
-            ),
-        ));
-    {{ '}' }}
-
-    let config_build_toml = std::process::Command::new("cargo")
-        .args([
-            "run",
-            "--",
-            target_dir.join("config.toml").to_str().unwrap(),
-        ])
-        .current_dir(&prosa_config_path)
-        .output()
-        .expect("Failed to generate config.toml");
-    if !config_build_toml.status.success() {{ '{' }}
-        return Err(io::Error::other(
-            std::str::from_utf8(config_build_toml.stderr.as_slice()).unwrap_or(
-                format!(
-                    "Can't build config.toml config file {{ '{' }}:?{{ '}' }}",
-                    config_build_toml.status.code()
-                )
-                .as_str(),
-            ),
-        ));
+        .output()?;
+    if !config_build.status.success() {{ '{' }}
+        return Err(io::Error::other(format!(
+            "Can't build config files {{ '{:?}' }}: {{ '{}' }}",
+            config_build.status.code(),
+            String::from_utf8_lossy(&config_build.stderr)
+        )));
     {{ '}' }}
 
     Ok(())

@@ -7,7 +7,7 @@ use tera::Tera;
 
 use crate::{cargo::CargoMetadata, package::ASSETS_SYSTEMD_J2};
 
-/// Struct to handle Container file creation
+/// Struct to handle rpm package data creation
 pub struct RpmPkg {
     path: PathBuf,
     ctx: tera::Context,
@@ -112,8 +112,8 @@ impl RpmPkg {
     }
 
     /// Function to add Red Hat package metadata to `Cargo.toml`
-    pub fn add_rpm_pkg_metadata(deb_table: &mut toml_edit::Table, name: &str) {
-        if !deb_table.contains_key("assets") {
+    pub fn add_rpm_pkg_metadata(rpm_table: &mut toml_edit::Table, name: &str) {
+        if !rpm_table.contains_key("assets") {
             // Add every assets properties to deb table
             let mut assets = toml_edit::Array::new();
 
@@ -125,11 +125,11 @@ impl RpmPkg {
                 assets.push(Self::get_readme_assets(name));
             }
 
-            deb_table.insert("assets", toml_edit::Item::Value(assets.into()));
+            rpm_table.insert("assets", toml_edit::Item::Value(assets.into()));
         }
     }
 
-    /// Method to write package data (useful for the deb package) into a folder
+    /// Method to write package data (useful for the rpm package) into a folder
     pub fn write_package_data(&self) -> io::Result<()> {
         let name = self
             .ctx

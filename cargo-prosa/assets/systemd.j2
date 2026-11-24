@@ -1,6 +1,7 @@
 [Unit]
 {% if description is defined %}Description={{ description }}{% endif %}
 {% if documentation is defined %}Documentation={{ documentation }}{% endif %}
+Wants=network-online.target
 After=network-online.target
 ConditionFileNotEmpty={{ config }}
 
@@ -10,4 +11,4 @@ ExecStart={{ bin }} -c {{ config }}
 Restart=on-failure
 
 [Install]
-WantedBy=multi-user.target
+{% if user_service is defined and user_service %}WantedBy=default.target{% else %}WantedBy=multi-user.target{% endif %}
