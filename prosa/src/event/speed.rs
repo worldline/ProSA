@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{cmp::Ordering, collections::VecDeque, time::Duration};
+use std::{cmp::Ordering, collections::VecDeque, num::NonZeroU32, time::Duration};
 
 use tokio::sync::Notify;
 use tokio::time::{Instant, sleep};
@@ -209,7 +209,7 @@ pub struct Regulator {
     /// Threshold time before sending the next request if the distant respond a timeout (to not overload the distant)
     timeout_threshold: Duration,
     /// Maximum concurents request in parallel
-    max_concurrents_send: u32,
+    max_concurrents_send: NonZeroU32,
 
     /// Speed of the regulator
     speed: Speed,
@@ -230,7 +230,7 @@ impl Regulator {
     pub fn new(
         max_speed: f64,
         timeout_threshold: Duration,
-        max_concurrents_send: u32,
+        max_concurrents_send: NonZeroU32,
         speed_interval: u16,
     ) -> Regulator {
         Regulator {
@@ -248,7 +248,7 @@ impl Regulator {
     /// Method to synchronize regulator sending rate
     pub async fn tick(&mut self) {
         #[allow(clippy::while_immutable_condition)]
-        while self.current_concurrents_send >= self.max_concurrents_send {
+        while self.current_concurrents_send >= self.max_concurrents_send.get() {
             self.concurent_notify.notified().await;
         }
 
@@ -302,7 +302,7 @@ impl Default for Regulator {
         Regulator {
             max_speed: 5.0,
             timeout_threshold: Duration::from_secs(5),
-            max_concurrents_send: 1,
+            max_concurrents_send: NonZeroU32::MIN,
 
             speed: Speed::default(),
             concurent_notify: Notify::new(),
@@ -406,7 +406,7 @@ mod tests {
     #[allow(clippy::needless_return)]
     #[tokio::test]
     async fn regulator_test() {
-        let mut regulator = Regulator::new(TPS, Duration::from_secs(3), 1, 5);
+        let mut regulator = Regulator::new(TPS, Duration::from_secs(3), NonZeroU32::MIN, 5);
         assert_eq!(0f64, regulator.get_speed());
         assert_eq!(
             " - Tps                    : 0 / 5\n - Concurents transactions: 0 / 1\n - Timeout Threshold      : 5000 ms\n",

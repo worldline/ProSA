@@ -1,10 +1,11 @@
-use std::{cmp::Ordering, marker::PhantomData, ops::Add, time::Duration};
+use std::{cmp::Ordering, future::poll_fn, marker::PhantomData, ops::Add, time::Duration};
 
 use prosa_utils::{
     hash::{BuildIntHasher, IntHashMap},
     msg::tvf::Tvf,
 };
 use tokio::time::{Instant, Sleep, sleep_until};
+use tokio_util::time::{DelayQueue, delay_queue::Key};
 
 use crate::core::msg::Msg;
 
@@ -208,16 +209,6 @@ where
     {
         self.timers.retain(|t| f(t.timer_id));
     }
-
-    /// Method to pop the inner Pending timer of the timer list
-    fn pop(&mut self) -> Option<PendingTimer<T>> {
-        self.timers.pop()
-    }
-
-    /// Method to get a reference on the last pending timer or None if the list is empty
-    fn last(&self) -> Option<&PendingTimer<T>> {
-        self.timers.last()
-    }
 }
 
 /// ProSA pending message to keep track of the message and trigger a timeout if a message is expire
@@ -259,8 +250,8 @@ where
     T: Msg<M>,
     M: Sized + Clone + Tvf,
 {
-    pending_messages: IntHashMap<u64, T>,
-    timers: Timers<u64>,
+    keys: IntHashMap<u64, Key>,
+    queue: DelayQueue<(u64, T)>,
     phantom: PhantomData<M>,
 }
 
@@ -271,17 +262,17 @@ where
 {
     /// Returns the number of pending messages, also referred to as its ‘length’.
     pub fn len(&self) -> usize {
-        self.pending_messages.len()
+        self.keys.len()
     }
 
     /// Returns the capacity of the internal message map.
     pub fn capacity(&self) -> usize {
-        self.pending_messages.capacity()
+        self.keys.capacity()
     }
 
     /// Returns true if there is no pending message
     pub fn is_empty(&self) -> bool {
-        self.pending_messages.is_empty()
+        self.keys.is_empty()
     }
 
     /// Method to create a new pending message list with a specific capacity
@@ -291,33 +282,38 @@ where
         M: Sized + Clone + Tvf,
     {
         PendingMsgs {
-            pending_messages: IntHashMap::with_capacity_and_hasher(
-                capacity,
-                BuildIntHasher::default(),
-            ),
-            timers: Timers::with_capacity(capacity),
+            keys: IntHashMap::with_capacity_and_hasher(capacity, BuildIntHasher::default()),
+            queue: DelayQueue::with_capacity(capacity),
             phantom: PhantomData,
         }
     }
 
     /// Method to push a pending message
+    ///
+    /// # Panics
+    ///
+    /// Panics if `timeout` is greater than 2^36 - 1 milliseconds (about 795 days).
     pub fn push(&mut self, msg: T, timeout: Duration) {
         self.push_with_id(msg.get_id(), msg, timeout);
     }
 
     /// Method to push a pending message with a custom id
+    /// A message already pending with the same id is replaced, along with its timeout
+    ///
+    /// # Panics
+    ///
+    /// Panics if `timeout` is greater than 2^36 - 1 milliseconds (about 795 days).
     pub fn push_with_id(&mut self, id: u64, msg: T, timeout: Duration) {
-        self.timers.push(id, timeout);
-        self.pending_messages.insert(id, msg);
+        let key = self.queue.insert((id, msg), timeout);
+        if let Some(old_key) = self.keys.insert(id, key) {
+            self.queue.remove(&old_key);
+        }
     }
 
     /// Method to pull a pending message to process it
     pub fn pull_msg(&mut self, msg_id: u64) -> Option<T> {
-        if let Some(msg) = self.pending_messages.remove(&msg_id) {
-            return Some(msg);
-        }
-
-        None
+        let key = self.keys.remove(&msg_id)?;
+        Some(self.queue.remove(&key).into_inner().1)
     }
 
     /// Method to wait for expired message (timeout)
@@ -343,20 +339,11 @@ where
     /// }
     /// ```
     pub async fn pull(&mut self) -> Option<T> {
-        while let Some(timer) = self.timers.last() {
-            if self.pending_messages.contains_key(&timer.get_timer_id()) {
-                if !timer.is_expired() {
-                    timer.sleep().await;
-                }
-
-                let time = self.timers.pop()?;
-                return self.pull_msg(time.get_timer_id());
-            } else {
-                self.timers.pop();
-            }
-        }
-
-        None
+        let (id, msg) = poll_fn(|cx| self.queue.poll_expired(cx))
+            .await?
+            .into_inner();
+        self.keys.remove(&id);
+        Some(msg)
     }
 }
 
@@ -367,8 +354,8 @@ where
 {
     fn default() -> Self {
         PendingMsgs::<T, M> {
-            pending_messages: Default::default(),
-            timers: Default::default(),
+            keys: Default::default(),
+            queue: DelayQueue::new(),
             phantom: PhantomData,
         }
     }
@@ -512,6 +499,57 @@ mod tests {
         assert_eq!(pending_timer.len(), 0);
         assert!(pending_timer.is_empty());
         assert!(pending_timer.capacity() >= capacity);
+    }
+
+    #[tokio::test]
+    async fn test_timers_order() {
+        let mut pending_timer: Timers<u64> = Default::default();
+        pending_timer.push(3, Duration::from_millis(30));
+        pending_timer.push(1, Duration::from_millis(10));
+        pending_timer.push(2, Duration::from_millis(20));
+        assert_eq!(Some(1), pending_timer.pull().await);
+        assert_eq!(Some(2), pending_timer.pull().await);
+        assert_eq!(Some(3), pending_timer.pull().await);
+        assert_eq!(None, pending_timer.pull().await);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_pending_msgs_replace_and_pull() {
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let mut pending_msg: PendingMsgs<RequestMsg<SimpleStringTvf>, SimpleStringTvf> =
+            Default::default();
+        let msg = |v: &str| {
+            let mut data = SimpleStringTvf::default();
+            data.put_string(1, v);
+            RequestMsg::new(String::from("TEST"), data, tx.clone())
+        };
+
+        // Answered message doesn't expire
+        let answered = msg("answered");
+        let answered_id = answered.get_id();
+        pending_msg.push(answered, Duration::from_millis(10));
+        assert!(pending_msg.pull_msg(answered_id).is_some());
+        assert!(pending_msg.pull_msg(answered_id).is_none());
+        assert!(pending_msg.is_empty());
+
+        // Pushing the same id replaces the message and its timeout
+        pending_msg.push_with_id(1, msg("old"), Duration::from_millis(10));
+        pending_msg.push_with_id(1, msg("new"), Duration::from_millis(50));
+        assert_eq!(1, pending_msg.len());
+        assert!(
+            timeout(Duration::from_millis(30), pending_msg.pull())
+                .await
+                .is_err()
+        );
+        let expired = pending_msg.pull().await.expect("message should expire");
+        assert_eq!(
+            Ok(String::from("new")),
+            expired
+                .get_data()
+                .and_then(|d| Ok(d.get_string(1)?.into_owned()))
+        );
+        assert!(pending_msg.is_empty());
+        assert!(pending_msg.pull().await.is_none());
     }
 
     #[tokio::test]
