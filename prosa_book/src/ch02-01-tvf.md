@@ -233,9 +233,12 @@ enum B {
 }
 ```
 
-If the enumeration has a `#[repr]` attribute, the type of encoding of the discriminant, can be deduced from it and the actual Rust's variant discriminant will be used.
-If no explicit `#[repr]` is set, the discriminant will be encoded as a string using the variants' names. 
-In all cases, it is possible to override the value being encoded by using the `tag` attribute on the variant.
+Without a `tag_type` attribute, the tag type is deduced from the integer type of the enumeration `#[repr]` (`u8` gives `byte`, other unsigned types give `unsigned`, signed types give `signed`).
+Without both, the tag type is `string`.
+
+With a `string` tag type, a variant is tagged with its name.
+With a numeric tag type, a variant is tagged with its explicit discriminant, else the previous variant tag plus one (`0` for the first variant).
+In all cases, the `tag` attribute on a variant overrides its tag.
 
 ```rust,ignore
 #[repr(u8)]

@@ -439,8 +439,7 @@ fn impl_from_field(type_name: &Ident, generics: Generics) -> TokenStream {
 
 impl<'f> TvfEnum<'f> {
     /// Declare the variant discriminants as constants for `match` statement.
-    /// Depending on the trait implemented (`ToTvf` or `FromTvf`) we may need or not
-    /// to declare a constant for the default variant too.
+    /// The default variant is declared too, since the next variant tag may refer to it.
     pub(crate) fn decl_discris(&self, tag_type: TagType) -> TokenStream {
         // Decalre constants for each variant
         let mut decls = self
