@@ -182,6 +182,125 @@ let message = tvf!(SimpleStringTvf {
 ```
 
 
+## Constructing TVF Messages with the derive macros
+
+You can also define TVF messages by applying derive macros on Rust's data types.
+The derives in question are:
+- `ToTvf` to convert a data type into a TVF message
+- `IntoTvf` to consume and convert a data type into a TVF message
+- `FromTvf` to reconstruct the data type from a TVF message
+
+Each of the TVF derives has its corresponding field trait that are also implemented allowing to construct hierarchical TVF messages through Rust's data composition:
+- `ToField` 
+- `IntoField` 
+- `FromField` 
+
+
+### Basic usage
+
+You can apply the derive macros to either structures or enumerations (unions are not supported).
+By default, fields are assigned identifier in the order they are defined (1, 2, 3, ...).
+Those identifiers can be overridden using the `id` attribute.
+
+```rust,ignore
+const MY_FIELD: usize = 100;
+
+#[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+struct A {
+    a: u32,
+    
+    #[tvf(id = 10)]
+    b: bool,
+    
+    #[tvf(id = MY_FIELD)]
+    c: String,
+}
+```
+
+When applied to an enumeration, ones have to specify the field used to encode the variant discriminant using the `tag_id` attribute.
+The `tag_type` attribute on the other hand is optional with the following possible values:
+- `string`
+- `byte`
+- `signed`
+- `unsigned`
+
+```rust,ignore
+#[derive(Debug, PartialEq, Clone, FromTvf, ToTvf, IntoTvf)]
+#[tvf(tag_id = 123, tag_type = "byte")]
+enum B {
+    C,
+    D { a: u32, b: f32 },
+}
+```
+
+Without a `tag_type` attribute, the tag type is deduced from the integer type of the enumeration `#[repr]` (`u8` gives `byte`, other unsigned types give `unsigned`, signed types give `signed`).
+Without both, the tag type is `string`.
+
+With a `string` tag type, a variant is tagged with its name.
+With a numeric tag type, a variant is tagged with its explicit discriminant, else the previous variant tag plus one (`0` for the first variant).
+In all cases, the `tag` attribute on a variant overrides its tag.
+
+```rust,ignore
+#[repr(u8)]
+#[derive(FromTvf, ToTvf, IntoTvf)]
+#[tvf(tag_id = 123)]
+enum NumEnum {
+    /// Variant `NumEnum::F` will be encoded as `msg.put_byte(123, 3)`
+    F = 3,
+
+    /// Variant `NumEnum::G` will be encoded as `msg.put_byte(123, 4)` 
+    G,
+
+    /// Variant `NumEnum::H` will be encoded as `msg.put_byte(123, 10)`
+    #[tvf(tag = 10)]
+    H,
+}
+
+#[derive(FromTvf, ToTvf, IntoTvf)]
+#[tvf(tag_id = 456)]
+enum StrEnum {
+    /// Variant `StrEnum::Dog` will be encoded as `msg.put_string(456, "Dog")`
+    Dog = 3,
+
+    /// Variant `StrEnum::Cat` will be encoded as `msg.put_string(456, "Cat")` 
+    Cat,
+
+    /// Variant `StrEnum::Bird` will be encoded as `msg.put_string(456, "toucan")`
+    #[tvf(tag = "toucan")]
+    Bird,
+}
+```
+
+A `Vec` is encoded with its elements at identifiers `1..=len`.
+Decoding requires these identifiers without gaps, so use a map for sparse fields.
+
+It is also possible to override the conversion method for a specific field using the following attributes with the path to the function to use:
+- `to_tvf`
+- `into_tvf`
+- `from_tvf`
+
+```rust,ignore
+#[derive(Debug, PartialEq, FromTvf, ToTvf, IntoTvf)]
+struct E {
+    #[tvf(to_tvf = "custom_to", into_tvf = "custom_into", from_tvf = "custom_from")]
+    a: u32,
+    b: f32,
+}
+
+fn custom_to<TVF: Tvf>(value: &u32, id: usize, msg: &mut TVF) {
+    msg.put_unsigned(id, (*value << 4) as u64);
+}
+
+fn custom_into<TVF: Tvf>(value: u32, id: usize, msg: &mut TVF) {
+    msg.put_unsigned(id, (value << 4) as u64);
+}
+
+fn custom_from<TVF: Tvf>(msg: &TVF, id: usize) -> Result<u32, TvfError> {
+    msg.get_unsigned(id).map(|value| (value as u32) >> 4)
+}
+```
+
+
 ## Implement your own TVF
 
 If you have your own internal format, you can implement the TVF trait on your own and expose your TVF struct:
