@@ -22,7 +22,7 @@ impl<'f> TvfEnum<'f> {
         );
 
         // handle all cases of the enumeration
-        let decl_discris = self.decl_discris(self.attr.tag_type, true);
+        let decl_discris = self.decl_discris(self.attr.tag_type);
         let mut cases = Vec::with_capacity(self.variants.len());
         let put_variant = self.attr.tag_type.put_method();
         let tag_id = &self.attr.tag_id;
@@ -227,7 +227,7 @@ impl<'f> TvfEnum<'f> {
             extend_generics(self.generics.clone(), ImplTrait::From);
 
         // handle all cases of the enumeration
-        let decl_discris = self.decl_discris(self.attr.tag_type, false);
+        let decl_discris = self.decl_discris(self.attr.tag_type);
         let mut cases = Vec::with_capacity(self.variants.len());
         let get_variant = self.attr.tag_type.get_method();
         let tag_id = &self.attr.tag_id;
@@ -439,9 +439,9 @@ fn impl_from_field(type_name: &Ident, generics: Generics) -> TokenStream {
 
 impl<'f> TvfEnum<'f> {
     /// Declare the variant discriminants as constants for `match` statement.
-    /// Depending on the trait implemented (ToTvf or FromTvf) we may need or not
+    /// Depending on the trait implemented (`ToTvf` or `FromTvf`) we may need or not
     /// to declare a constant for the default variant too.
-    pub(crate) fn decl_discris(&self, tag_type: TagType, decl_default_too: bool) -> TokenStream {
+    pub(crate) fn decl_discris(&self, tag_type: TagType) -> TokenStream {
         // Decalre constants for each variant
         let mut decls = self
             .variants
@@ -450,7 +450,7 @@ impl<'f> TvfEnum<'f> {
             .collect::<Vec<_>>();
 
         // If a default variant was defined, include it too
-        if decl_default_too && let Some(default) = &self.default_variant {
+        if let Some(default) = &self.default_variant {
             decls.push(default.decl_discri(tag_type));
         }
 

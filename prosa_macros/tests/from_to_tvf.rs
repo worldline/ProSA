@@ -278,6 +278,15 @@ mod macro_tests {
         optional: Option<A>,
     }
 
+    #[derive(Debug, PartialEq, FromTvf, ToTvf)]
+    #[tvf(tag_id = 1, tag_type = "unsigned")]
+    enum DefaultNotLast {
+        First,
+        #[tvf(default)]
+        Default,
+        AfterDefault,
+    }
+
     #[test]
     fn test_derive_struct() {
         let a0 = tvf![SimpleStringTvf {
@@ -377,6 +386,30 @@ mod macro_tests {
         assert_eq!(bd0, bd2);
         let bd3 = B::from_tvf(&bd0).expect("Deserialization from TVF should work");
         assert_eq!(bd1, bd3);
+    }
+
+    #[test]
+    fn test_default_enum_variant_not_last() {
+        for (variant, expected_tag) in [
+            (DefaultNotLast::First, 0),
+            (DefaultNotLast::Default, 1),
+            (DefaultNotLast::AfterDefault, 2),
+        ] {
+            let expected = tvf![SimpleStringTvf { 1 => expected_tag as u64 }];
+            let mut encoded = SimpleStringTvf::default();
+            variant.to_tvf(&mut encoded);
+            assert_eq!(expected, encoded);
+            assert_eq!(
+                variant,
+                DefaultNotLast::from_tvf(&expected).expect("Enum variant should deserialize")
+            );
+        }
+
+        let unknown_tag = tvf![SimpleStringTvf { 1 => 99u64 }];
+        assert_eq!(
+            DefaultNotLast::Default,
+            DefaultNotLast::from_tvf(&unknown_tag).expect("Unknown tags should use the default")
+        );
     }
 
     #[test]
